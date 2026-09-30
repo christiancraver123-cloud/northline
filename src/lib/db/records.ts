@@ -102,7 +102,51 @@ export interface AnalyticsRecord extends Base {
   profileVisits: number | null; follows: number | null; watchTimeSec: number | null; completionRate: number | null;
 }
 
+// ---- Agent Operations Center ------------------------------------------------
+export type AgentCode =
+  | "ORCHESTRATOR" | "CONTENT_STRATEGIST" | "CREATIVE_DIRECTOR" | "PROMPT_ENGINEER" | "CAPTION_WRITER"
+  | "IDENTITY_QA" | "CONTENT_QA" | "PRODUCTION_MANAGER" | "PERFORMANCE_AGENT" | "GROWTH_STRATEGIST";
+export type AgentStatus = "WORKING" | "QUEUED" | "WAITING" | "SCHEDULED" | "IDLE" | "FAILED" | "PAUSED";
+export type TaskStatus = "QUEUED" | "RUNNING" | "WAITING" | "COMPLETE" | "FAILED" | "CANCELLED";
+
+/** Persistent agent identity + operator-editable config. Status is DERIVED from tasks/schedules, never stored. */
+export interface Agent extends Base {
+  code: AgentCode; name: string; role: string; paused: boolean; notes: string;
+  /** Orchestrator-only operational flags (priority / paused creators). */
+  config: { priorityTalent?: TalentCode[]; pausedTalent?: TalentCode[] };
+}
+export interface AgentTask extends Base {
+  agentId: AgentCode; kind: string; title: string; input: Record<string, unknown>; output: Record<string, unknown> | null;
+  status: TaskStatus; priority: number; // 1 = highest, 5 = lowest
+  dependsOn: string[]; parentTaskId: string | null; assignmentId: string | null; productionId: string | null; talent: TalentCode | null;
+  createdBy: string; // operator | orchestrator | schedule:<id> | event:<name> | n8n
+  waitingOn: string | null; runAfter: string | null; startedAt: string | null; finishedAt: string | null; error: string | null;
+}
+export interface AgentRun extends Base {
+  agentId: AgentCode; taskId: string | null; trigger: "queue" | "schedule" | "event" | "operator" | "n8n";
+  state: WorkflowState; startedAt: string; finishedAt: string | null; error: string | null; summary: string;
+  costUsd: number | null; tokens: number | null; // null = no model call was made / unknown
+}
+/** Operational activity log: what happened (tool/task results), NOT model reasoning. */
+export interface AgentEvent extends Base {
+  agentId: AgentCode; taskId: string | null; runId: string | null; level: "info" | "warn" | "error";
+  kind: string; message: string; data: Record<string, unknown>;
+}
+export interface AgentMessage extends Base {
+  agentId: AgentCode; role: "operator" | "agent" | "system"; content: string; taskIds: string[]; reportIds: string[];
+}
+export interface AgentReport extends Base {
+  agentId: AgentCode; kind: "STATUS" | "CREATORS" | "QA" | "ALERT" | "CONCEPTS" | "ASSIGNMENT" | "PERFORMANCE" | "DIGEST";
+  title: string; body: string; data: Record<string, unknown>; sources: string[]; runId: string | null; read: boolean;
+}
+export interface AgentSchedule extends Base {
+  agentId: AgentCode; name: string; cron: string; taskKind: string; taskInput: Record<string, unknown>;
+  enabled: boolean; lastRunAt: string | null; nextRunAt: string | null; source: "northline" | "n8n";
+}
+
 export interface Tables {
+  agents: Agent; agentTasks: AgentTask; agentRuns: AgentRun; agentEvents: AgentEvent; agentMessages: AgentMessage;
+  agentReports: AgentReport; agentSchedules: AgentSchedule;
   campaigns: Campaign; productions: Production; assets: Asset; referenceAssets: ReferenceAsset; prompts: Prompt;
   captions: Caption; approvals: Approval; workflowRuns: WorkflowRun; providerJobs: ProviderJob;
   calendarEntries: CalendarEntry; storylines: Storyline; launchStates: LaunchState; analytics: AnalyticsRecord;
@@ -111,4 +155,5 @@ export type TableName = keyof Tables;
 export const TABLE_NAMES: TableName[] = [
   "campaigns", "productions", "assets", "referenceAssets", "prompts", "captions", "approvals", "workflowRuns",
   "providerJobs", "calendarEntries", "storylines", "launchStates", "analytics",
+  "agents", "agentTasks", "agentRuns", "agentEvents", "agentMessages", "agentReports", "agentSchedules",
 ];

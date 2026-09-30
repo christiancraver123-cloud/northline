@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { authorized } from "@/lib/auth";
 import { getRepo } from "@/lib/db";
 import { CreateRequestSchema } from "@/lib/orchestrator/contracts";
-import { executeCreate } from "@/lib/orchestrator/execute";
+import { submitCreate } from "@/lib/agents/ops/commands";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +14,10 @@ export async function POST(req: Request) {
   const parsed = CreateRequestSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ ok: false, error: "validation failed", issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })) }, { status: 422 });
   try {
-    const r = await executeCreate(await getRepo(), parsed.data);
-    return NextResponse.json({ ok: r.failures.length === 0, runId: r.runId, campaignId: r.campaignId, productions: r.productions, failures: r.failures, approvalRequired: true });
+    const r = await submitCreate(await getRepo(), parsed.data, { createdBy: "n8n", trigger: "n8n" });
+    if (r.task.status === "FAILED") return NextResponse.json({ ok: false, error: r.task.error, taskId: r.task.id }, { status: 500 });
+    const out = r.output ?? {};
+    return NextResponse.json({ ok: (out.failures ?? []).length === 0, taskId: r.task.id, runId: out.runId, productions: out.productions ?? [], failures: out.failures ?? [], approvalRequired: true });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "internal error" }, { status: 500 });
   }

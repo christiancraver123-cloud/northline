@@ -56,3 +56,16 @@ export const Empty = ({ children }: { children: ReactNode }) => <div className="
 export const Btn = ({ children, primary, ...rest }: { children: ReactNode; primary?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
   <button {...rest} className={`rounded-xl border px-3.5 py-2 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-40 ${primary ? "border-transparent bg-gradient-to-br from-blue to-[#4d5cf0] text-white" : "border-edge bg-panel2 text-ink hover:brightness-125"} ${rest.className ?? ""}`}>{children}</button>
 );
+
+// ---- Agent Operations Center ------------------------------------------------
+const AGENT_TONE: Record<string, string> = { WORKING: "info", QUEUED: "info", WAITING: "warn", SCHEDULED: "mute", IDLE: "mute", FAILED: "bad", PAUSED: "warn" };
+export const AgentStatusPill = ({ status }: { status: string }) => <Pill tone={AGENT_TONE[status] ?? "mute"}>{status === "WORKING" && <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue2" />}{status}</Pill>;
+
+export function ago(iso: string | null | undefined, now = Date.now()): string {
+  if (!iso) return "—";
+  const s = Math.max(0, Math.round((now - new Date(iso).getTime()) / 1000));
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}

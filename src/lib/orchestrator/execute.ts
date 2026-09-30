@@ -3,6 +3,7 @@
 import type { Repo } from "@/lib/db/repo";
 import type { Asset, CreativeBrief, Production, WorkflowRun } from "@/lib/db/records";
 import type { Origin, TalentCode } from "@/lib/domain/types";
+import type { AgentCode } from "@/lib/db/records";
 import { CreateRequestSchema, type CreateRequestInput } from "./contracts";
 import { planRequest, type PlannedProduction, type TaskPlan } from "./plan";
 import { captionWriter, contentQa, creativeDirector, promptEngineer, strategist, type AgentContext } from "@/lib/agents/agents";
@@ -10,7 +11,8 @@ import { getImageProvider, getVideoProvider } from "@/lib/providers";
 import { localStorageProvider } from "@/lib/providers/storage";
 import type { ImageProvider, StorageProvider, VideoProvider } from "@/lib/providers/types";
 
-export interface Deps { image: ImageProvider; video: VideoProvider; storage: StorageProvider; origin: Origin; now?: () => Date }
+export type Trace = (agent: AgentCode, kind: string, message: string, opts?: { level?: "info" | "warn" | "error"; data?: Record<string, unknown> }) => Promise<void> | void;
+export interface Deps { image: ImageProvider; video: VideoProvider; storage: StorageProvider; origin: Origin; now?: () => Date; /** Optional operational activity sink (agent activity log). */ trace?: Trace }
 export const defaultDeps = (): Deps => ({ image: getImageProvider(), video: getVideoProvider(), storage: localStorageProvider, origin: "live" });
 
 export interface CreateResult { runId: string; campaignId: string | null; productions: { id: string; code: string; status: string; qaOk: boolean }[]; plan: TaskPlan; failures: string[] }
@@ -56,12 +58,21 @@ export async function executeCreate(repo: Repo, input: CreateRequestInput, deps:
 async function produce(repo: Repo, pp: PlannedProduction, platform: "instagram" | "tiktok", campaignId: string | null, year: number, variant: number, deps: Deps, runId: string, failures: string[]) {
   const primary = pp.talent[0];
   const code = `${primary}-${year}-${pad(await repo.nextProductionSeq(primary, year))}`;
+  const tr: Trace = async (a, k, m, o) => { try { await deps.trace?.(a, k, m, o); } catch { /* tracing must never break production */ } };
+  await tr("PRODUCTION_MANAGER", "PRODUCTION_ID", `Reserved production ID ${code} (${pp.contentType}, ${pp.talent.join("+")})`, { data: { code } });
   const ctx = await contextFor(repo, primary, variant);
+  await tr("ORCHESTRATOR", "LOAD_IDENTITY", `Loaded canonical identity and ${ctx.recentConcepts.length} recent productions for ${primary}`, { data: { recentLocations: ctx.recentLocations } });
   const strat = strategist(primary, pp.contentType, pp.concept, ctx);
+  await tr("CONTENT_STRATEGIST", "CONCEPT_CHOSEN", `Concept "${strat.concept}" — ${strat.angle}`);
   const brief: CreativeBrief = creativeDirector(primary, pp.contentType, strat.concept, strat.angle, ctx, pp.assetCount);
+  await tr("CREATIVE_DIRECTOR", "BRIEF_CREATED", `Brief for ${code}: ${brief.location}, ${brief.lighting}, ${brief.shots.length} shot(s)`);
+  await tr("CREATIVE_DIRECTOR", "HANDOFF", `Handed ${code} brief to Prompt Engineer`);
   const prompts = promptEngineer(primary, brief);
+  await tr("PROMPT_ENGINEER", "PROMPTS_BUILT", `Built ${prompts.length} prompt(s) for ${code} with canonical identity block`);
   const qaNotes = [...contentQa(prompts, ctx, brief.location), ...prompts.flatMap((p) => p.qa.issues.map((i) => `Shot ${p.shotN}: ${i}`))];
   const identityOk = prompts.every((p) => p.qa.ok);
+  await tr("IDENTITY_QA", identityOk ? "QA_PASSED" : "QA_REJECTED", identityOk ? `Identity QA passed for ${code}` : `Identity QA rejected ${code}: ${prompts.flatMap((p) => p.qa.issues).join("; ")}`, { level: identityOk ? "info" : "warn", data: { issues: prompts.flatMap((p) => p.qa.issues) } });
+  await tr("CONTENT_QA", "QA_COMPLETE", qaNotes.filter((n) => !n.startsWith("Shot")).length ? `Content QA notes for ${code}: ${qaNotes.filter((n) => !n.startsWith("Shot")).join("; ")}` : `Content QA clean for ${code}`);
   const scope = pp.talent.length === 1 ? "SOLO" : pp.talent.length === 2 ? "DUO" : pp.talent.length >= 6 ? "ALL_SIX" : "GROUP";
 
   let production: Production = await repo.insert("productions", {
@@ -74,10 +85,12 @@ async function produce(repo: Repo, pp: PlannedProduction, platform: "instagram" 
     promptRows.push(await repo.insert("prompts", { productionId: production.id, provider: deps.image.name, version: 1, shotN: p.shotN, positive: p.positive, negative: p.negative, identityRefs: ["MASTER_FACE", "FRONT", "THREE_QUARTER"], qa: p.qa, origin: deps.origin }));
   }
   await repo.insert("captions", { productionId: production.id, talent: primary, text: captionWriter(primary, strat.concept, pp.talent.slice(1)), kind: "FEED", approval: "PENDING", origin: deps.origin });
+  await tr("CAPTION_WRITER", "CAPTION_DRAFTED", `Drafted caption for ${code}`);
 
   const assetIds: string[] = [];
   if (!identityOk) {
     failures.push(`${code}: identity QA blocked generation`);
+    await tr("PRODUCTION_MANAGER", "BLOCKED", `${code} blocked before generation by Identity QA`, { level: "warn" });
     return { summary: { id: production.id, code, status: production.status, qaOk: false }, assetIds };
   }
 
@@ -88,7 +101,9 @@ async function produce(repo: Repo, pp: PlannedProduction, platform: "instagram" 
       promptId: prompt.id, storagePath: null, filename: filenameFor(code, shot.kind, shot.n, "RAW", "png"), isReference: false, publication: "UNPUBLISHED", origin: deps.origin,
     });
     assetIds.push(asset.id);
+    const before = failures.length;
     await runImageJob(repo, deps, production, asset, prompt.positive, prompt.negative, runId, failures);
+    await tr("PRODUCTION_MANAGER", failures.length > before ? "ASSET_FAILED" : "ASSET_GENERATED", failures.length > before ? `Asset ${shot.n} of ${code} failed (${deps.image.name})` : `Asset ${shot.n} of ${code} generated via ${deps.image.name}`, { level: failures.length > before ? "error" : "info" });
   }
   if (pp.contentType === "REEL") {
     const reel = await repo.insert("assets", {
@@ -102,7 +117,10 @@ async function produce(repo: Repo, pp: PlannedProduction, platform: "instagram" 
   const anyFailed = assets.some((a) => a.status === "FAILED");
   const awaitingVideo = assets.some((a) => a.kind === "REEL" && a.status === "PENDING");
   production = await repo.update("productions", production.id, { status: anyFailed || awaitingVideo ? "RAW" : "REVIEW" });
-  if (production.status === "REVIEW") await repo.insert("approvals", { productionId: production.id, subject: "PRODUCTION", subjectId: production.id, state: "PENDING", decidedBy: null, decidedAt: null, notes: "", origin: deps.origin });
+  if (production.status === "REVIEW") {
+    await repo.insert("approvals", { productionId: production.id, subject: "PRODUCTION", subjectId: production.id, state: "PENDING", decidedBy: null, decidedAt: null, notes: "", origin: deps.origin });
+    await tr("PRODUCTION_MANAGER", "WAITING_APPROVAL", `${code} is in the approval queue`);
+  }
   return { summary: { id: production.id, code, status: production.status, qaOk: true }, assetIds };
 }
 

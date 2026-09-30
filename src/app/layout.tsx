@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const repo = await getRepo();
   const pending = (await repo.list("approvals", { state: "PENDING" })).length;
+  const unreadReports = (await repo.list("agentReports", { read: false })).length;
   return (
     <html lang="en">
       <head>
@@ -17,7 +18,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </head>
       <body>
         <div className="grid min-h-screen lg:grid-cols-[250px_minmax(0,1fr)]">
-          <Sidebar pending={pending} driver={storeDriver()} />
+          <Sidebar pending={pending} unreadReports={unreadReports} driver={storeDriver()} />
           <main className="min-w-0 p-4 sm:p-6 lg:p-8">{children}</main>
         </div>
       </body>

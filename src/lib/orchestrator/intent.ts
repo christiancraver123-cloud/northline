@@ -6,6 +6,14 @@ import type { CreateRequest } from "./contracts";
 
 const NUM: Record<string, number> = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 
+export function detectTalent(text: string): TalentCode[] {
+  const lower = text.toLowerCase();
+  let talent: TalentCode[] = ROSTER.filter((t) => new RegExp(`\\b${t.first.toLowerCase()}\\b|\\b${t.name.split(" ")[1].toLowerCase()}\\b`).test(lower)).map((t) => t.code);
+  for (const c of TALENT_CODES) if (new RegExp(`\\b${c.toLowerCase()}\\b`).test(lower) && !talent.includes(c)) talent.push(c);
+  if (/\b(all six|all 6|six[- ]creators?|everyone|all creators|whole roster|entire roster)\b/.test(lower)) talent = [...TALENT_CODES];
+  return talent;
+}
+
 export interface ParsedIntent { request: CreateRequest | null; issues: string[] }
 
 export function parseIntent(text: string): ParsedIntent {

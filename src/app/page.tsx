@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { getRepo } from "@/lib/db";
 import { ROSTER } from "@/lib/talent/roster";
-import { Avatar, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips } from "@/components/ui";
+import { snapshots } from "@/lib/agents/ops/service";
+import { AgentStatusPill, Avatar, Card, ago, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips } from "@/components/ui";
 
 export default async function Dashboard() {
   const repo = await getRepo();
+  const [snaps, reports] = await Promise.all([snapshots(repo), repo.list("agentReports", { read: false })]);
   const [prods, approvals, jobs, runs, cal, launch] = await Promise.all([
     repo.list("productions"), repo.list("approvals", { state: "PENDING" }), repo.list("providerJobs"), repo.list("workflowRuns"), repo.list("calendarEntries"), repo.list("launchStates"),
   ]);
@@ -42,6 +44,12 @@ export default async function Dashboard() {
           </Card>
         </div>
         <div className="grid content-start gap-5">
+          <Card>
+            <div className="mb-3 flex items-center justify-between"><h2 className="font-bold">Agent activity</h2><Link className="text-blue2" href="/agents">Open →</Link></div>
+            <div className="mb-3 flex flex-wrap gap-1.5 text-[12px]">{(["WORKING", "QUEUED", "WAITING", "SCHEDULED", "IDLE", "FAILED", "PAUSED"] as const).map((k) => { const n = snaps.filter((x) => x.status === k).length; return n ? <span key={k} className="inline-flex items-center gap-1"><AgentStatusPill status={k} /><b className="font-mono">{n}</b></span> : null; })}</div>
+            <div className="grid gap-1.5">{snaps.map((x) => <Link key={x.agent.code} href={`/agents/${x.agent.code}`} className="flex items-center justify-between gap-2 text-[13px]"><span className="truncate">{x.agent.name}<span className="ml-2 text-[11px] text-faint">{x.current ? x.current.title.slice(0, 34) : x.lastEvent ? ago(x.lastEvent.createdAt) : ""}</span></span><AgentStatusPill status={x.status} /></Link>)}</div>
+            {reports.length > 0 && <Link href="/agents/reports" className="mt-3 block text-warn">{reports.length} unread agent report{reports.length > 1 ? "s" : ""} →</Link>}
+          </Card>
           <Card>
             <h2 className="mb-3 font-bold">Creators</h2>
             <div className="grid gap-2">{ROSTER.map((t) => {

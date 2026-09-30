@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ago } from "./ui";
 
 export function ChatPanel({ agent, name, messages, suggestions }: { agent: AgentCode; name: string; messages: AgentMessage[]; suggestions: string[] }) {
-  const shown = messages.slice(-30);
+  const shown = [...messages].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-30);
   return (
     <div className="flex flex-col gap-3">
       <div className="max-h-[480px] min-h-48 overflow-y-auto rounded-xl border border-edge bg-[#060a1c] p-3" aria-live="polite">

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getRepo } from "@/lib/db";
+import { newestFirst } from "@/lib/db/order";
 import { ROSTER } from "@/lib/talent/roster";
 import { snapshots } from "@/lib/agents/ops/service";
 import { AgentStatusPill, Avatar, Card, ProviderPill, ago, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips } from "@/components/ui";
@@ -8,7 +9,7 @@ export default async function Dashboard() {
   const repo = await getRepo();
   const [snaps, reports] = await Promise.all([snapshots(repo), repo.list("agentReports", { read: false })]);
   const [prods, approvals, jobs, runs, cal, launch] = await Promise.all([
-    repo.list("productions"), repo.list("approvals", { state: "PENDING" }), repo.list("providerJobs"), repo.list("workflowRuns"), repo.list("calendarEntries"), repo.list("launchStates"),
+    repo.list("productions").then(newestFirst), repo.list("approvals", { state: "PENDING" }), repo.list("providerJobs"), repo.list("workflowRuns").then(newestFirst), repo.list("calendarEntries"), repo.list("launchStates"),
   ]);
   const failedJobs = jobs.filter((j) => j.state === "FAILED");
   const generating = prods.filter((p) => p.status === "GENERATING" || p.status === "RAW");

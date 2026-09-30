@@ -366,6 +366,8 @@ describe("OpenAI provider behaviour", () => {
   it("maps failures to categories and never leaks the key or upstream body", async () => {
     const run = async (status: number, body: unknown = { error: { message: "SECRETKEY123 echoed", code: "x" } }) => { try { await openaiImage("SECRETKEY123", "m", (async () => new Response(JSON.stringify(body), { status })) as never).generate({ productionCode: "c", shotN: 1, prompt: "p", negative: "", talent: "SIE", references: [] }); } catch (e) { return e as ProviderError; } throw new Error("expected failure"); };
     expect((await run(429)).category).toBe("rate_limited");
+    const quota = await run(429, { error: { type: "insufficient_quota", code: "credit_balance_exhausted", message: "SECRETKEY123" } }); // seen live
+    expect([quota.category, quota.retryable]).toEqual(["quota_exceeded", false]);
     expect((await run(401)).category).toBe("auth");
     expect((await run(400)).category).toBe("invalid_request");
     expect((await run(500)).category).toBe("provider_unavailable");

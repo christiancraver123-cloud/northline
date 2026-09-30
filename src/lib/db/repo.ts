@@ -8,6 +8,7 @@ export type NewRecord<T extends TableName> = Omit<Tables[T], "id" | "createdAt" 
 
 export interface Repo {
   readonly driver: "file" | "supabase";
+  /** Rows in creation order, OLDEST FIRST (both drivers). Sort explicitly where newest-first is wanted. */
   list<T extends TableName>(t: T, filter?: Partial<Tables[T]>): Promise<Tables[T][]>;
   get<T extends TableName>(t: T, id: string): Promise<Tables[T] | null>;
   insert<T extends TableName>(t: T, rec: NewRecord<T>): Promise<Tables[T]>;

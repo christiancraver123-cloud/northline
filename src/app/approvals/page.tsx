@@ -13,7 +13,7 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
     return { a, p, assets: (await repo.list("assets", { productionId: p.id })).filter((x) => x.current).sort((x, y) => x.seq - y.seq), qa: await repo.list("qaResults", { productionId: p.id }), captions: await repo.list("captions", { productionId: p.id }), blockers: await approvalBlockers(repo, p.id) };
   }));
   const err = (await searchParams).error;
-  const decided = (await repo.list("approvals")).filter((a) => a.state !== "PENDING").slice(0, 8);
+  const decided = (await repo.list("approvals")).filter((a) => a.state !== "PENDING").sort((a, b) => (b.decidedAt ?? "").localeCompare(a.decidedAt ?? "")).slice(0, 8);
   return (
     <>
       <PageHeader title="Approvals" sub="Human approval is mandatory. Approving never publishes — it only unlocks scheduling." />

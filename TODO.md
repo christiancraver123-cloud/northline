@@ -7,9 +7,14 @@
 - [ ] `NORTHLINE_WEBHOOK_SECRET` + an n8n Schedule Trigger calling `POST /api/agents/tick`.
 - [ ] Create a `main` branch on GitHub (push was blocked by permissions) and choose the default branch.
 
+## BLOCKING the first real Sienna production
+- [ ] **OpenAI billing**: image generation returns `insufficient_quota / credit_balance_exhausted` — add credit to the OpenAI account (key itself is valid).
+- [ ] **Sienna's real reference files** (MASTER_FACE required; FACE_FRONT, FACE_3Q_LEFT, FACE_3Q_RIGHT, FACE_PROFILE, UPPER_BODY, FULL_BODY, NATURAL_CANDID recommended) — upload on Talent → Sienna.
+- [ ] Operator: decide how to open the app (run locally with the same env, or deploy) — the sandbox instance is not reachable from outside.
+
 ## Next milestone candidates
 - [ ] Run the first REAL Sienna production: upload real master/reference images, set `IMAGE_PROVIDER=openai` + `OPENAI_API_KEY`, assign a vision provider (Gemini/OpenAI) to Identity QA, verify results; tune prompts/locks from real outputs.
-- [ ] Live Supabase verification (repo, claim, storage bucket) + `scripts/verify-supabase.ts`.
+- [x] Live Supabase verification done (schema, RLS, repo, claim race, storage) — see WORKLOG Session 4. Still worth: keep a `scripts/verify-supabase.ts` for repeatability.
 
 ## P0/P1 — persistence & ops
 - [ ] Live-verify `SupabaseRepo` (supabase-js) end to end; add a script `scripts/verify-supabase.ts`.
@@ -17,7 +22,7 @@
 - [ ] Supabase Auth (multi-user, roles) replacing the single shared password.
 - [x] Supabase Storage adapter written (unverified live).
 - [x] Reference upload/management UI + references sent to image provider (done) — bulk import, per-reference QA/approval workflow TODO.
-- [ ] Verify OpenAI image adapter + OpenAI/Gemini text adapters with real keys.
+- [x] Gemini text+vision verified live. [ ] OpenAI image generation still unverified (quota).
 - [ ] Higgsfield adapter (submit/poll); needs credentials + API docs.
 
 ## P2 — agents & product

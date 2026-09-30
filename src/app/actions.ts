@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getRepo } from "@/lib/db";
 import { requireOperator } from "@/lib/auth/guard";
+import { ensureLaunchStates } from "@/lib/db/seed";
 import { retryAsset, submitReelVideo } from "@/lib/orchestrator/execute";
 import { submitCreate } from "@/lib/agents/ops/commands";
 import { ensureApprovalWait, resolveApprovalWaits } from "@/lib/agents/ops/service";
@@ -70,6 +71,7 @@ export async function launchAction(formData: FormData) {
   await requireOperator();
   const repo = await getRepo();
   const talent = String(formData.get("talent"));
+  await ensureLaunchStates(repo);
   const row = (await repo.list("launchStates")).find((l) => l.talent === talent);
   if (!row) return;
   const patch: Partial<LaunchState> = { handle: String(formData.get("handle") ?? "").trim().replace(/^@/, "") || null };

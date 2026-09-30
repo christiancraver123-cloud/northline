@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getRepo } from "@/lib/db";
+import { newestFirst } from "@/lib/db/order";
 import { ROSTER } from "@/lib/talent/roster";
 import { CONTENT_TYPES, PRODUCTION_STATUSES } from "@/lib/domain/types";
 import { Card, DemoBadge, Empty, PageHeader, ProdLink, StatusPill, TalentChips } from "@/components/ui";
@@ -9,7 +10,7 @@ type SP = { q?: string; talent?: string; format?: string; status?: string; campa
 export default async function Productions({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const repo = await getRepo();
-  const [all, campaigns, assets] = await Promise.all([repo.list("productions"), repo.list("campaigns"), repo.list("assets")]);
+  const [all, campaigns, assets] = await Promise.all([repo.list("productions").then(newestFirst), repo.list("campaigns"), repo.list("assets")]);
   const list = all.filter((p) =>
     (!sp.q || `${p.code} ${p.concept}`.toLowerCase().includes(sp.q.toLowerCase())) && (!sp.talent || p.talent.includes(sp.talent as never)) &&
     (!sp.format || p.contentType === sp.format) && (!sp.status || p.status === sp.status) && (!sp.campaign || p.campaignId === sp.campaign));

@@ -1,8 +1,9 @@
 import { getRepo } from "@/lib/db";
+import { newestFirst } from "@/lib/db/order";
 import { Card, Empty, PageHeader, Pill, StatusPill } from "@/components/ui";
 
 export default async function Automations() {
-  const runs = await (await getRepo()).list("workflowRuns");
+  const runs = newestFirst(await (await getRepo()).list("workflowRuns"));
   const secret = !!process.env.NORTHLINE_WEBHOOK_SECRET;
   return (
     <>

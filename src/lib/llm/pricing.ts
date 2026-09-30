@@ -1,5 +1,5 @@
 // Cost is computed ONLY from operator-supplied pricing (LLM_PRICING_JSON) AND real usage numbers. Otherwise null — never guessed.
-// Example: LLM_PRICING_JSON='{"gemini/gemini-2.5-flash":{"inputPerMTok":0.30,"outputPerMTok":2.50}}'  (USD per million tokens; you supply the values)
+// Example: LLM_PRICING_JSON='{"gemini/gemini-3.8-flash":{"inputPerMTok":0.30,"outputPerMTok":2.50}}'  (USD per million tokens; you supply the values)
 import type { LlmUsage } from "./types";
 
 export function costFor(provider: string, model: string, usage: LlmUsage | null, env: NodeJS.ProcessEnv = process.env): number | null {

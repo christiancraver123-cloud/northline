@@ -4,8 +4,19 @@ import { LlmError, type LlmProvider } from "./types";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-export function geminiProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: typeof fetch = fetch): LlmProvider {
-  const model0 = env.GEMINI_MODEL || "gemini-2.5-flash";
+/** Seen live: Gemini returns intermittent 503s under load. Retry a couple of times with short backoff before reporting unavailable. */
+export async function fetchWithTransientRetry(fetchFn: typeof fetch, url: string, init: RequestInit, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): Promise<Response> {
+  let res = await fetchFn(url, init);
+  for (const wait of [1500, 4000]) {
+    if (res.status !== 503 && res.status !== 500) return res;
+    await sleep(wait);
+    res = await fetchFn(url, init);
+  }
+  return res;
+}
+
+export function geminiProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: typeof fetch = fetch, sleep?: (ms: number) => Promise<void>): LlmProvider {
+  const model0 = env.GEMINI_MODEL || "gemini-3.8-flash";
   return {
     name: "gemini",
     defaultModel: model0, vision: true,
@@ -16,7 +27,7 @@ export function geminiProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: ty
       const model = req.model || model0;
       let res: Response;
       try {
-        res = await fetchFn(`${BASE}/${encodeURIComponent(model)}:generateContent`, {
+        res = await fetchWithTransientRetry(fetchFn, `${BASE}/${encodeURIComponent(model)}:generateContent`, {
           method: "POST",
           headers: { "content-type": "application/json", "x-goog-api-key": key },
           body: JSON.stringify({
@@ -24,7 +35,7 @@ export function geminiProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: ty
             contents: [{ role: "user", parts: [{ text: req.prompt }, ...(req.images ?? []).map((i) => ({ inlineData: { mimeType: i.mime, data: i.dataBase64 } }))] }],
             generationConfig: { temperature: req.temperature ?? 0.4, ...(req.maxOutputTokens ? { maxOutputTokens: req.maxOutputTokens } : {}), ...(req.json ? { responseMimeType: "application/json" } : {}) },
           }),
-        });
+        }, sleep);
       } catch {
         throw new LlmError("gemini", "unavailable", "network error reaching Gemini");
       }
@@ -36,11 +47,12 @@ export function geminiProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: ty
         if (res.status === 503) throw new LlmError("gemini", "unavailable", "service unavailable (HTTP 503)", retry);
         throw new LlmError("gemini", "failed", `request failed (HTTP ${res.status})`);
       }
-      const j = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number }; responseId?: string };
+      const j = (await res.json()) as { candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[]; usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; totalTokenCount?: number }; responseId?: string; modelVersion?: string };
       const text = j.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
       if (!text) throw new LlmError("gemini", "failed", `empty response${j.candidates?.[0]?.finishReason ? ` (${j.candidates[0].finishReason})` : ""}`);
       const u = j.usageMetadata;
-      return { provider: "gemini", model, text, usage: u ? { inputTokens: u.promptTokenCount ?? null, outputTokens: u.candidatesTokenCount ?? null, totalTokens: u.totalTokenCount ?? null } : null, requestId: j.responseId ?? null };
+      // Record the model Google actually served (modelVersion) when reported.
+      return { provider: "gemini", model: j.modelVersion?.replace(/^models\//, "") || model, text, usage: u ? { inputTokens: u.promptTokenCount ?? null, outputTokens: u.candidatesTokenCount ?? null, totalTokens: u.totalTokenCount ?? null } : null, requestId: j.responseId ?? null };
     },
   };
 }

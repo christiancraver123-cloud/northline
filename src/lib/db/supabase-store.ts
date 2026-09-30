@@ -22,7 +22,7 @@ export class SupabaseRepo implements Repo {
   async list<T extends TableName>(t: T, filter?: Partial<Tables[T]>) {
     let q = this.db.from(table(t)).select("*");
     for (const [k, v] of Object.entries(filter ?? {})) if (v !== undefined) q = q.eq(snake(k), v as never);
-    const { data, error } = await q.order("created_at", { ascending: false });
+    const { data, error } = await q.order("created_at", { ascending: true }) // same contract as the file store: oldest first; pages sort newest-first explicitly;
     if (error) this.fail("list", t, error);
     return (data ?? []).map((r) => mapKeys(r, camel)) as unknown as Tables[T][];
   }

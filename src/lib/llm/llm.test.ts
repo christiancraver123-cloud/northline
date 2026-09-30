@@ -40,6 +40,16 @@ describe("Gemini adapter (fetch-mocked contract)", () => {
     expect(e500.kind).toBe("failed");
     expect(e500.message).not.toContain("SECRETKEY");
   });
+  it("retries transient 503s (seen live) then succeeds; gives up after 2 retries; records the model actually served", async () => {
+    let n = 0;
+    const flaky = vi.fn(async () => (++n < 3 ? new Response("{}", { status: 503 }) : new Response(JSON.stringify({ ...ok, modelVersion: "gemini-served-1" }), { status: 200 })));
+    const r = await geminiProvider({ GEMINI_API_KEY: "K" } as never, flaky as never, async () => {}).complete({ prompt: "x" });
+    expect(flaky).toHaveBeenCalledTimes(3);
+    expect(r.model).toBe("gemini-served-1");
+    const dead = vi.fn(async () => new Response("{}", { status: 503 }));
+    await expect(geminiProvider({ GEMINI_API_KEY: "K" } as never, dead as never, async () => {}).complete({ prompt: "x" })).rejects.toMatchObject({ kind: "unavailable" });
+    expect(dead).toHaveBeenCalledTimes(3);
+  });
   it("is unavailable without a key and never calls the network", async () => {
     const f = mkFetch(200, ok);
     const p = geminiProvider({} as never, f as never);

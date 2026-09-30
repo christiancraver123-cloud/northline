@@ -7,6 +7,8 @@ const API = "https://api.openai.com/v1/images";
 
 function categorize(status: number, code: string | undefined): { category: FailureCategory; retryable: boolean } {
   if (code === "content_policy_violation" || code === "moderation_blocked") return { category: "content_policy", retryable: false };
+  // Seen live: HTTP 429 with code credit_balance_exhausted / insufficient_quota is a BILLING problem, not a transient rate limit.
+  if (code === "insufficient_quota" || code === "credit_balance_exhausted" || code === "billing_hard_limit_reached") return { category: "quota_exceeded", retryable: false };
   if (status === 429) return { category: "rate_limited", retryable: true };
   if (status === 401 || status === 403) return { category: "auth", retryable: false };
   if (status === 400 || status === 422) return { category: "invalid_request", retryable: false };
@@ -38,8 +40,9 @@ export function openaiImage(apiKey: string, model = "gpt-image-1", fetchFn: type
       }
       if (!res.ok) {
         let code: string | undefined;
-        try { code = ((await res.json()) as { error?: { code?: string } }).error?.code; } catch { /* ignore body */ }
-        const c = categorize(res.status, typeof code === "string" ? code : undefined);
+        let type: string | undefined;
+        try { const e = ((await res.json()) as { error?: { code?: string; type?: string } }).error; code = e?.code; type = e?.type; } catch { /* ignore body */ }
+        const c = categorize(res.status, typeof code === "string" ? code : typeof type === "string" ? type : undefined);
         // Never echo the upstream body or the key: status + category only.
         throw new ProviderError("openai", `image generation failed (HTTP ${res.status}, ${c.category})`, c.retryable, c.category);
       }

@@ -17,6 +17,15 @@ Copy `.env.example` to `.env.local` and set only what you have:
 - **Video**: the Higgsfield adapter is a stub (see TODO.md).
 - **n8n**: set `NORTHLINE_WEBHOOK_SECRET`; see `docs/n8n.md`.
 
+## Running the real app (live services)
+```bash
+# env (server-side only): NORTHLINE_STORE=supabase SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY IMAGE_PROVIDER=openai OPENAI_API_KEY GEMINI_API_KEY
+#                         NORTHLINE_ADMIN_PASSWORD NORTHLINE_SESSION_SECRET NORTHLINE_WEBHOOK_SECRET
+npm install && npm run build && PORT=3100 npm start      # then open http://localhost:3100 and sign in
+```
+Migrations are applied once via the Supabase SQL Editor (`supabase/migrations/0001…0005`, in order). Do not re-run them.
+The cloud sandbox instance is not reachable from your browser: run the same command locally (same env) or deploy (Render/Vercel/Railway). `NORTHLINE_DEMO_SEED=false` skips seeded demo data in file mode.
+
 ## Real production pipeline (Sienna first)
 1. **Talent → Sienna → Canonical references**: upload a MASTER_FACE (+ supporting references). Identity is `SIE-IDENTITY-v1.0`.
 2. **Launch**: confirm virtual/AI disclosure (approval is locked until then).

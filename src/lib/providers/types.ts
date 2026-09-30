@@ -1,7 +1,7 @@
 // Provider abstractions. Provider-specific logic lives ONLY in adapters under this folder.
 import type { ReferenceType, TalentCode } from "@/lib/domain/types";
 
-export type FailureCategory = "provider_unavailable" | "rate_limited" | "auth" | "invalid_request" | "content_policy" | "timeout" | "unknown";
+export type FailureCategory = "provider_unavailable" | "quota_exceeded" | "rate_limited" | "auth" | "invalid_request" | "content_policy" | "timeout" | "unknown";
 
 export interface ImageReference { bytes: Uint8Array; mime: string; type: ReferenceType }
 export interface ImageRequest { productionCode: string; shotN: number; prompt: string; negative: string; talent: TalentCode; references: ImageReference[]; size?: string }

@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { getRepo } from "@/lib/db";
+import { newestFirst } from "@/lib/db/order";
 import { getTalent } from "@/lib/talent/roster";
 import { REFERENCE_TYPES } from "@/lib/domain/types";
 import { uploadReferenceAction, referenceControlAction } from "../../actions";
-import { buildCanonicalIdentity } from "@/lib/identity/canonical";
+import { loadIdentity } from "@/lib/identity/service";
 import { ReferenceLibrary } from "@/components/ReferenceLibrary";
 import { Avatar, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill } from "@/components/ui";
 
@@ -11,9 +12,10 @@ export default async function TalentDetail({ params, searchParams }: { params: P
   const t = getTalent((await params).code.toUpperCase());
   if (!t) notFound();
   const repo = await getRepo();
-  const [prods, refs, launch] = await Promise.all([repo.list("productions"), repo.list("referenceAssets", { talent: t.code }), repo.list("launchStates", { talent: t.code })]);
+  const [prods, refs, launch] = await Promise.all([repo.list("productions").then(newestFirst), repo.list("referenceAssets", { talent: t.code }), repo.list("launchStates", { talent: t.code })]);
   const sp = await searchParams;
-  const ci = buildCanonicalIdentity(t.code);
+  const loaded = await loadIdentity(repo, t.code); // persists the immutable snapshot on first view
+  const ci = loaded.identity;
   const mine = prods.filter((p) => p.talent.includes(t.code));
   return (
     <>
@@ -26,7 +28,7 @@ export default async function TalentDetail({ params, searchParams }: { params: P
           <dl className="grid grid-cols-[90px_1fr] gap-x-3 gap-y-1.5 text-[13px]">
             {(["hair", "eyes", "skin", "face", "body", "jewelry"] as const).map((k) => <><dt key={k + "d"} className="text-muted capitalize">{k}</dt><dd key={k}>{t.identity[k]}</dd></>)}
           </dl>
-          <p className="mt-3 text-[12px] text-faint">Canonical identity <b className="font-mono text-ink">{ci.id}</b> — productions record this version. Source: src/lib/identity/canonical.ts + roster.ts. Generated images never replace it.</p>
+          <p className="mt-3 text-[12px] text-faint">Canonical identity <b className="font-mono text-ink">{ci.id}</b> — stored snapshot in the database{loaded.drift ? " (code facts drifted — bump the version)" : ""}; productions record this version. Source: src/lib/identity/canonical.ts + roster.ts. Generated images never replace it.</p>
           <h2 className="mb-2 mt-5 font-bold">Hard locks <span className="text-[11px] font-normal text-faint">(violation = HARD_FAIL)</span></h2>
           <ul className="grid gap-1.5 text-[12.5px]">{ci.hardLocks.map((l) => <li key={l.id} className="rounded-lg border border-bad/30 p-2"><span className="font-mono text-[11px] text-bad">{l.id}</span> {l.description}</li>)}</ul>
           <h2 className="mb-2 mt-4 font-bold">Soft locks <span className="text-[11px] font-normal text-faint">(violation = REVIEW)</span></h2>

@@ -7,10 +7,18 @@ import { ensureAgents } from "@/lib/agents/ops/service";
 import { mockImage, mockVideo } from "@/lib/providers/mock";
 import { localStorageProvider } from "@/lib/providers/storage";
 
-export async function seedDemo(repo: Repo, opts: { productions?: boolean } = {}) {
+/** Idempotent: one launch row per creator (works for file and Supabase stores; unique(talent) guards races). */
+export async function ensureLaunchStates(repo: Repo) {
+  const have = new Set((await repo.list("launchStates")).map((l) => l.talent));
   for (const t of ROSTER) {
-    await repo.insert("launchStates", { talent: t.code, accountCreated: false, handle: null, bioDone: false, aiDisclosure: false, profilePicture: false, masterFace: false, referencesDone: false, initialContent: false, approved: false, origin: "live" });
+    if (have.has(t.code)) continue;
+    try { await repo.insert("launchStates", { talent: t.code, accountCreated: false, handle: null, bioDone: false, aiDisclosure: false, profilePicture: false, masterFace: false, referencesDone: false, initialContent: false, approved: false, origin: "live" }); }
+    catch { /* concurrent creator won the unique index */ }
   }
+}
+
+export async function seedDemo(repo: Repo, opts: { productions?: boolean } = {}) {
+  await ensureLaunchStates(repo);
   await ensureAgents(repo);
   if (opts.productions === false) return;
   const deps = { image: mockImage, video: mockVideo, storage: localStorageProvider };

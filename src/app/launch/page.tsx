@@ -1,4 +1,5 @@
 import { getRepo } from "@/lib/db";
+import { ensureLaunchStates } from "@/lib/db/seed";
 import { ROSTER } from "@/lib/talent/roster";
 import { launchAction } from "../actions";
 import { Avatar, Btn, Card, PageHeader, Pill } from "@/components/ui";
@@ -9,7 +10,9 @@ const FIELDS: [string, string][] = [
 ];
 
 export default async function Launch() {
-  const rows = await (await getRepo()).list("launchStates");
+  const repo = await getRepo();
+  await ensureLaunchStates(repo);
+  const rows = await repo.list("launchStates");
   return (
     <>
       <PageHeader title="Launch" sub="Track each creator to launch. Toggle only what is actually true — Northline does not assume external accounts exist." />

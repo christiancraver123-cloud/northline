@@ -163,8 +163,8 @@ describe("operator chat is operational", () => {
   });
   it("explains an Identity QA rejection from stored prompt QA", async () => {
     const r = await fresh();
-    const p = await r.insert("productions", { code: "ALE-2026-009", talent: ["ALE"], scope: "SOLO", contentType: "POST", platform: "instagram", concept: "x", status: "IDEA", campaignId: null, storylineId: null, brief: null, qaNotes: ["Shot 1: Forbidden for Alessia: hoops"], costUsd: 0 });
-    await r.insert("prompts", { productionId: p.id, provider: "mock", version: 1, shotN: 1, positive: "Alessia with hoops", negative: "", identityRefs: [], qa: { ok: false, issues: ["Forbidden for Alessia: hoops"] } });
+    const p = await r.insert("productions", { code: "ALE-2026-009", talent: ["ALE"], scope: "SOLO", contentType: "POST", platform: "instagram", concept: "x", status: "IDEA", campaignId: null, storylineId: null, brief: null, qaNotes: ["Shot 1: Forbidden for Alessia: hoops"], costUsd: 0, identityVersion: null, currentAttemptId: null });
+    await r.insert("prompts", { productionId: p.id, provider: "mock", version: 1, shotN: 1, positive: "Alessia with hoops", negative: "", identityRefs: [], qa: { ok: false, issues: ["Forbidden for Alessia: hoops"] }, briefId: null, attemptId: null });
     const a = await handleMessage(r, "ORCHESTRATOR", "Why did Identity QA reject ALE-2026-009?");
     expect(a.reply).toMatch(/Forbidden for Alessia: hoops/);
     expect((await handleMessage(r, "ORCHESTRATOR", "Why was ALE-2026-777 rejected?")).reply).toMatch(/can't find/);

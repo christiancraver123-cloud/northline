@@ -29,3 +29,9 @@ Nothing runs in the background inside Next.js; if nothing calls the tick, schedu
 - Concurrency: the worker runs independent tasks in parallel (`AGENT_CONCURRENCY` default 4; `AGENT_LANE_CONCURRENCY` default 2 per provider; one task per agent at a time). Lanes are provider-based so a rate-limited vendor doesn't stall others.
 - Tracking: every run records provider/model/fallback/tokens/cost; every attempt is an `llm_calls` row. **Cost is computed only** from operator-supplied `LLM_PRICING_JSON` plus real reported usage; otherwise `null` ("unknown"). Mock = $0. Never estimated.
 - Status: Gemini/OpenAI adapters are contract-tested with mocked `fetch`; they have **not** been run against live APIs (no keys in the build environment).
+
+## Claiming, leases, idempotency (worker safety)
+See `docs/pipeline.md` → Worker safety. Summary: atomic `repo.claim` QUEUED→RUNNING (exactly one worker wins, also across processes on Supabase), lease + reclaim of crashed workers (`TASK_LEASE_EXPIRED` events), `idempotency_key` dedupe. Concurrency tests: `src/lib/agents/ops/claim.test.ts`.
+
+## Production QA tasks
+`production.create` → (event) `identity_qa.attempt` (Identity QA), `technical_qa.attempt` + `content_qa.production` (Content QA), then `production.finalize` (Production Manager, depends on all three). `production.regenerate` spawns the same family for the new attempt. These appear in each agent's queue/activity like any other task.

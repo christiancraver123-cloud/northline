@@ -21,6 +21,7 @@ export function laneOf(task: AgentTask, agent: Agent | undefined, router: Router
 
 export async function processQueue(repo: Repo, opts: ProcessOptions = {}): Promise<ProcessResult> {
   const now = (opts.now ?? new Date()).toISOString();
+  await reclaimExpired(repo, opts.now ?? new Date());
   const router = opts.router ?? defaultRouter();
   const agents = await ensureAgents(repo);
   const agentBy = new Map(agents.map((a) => [a.code, a]));
@@ -58,15 +59,38 @@ export async function processQueue(repo: Repo, opts: ProcessOptions = {}): Promi
     }
     if (!batch.length) break;
     budget -= batch.length;
-    ran.push(...(await Promise.all(batch.map((t) => runTask(repo, t, opts, router, agentBy.get(t.agentId))))));
+    const results = (await Promise.all(batch.map((t) => runTask(repo, t, opts, router, agentBy.get(t.agentId))))).filter((r): r is NonNullable<typeof r> => r !== null);
+    ran.push(...results);
   }
   return { ran, remainingQueued: (await repo.list("agentTasks", { status: "QUEUED" })).length };
 }
 
+export const LEASE_MS = () => envInt("AGENT_LEASE_SEC", 1200) * 1000;
+export const MAX_TASK_ATTEMPTS = 3;
+/** Tasks that create external/persistent side effects and must NOT be silently re-run after a lost lease (would duplicate productions). */
+const NO_REQUEUE = new Set(["production.create", "production.regenerate"]);
+
+/** Recover tasks whose worker died (lease expired): re-queue (or fail after MAX attempts / for non-idempotent kinds). */
+export async function reclaimExpired(repo: Repo, now = new Date()): Promise<number> {
+  let n = 0;
+  for (const t of await repo.list("agentTasks", { status: "RUNNING" })) {
+    if (!t.leaseExpiresAt || t.leaseExpiresAt > now.toISOString()) continue;
+    const dead = NO_REQUEUE.has(t.kind) || t.attempts >= MAX_TASK_ATTEMPTS;
+    const won = await repo.claim("agentTasks", t.id, { status: "RUNNING", claimedBy: t.claimedBy }, dead
+      ? { status: "FAILED", error: `Worker lease expired${NO_REQUEUE.has(t.kind) ? " (not auto-retried: would duplicate work; retry manually)" : ` after ${t.attempts} attempt(s)`}`, finishedAt: now.toISOString(), claimedBy: null, leaseExpiresAt: null }
+      : { status: "QUEUED", claimedBy: null, leaseExpiresAt: null, startedAt: null });
+    if (won) { n++; await logEvent(repo, t.agentId, "TASK_LEASE_EXPIRED", dead ? `Lease expired; task failed: ${t.title}` : `Lease expired; task re-queued: ${t.title}`, { taskId: t.id, level: "warn", origin: t.origin }); }
+  }
+  return n;
+}
+
 async function runTask(repo: Repo, task: AgentTask, opts: ProcessOptions, router: Router, agent: Agent | undefined) {
   const t0 = new Date().toISOString();
+  // ATOMIC CLAIM: only the caller that flips QUEUED→RUNNING proceeds. Concurrent workers/ticks lose the race and skip.
+  const workerId = `w-${process.pid}-${Math.random().toString(36).slice(2, 8)}`;
+  const claimed = await repo.claim("agentTasks", task.id, { status: "QUEUED" }, { status: "RUNNING", startedAt: t0, claimedBy: workerId, leaseExpiresAt: new Date(Date.now() + LEASE_MS()).toISOString(), attempts: task.attempts + 1 });
+  if (!claimed) return null;
   const run = await repo.insert("agentRuns", { agentId: task.agentId, taskId: task.id, trigger: task.createdBy.startsWith("schedule:") ? "schedule" : task.createdBy.startsWith("event:") ? "event" : task.createdBy === "n8n" ? "n8n" : opts.trigger ?? "queue", state: "RUNNING", startedAt: t0, finishedAt: null, error: null, summary: "", costUsd: null, tokens: null, provider: null, model: null, usedFallback: false, origin: task.origin });
-  await repo.update("agentTasks", task.id, { status: "RUNNING", startedAt: t0 });
   await logEvent(repo, task.agentId, "TASK_STARTED", `Started: ${task.title}`, { taskId: task.id, runId: run.id, origin: task.origin });
   const handler = HANDLERS[task.kind];
   const calls = { n: 0, tokens: 0, tokensKnown: true, cost: 0, costKnown: true, provider: null as string | null, model: null as string | null, fallback: false };
@@ -102,7 +126,7 @@ async function runTask(repo: Repo, task: AgentTask, opts: ProcessOptions, router
     if (!handler) throw new Error(`No handler for task kind "${task.kind}"`);
     const res = await handler(ctx);
     const t1 = new Date().toISOString();
-    await repo.update("agentTasks", task.id, { status: "COMPLETE", output: { ...res.output, reportIds: res.reportIds ?? [] }, finishedAt: t1 });
+    await repo.update("agentTasks", task.id, { status: "COMPLETE", output: { ...res.output, reportIds: res.reportIds ?? [] }, finishedAt: t1, claimedBy: null, leaseExpiresAt: null });
     const f = finish(t1);
     await repo.update("agentRuns", run.id, { state: "COMPLETE", summary: res.summary, ...f });
     await logEvent(repo, task.agentId, "TASK_COMPLETE", `Completed: ${task.title} — ${res.summary}`, { taskId: task.id, runId: run.id, origin: task.origin });
@@ -111,7 +135,7 @@ async function runTask(repo: Repo, task: AgentTask, opts: ProcessOptions, router
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown error";
     const t1 = new Date().toISOString();
-    await repo.update("agentTasks", task.id, { status: "FAILED", error: msg, finishedAt: t1 });
+    await repo.update("agentTasks", task.id, { status: "FAILED", error: msg, finishedAt: t1, claimedBy: null, leaseExpiresAt: null });
     const f = finish(t1);
     await repo.update("agentRuns", run.id, { state: "FAILED", error: msg, summary: msg, ...f });
     await logEvent(repo, task.agentId, "TASK_FAILED", `Failed: ${task.title} — ${msg}`, { taskId: task.id, runId: run.id, level: "error", origin: task.origin });

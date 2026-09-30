@@ -7,11 +7,12 @@ import { ensureAgents } from "@/lib/agents/ops/service";
 import { mockImage, mockVideo } from "@/lib/providers/mock";
 import { localStorageProvider } from "@/lib/providers/storage";
 
-export async function seedDemo(repo: Repo) {
+export async function seedDemo(repo: Repo, opts: { productions?: boolean } = {}) {
   for (const t of ROSTER) {
     await repo.insert("launchStates", { talent: t.code, accountCreated: false, handle: null, bioDone: false, aiDisclosure: false, profilePicture: false, masterFace: false, referencesDone: false, initialContent: false, approved: false, origin: "live" });
   }
   await ensureAgents(repo);
+  if (opts.productions === false) return;
   const deps = { image: mockImage, video: mockVideo, storage: localStorageProvider };
   const o = { deps, origin: "demo" as const, createdBy: "seed" };
   await submitCreate(repo, { talent: ["SIE"], format: "CAROUSEL", concept: "Pilates to coffee run", asset_count: 6 }, o);

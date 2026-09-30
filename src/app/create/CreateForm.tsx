@@ -22,7 +22,7 @@ export function CreateForm({ error }: { error?: string }) {
     const { request, issues } = parseIntent(text);
     setIssues(issues);
     if (!request) return;
-    setTalent(request.talent); setFormat(request.format); setConcept(request.concept); setQuantity(request.quantity);
+    setTalent(request.talent); setFormat(request.format); setConcept(request.concept); setQuantity(request.quantity); setAssetCount(request.asset_count ?? "");
   }
   const request = useMemo(() => {
     const r = CreateRequestSchema.safeParse({ talent, format, concept, quantity, asset_count: assetCount === "" ? undefined : assetCount });

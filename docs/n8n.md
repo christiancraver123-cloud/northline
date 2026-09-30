@@ -24,3 +24,6 @@ No live n8n instance is connected; nothing on the Automations page reflects a re
 ## Worker tick (scheduled/event-driven agent work)
 `POST {NORTHLINE_URL}/api/agents/tick` — same Bearer auth. Materialises due agent schedules and runs eligible queued tasks. Use an n8n Schedule Trigger (e.g. every 5 min). See `docs/agents.md`.
 Production webhook responses now also include `taskId` (the Production Manager task that ran the workflow).
+
+## Idempotency
+Send `Idempotency-Key: <stable id, e.g. n8n execution id>` (or body `idempotency_key`). Re-delivering the same key returns the existing run instead of creating another production (unique index on `agent_tasks.idempotency_key`).

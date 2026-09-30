@@ -12,6 +12,11 @@ export interface Repo {
   get<T extends TableName>(t: T, id: string): Promise<Tables[T] | null>;
   insert<T extends TableName>(t: T, rec: NewRecord<T>): Promise<Tables[T]>;
   update<T extends TableName>(t: T, id: string, patch: Partial<Tables[T]>): Promise<Tables[T]>;
+  /**
+   * Atomic compare-and-set: applies `patch` only if the row currently matches `expect`; returns the updated row, or null if
+   * another worker got there first. This is the primitive behind safe task claiming (works across processes on Supabase).
+   */
+  claim<T extends TableName>(t: T, id: string, expect: Partial<Tables[T]>, patch: Partial<Tables[T]>): Promise<Tables[T] | null>;
   /** Atomically reserve the next production sequence number for a creator+year. */
   nextProductionSeq(talentCode: string, year: number): Promise<number>;
 }

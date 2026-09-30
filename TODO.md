@@ -7,12 +7,16 @@
 - [ ] `NORTHLINE_WEBHOOK_SECRET` + an n8n Schedule Trigger calling `POST /api/agents/tick`.
 - [ ] Create a `main` branch on GitHub (push was blocked by permissions) and choose the default branch.
 
+## Next milestone candidates
+- [ ] Run the first REAL Sienna production: upload real master/reference images, set `IMAGE_PROVIDER=openai` + `OPENAI_API_KEY`, assign a vision provider (Gemini/OpenAI) to Identity QA, verify results; tune prompts/locks from real outputs.
+- [ ] Live Supabase verification (repo, claim, storage bucket) + `scripts/verify-supabase.ts`.
+
 ## P0/P1 — persistence & ops
 - [ ] Live-verify `SupabaseRepo` (supabase-js) end to end; add a script `scripts/verify-supabase.ts`.
-- [ ] Distributed-safe worker: task claim via `update ... where status='QUEUED'` (optimistic lock) so multiple tick callers can't double-run.
+- [x] Distributed-safe worker claim (done: `repo.claim`, leases, idempotency) — still needs live Supabase verification.
 - [ ] Supabase Auth (multi-user, roles) replacing the single shared password.
-- [ ] Supabase Storage adapter (StorageProvider) replacing local disk.
-- [ ] Reference-asset upload/management UI; feed references into image requests; immutable approved refs.
+- [x] Supabase Storage adapter written (unverified live).
+- [x] Reference upload/management UI + references sent to image provider (done) — bulk import, per-reference QA/approval workflow TODO.
 - [ ] Verify OpenAI image adapter + OpenAI/Gemini text adapters with real keys.
 - [ ] Higgsfield adapter (submit/poll); needs credentials + API docs.
 
@@ -30,3 +34,10 @@
 
 ## P3
 - [ ] UI polish/responsive pass, pagination, toasts; live-updating chat/activity (SSE) instead of reload.
+
+## QA / pipeline follow-ups
+- [ ] Per-asset/per-frame regenerate selection in the UI; attempt comparison view.
+- [ ] Video (Reel) QA; Higgsfield adapter.
+- [ ] Identity drift handling: version bump workflow (v1.1) + migrating references/productions; admin UI for editing locks.
+- [ ] Reference-quality checks (min resolution, face detected) when a vision provider is available.
+- [ ] Caption QA and caption edit UI.

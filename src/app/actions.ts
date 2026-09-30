@@ -7,6 +7,11 @@ import { retryAsset, submitReelVideo } from "@/lib/orchestrator/execute";
 import { submitCreate } from "@/lib/agents/ops/commands";
 import { ensureApprovalWait, resolveApprovalWaits } from "@/lib/agents/ops/service";
 import { decide, resubmitForReview, type Decision } from "@/lib/orchestrator/approvals";
+import { archiveReference, promoteGeneratedAsset, setMaster, uploadReference } from "@/lib/references/service";
+import { getStorage } from "@/lib/providers/storage";
+import { submitRegenerate } from "@/lib/agents/ops/commands";
+import { MAX_IMAGE_BYTES } from "@/lib/media/inspect";
+import { REFERENCE_TYPES, TALENT_CODES, type ReferenceType, type TalentCode } from "@/lib/domain/types";
 import { CreateRequestSchema } from "@/lib/orchestrator/contracts";
 import type { LaunchState } from "@/lib/db/records";
 
@@ -31,7 +36,8 @@ export async function decideAction(formData: FormData) {
   try {
     const repo = await getRepo();
     const ap = await repo.get("approvals", id);
-    await decide(repo, id, decision, notes);
+    const selected = formData.getAll("asset").map(String);
+    await decide(repo, id, decision, notes, "operator", decision === "APPROVED" && selected.length ? { selectedAssetIds: selected } : {});
     if (ap) await resolveApprovalWaits(repo, ap.productionId, decision);
   } catch (e) { err = e instanceof Error ? e.message : "failed"; }
   revalidatePath("/", "layout");
@@ -122,4 +128,59 @@ export async function markReportAction(formData: FormData) {
   if (id === "ALL") for (const r of await repo.list("agentReports", { read: false })) await repo.update("agentReports", r.id, { read: true });
   else await repo.update("agentReports", id, { read: formData.get("read") !== "0" });
   revalidatePath("/", "layout");
+}
+
+
+// ---- Canonical references & regeneration ----------------------------------------------------
+const back = (code: string, q: string) => redirect(`/talent/${code}?${q}#references`);
+
+export async function uploadReferenceAction(formData: FormData) {
+  await requireOperator();
+  const code = String(formData.get("talent")) as TalentCode;
+  if (!TALENT_CODES.includes(code)) redirect("/talent");
+  const type = String(formData.get("type")) as ReferenceType;
+  const file = formData.get("file");
+  let err = "";
+  try {
+    if (!(file instanceof File) || file.size === 0) throw new Error("Choose an image file.");
+    if (file.size > MAX_IMAGE_BYTES) throw new Error("File is larger than 10MB.");
+    if (!REFERENCE_TYPES.includes(type)) throw new Error("Choose a reference type.");
+    await uploadReference(await getRepo(), getStorage(), { talent: code, type, bytes: new Uint8Array(await file.arrayBuffer()), filename: file.name, notes: String(formData.get("notes") ?? ""), replaceId: String(formData.get("replaceId") ?? "") || undefined });
+  } catch (e) { err = e instanceof Error ? e.message : "upload failed"; }
+  revalidatePath("/", "layout");
+  back(code, err ? `refError=${encodeURIComponent(err)}` : "refOk=1");
+}
+export async function referenceControlAction(formData: FormData) {
+  await requireOperator();
+  const repo = await getRepo();
+  const code = String(formData.get("talent"));
+  const id = String(formData.get("id"));
+  let err = "";
+  try {
+    if (formData.get("op") === "archive") await archiveReference(repo, id);
+    else if (formData.get("op") === "master") await setMaster(repo, id);
+  } catch (e) { err = e instanceof Error ? e.message : "failed"; }
+  revalidatePath("/", "layout");
+  back(code, err ? `refError=${encodeURIComponent(err)}` : "refOk=1");
+}
+export async function promoteAssetAction(formData: FormData) {
+  await requireOperator();
+  const assetId = String(formData.get("assetId"));
+  let err = "";
+  try {
+    await promoteGeneratedAsset(await getRepo(), getStorage(), assetId, String(formData.get("type")) as ReferenceType, String(formData.get("operator") ?? "operator"), String(formData.get("notes") ?? ""), String(formData.get("replaceId") ?? "") || undefined);
+  } catch (e) { err = e instanceof Error ? e.message : "failed"; }
+  revalidatePath("/", "layout");
+  redirect(`/assets/${assetId}?${err ? `error=${encodeURIComponent(err)}` : "promoted=1"}`);
+}
+export async function regenerateAction(formData: FormData) {
+  await requireOperator();
+  const pid = String(formData.get("productionId"));
+  let err = "";
+  try {
+    const t = await submitRegenerate(await getRepo(), pid, { notes: String(formData.get("notes") ?? "") });
+    if (t.status === "FAILED") err = t.error ?? "regeneration failed";
+  } catch (e) { err = e instanceof Error ? e.message : "failed"; }
+  revalidatePath("/", "layout");
+  redirect(`/productions/${pid}${err ? `?error=${encodeURIComponent(err)}` : ""}`);
 }

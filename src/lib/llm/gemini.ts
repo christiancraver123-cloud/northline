@@ -8,7 +8,7 @@ export function geminiProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: ty
   const model0 = env.GEMINI_MODEL || "gemini-2.5-flash";
   return {
     name: "gemini",
-    defaultModel: model0,
+    defaultModel: model0, vision: true,
     configured: () => !!env.GEMINI_API_KEY,
     async complete(req) {
       const key = env.GEMINI_API_KEY;
@@ -21,7 +21,7 @@ export function geminiProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: ty
           headers: { "content-type": "application/json", "x-goog-api-key": key },
           body: JSON.stringify({
             ...(req.system ? { systemInstruction: { parts: [{ text: req.system }] } } : {}),
-            contents: [{ role: "user", parts: [{ text: req.prompt }] }],
+            contents: [{ role: "user", parts: [{ text: req.prompt }, ...(req.images ?? []).map((i) => ({ inlineData: { mimeType: i.mime, data: i.dataBase64 } }))] }],
             generationConfig: { temperature: req.temperature ?? 0.4, ...(req.maxOutputTokens ? { maxOutputTokens: req.maxOutputTokens } : {}), ...(req.json ? { responseMimeType: "application/json" } : {}) },
           }),
         });

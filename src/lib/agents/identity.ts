@@ -1,26 +1,32 @@
-// Identity block + Identity QA. Prompts are built from canonical roster data, never from previously generated images.
+// Identity block + prompt-level identity checks. Rules come from the canonical identity record (identity/canonical.ts),
+// never from ad-hoc strings scattered through application logic.
+import { allLocks, buildCanonicalIdentity, type CanonicalIdentity } from "@/lib/identity/canonical";
 import { ROSTER_BY_CODE } from "@/lib/talent/roster";
-import type { ReferenceSlot, TalentCode } from "@/lib/domain/types";
+import type { QaSeverity, TalentCode } from "@/lib/domain/types";
 
-export const REFERENCE_PRIORITY: ReferenceSlot[] = ["MASTER_FACE", "FRONT", "THREE_QUARTER", "PROFILE", "UPPER_BODY", "FULL_BODY", "NATURAL", "CHARACTER_SHEET"];
+export const identityBlock = (code: TalentCode, ci: CanonicalIdentity = buildCanonicalIdentity(code)): string => ci.providerBlock;
 
-export function identityBlock(code: TalentCode): string {
-  const t = ROSTER_BY_CODE[code];
-  return `${t.first}, a ${t.age}-year-old adult woman. ${t.identity.signature.join("; ")}. ${t.identity.body}. Expression: ${t.visual.expression}.`;
-}
-
+export interface QaFinding { lockId: string; severity: Exclude<QaSeverity, "PASS">; message: string }
 export interface QaResult { ok: boolean; issues: string[] }
 
-/** Checks the POSITIVE prompt text only (negative prompts legitimately mention forbidden traits). */
+/** Prompt conformance check (does the PROMPT state the identity correctly?). Not an image inspection. */
+export function identityPromptFindings(code: TalentCode, positive: string, ci: CanonicalIdentity = buildCanonicalIdentity(code)): QaFinding[] {
+  const first = ROSTER_BY_CODE[code].first;
+  const out: QaFinding[] = [];
+  for (const lock of allLocks(ci)) {
+    for (const r of lock.promptRequired ?? []) if (!new RegExp(r.pattern, "i").test(positive)) out.push({ lockId: lock.id, severity: lock.severity, message: `Missing identity marker: ${r.label}` });
+    for (const r of lock.promptForbidden ?? []) if (new RegExp(r.pattern, "i").test(positive)) out.push({ lockId: lock.id, severity: lock.severity, message: `Forbidden for ${first}: ${r.label}` });
+  }
+  return out;
+}
+export const worst = (f: { severity: QaSeverity }[]): QaSeverity => (f.some((x) => x.severity === "HARD_FAIL") ? "HARD_FAIL" : f.length ? "REVIEW" : "PASS");
+
+/** Backward-compatible wrapper: ok = no findings at all. */
 export function identityQa(code: TalentCode, positive: string): QaResult {
-  const t = ROSTER_BY_CODE[code];
-  const issues: string[] = [];
-  for (const r of t.qa.required) if (!new RegExp(r.pattern, "i").test(positive)) issues.push(`Missing identity marker: ${r.label}`);
-  for (const r of t.qa.forbidden) if (new RegExp(r.pattern, "i").test(positive)) issues.push(`Forbidden for ${t.first}: ${r.label}`);
-  return { ok: issues.length === 0, issues };
+  const f = identityPromptFindings(code, positive);
+  return { ok: f.length === 0, issues: f.map((x) => x.message) };
 }
 
-export function negativeBlock(code: TalentCode): string {
-  const t = ROSTER_BY_CODE[code];
-  return `Avoid: ${t.qa.forbidden.map((f) => f.label).join(", ")}; plastic skin, extra fingers, distorted hands, text overlays, watermarks, nudity, lingerie, real brand logos, real people.`;
+export function negativeBlock(code: TalentCode, ci: CanonicalIdentity = buildCanonicalIdentity(code)): string {
+  return `Avoid: ${[...new Set(ci.negativeConstraints)].join(", ")}.`;
 }

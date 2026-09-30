@@ -23,7 +23,7 @@ export function Pill({ children, tone = "mute" }: { children: ReactNode; tone?: 
 }
 const STATUS_TONE: Record<string, string> = {
   IDEA: "mute", GENERATING: "info", RAW: "warn", REVIEW: "info", APPROVED: "ok", SCHEDULED: "ok", PUBLISHED: "ok", REJECTED: "bad", ARCHIVED: "mute",
-  PENDING: "warn", FAILED: "bad", REVISION_REQUESTED: "warn", COMPLETE: "ok", RUNNING: "info", QUEUED: "mute", RETRYING: "warn", WAITING: "warn",
+  PENDING: "warn", FAILED: "bad", REVISION_REQUESTED: "warn", COMPLETE: "ok", RUNNING: "info", QUEUED: "mute", RETRYING: "warn", WAITING: "warn", SUCCEEDED: "ok", SUBMITTED: "info", PROCESSING: "info", HARD_FAIL: "bad", MANUAL_REVIEW_REQUIRED: "warn", QA_PENDING: "mute", PASS: "ok", ERROR: "bad",
 };
 export const StatusPill = ({ status }: { status: string }) => <Pill tone={STATUS_TONE[status] ?? "mute"}>{status.replace("_", " ")}</Pill>;
 export const DemoBadge = ({ origin }: { origin: string }) => (origin === "demo" ? <Pill tone="warn">DEMO</Pill> : null);
@@ -77,3 +77,6 @@ export function ProviderPill({ provider, model, fallback }: { provider: string |
   return <Pill tone={tone}>{provider}{model ? ` · ${model}` : ""}{fallback ? " · fallback" : ""}</Pill>;
 }
 export const PROVIDER_STATE_TONE: Record<string, string> = { configured: "ok", unavailable: "mute", rate_limited: "warn", failed: "bad" };
+
+export const QA_TONE: Record<string, string> = { PASS: "ok", REVIEW: "warn", HARD_FAIL: "bad", MANUAL_REVIEW_REQUIRED: "warn", QA_PENDING: "mute", NOT_RUN: "mute" };
+export const QaPill = ({ status }: { status: string }) => <Pill tone={QA_TONE[status] as never ?? "mute"}>{status === "MANUAL_REVIEW_REQUIRED" ? "MANUAL REVIEW" : status.replace("_", " ")}</Pill>;

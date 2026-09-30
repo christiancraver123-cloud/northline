@@ -6,7 +6,7 @@ export function openaiLlmProvider(env: NodeJS.ProcessEnv = process.env, fetchFn:
   const model0 = env.OPENAI_TEXT_MODEL || "gpt-4o-mini";
   return {
     name: "openai",
-    defaultModel: model0,
+    defaultModel: model0, vision: true,
     configured: () => !!env.OPENAI_API_KEY,
     async complete(req) {
       const key = env.OPENAI_API_KEY;
@@ -18,7 +18,7 @@ export function openaiLlmProvider(env: NodeJS.ProcessEnv = process.env, fetchFn:
           method: "POST",
           headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
           body: JSON.stringify({ model, temperature: req.temperature ?? 0.4, ...(req.maxOutputTokens ? { max_tokens: req.maxOutputTokens } : {}), ...(req.json ? { response_format: { type: "json_object" } } : {}),
-            messages: [...(req.system ? [{ role: "system", content: req.system }] : []), { role: "user", content: req.prompt }] }),
+            messages: [...(req.system ? [{ role: "system", content: req.system }] : []), { role: "user", content: req.images?.length ? [{ type: "text", text: req.prompt }, ...req.images.map((i) => ({ type: "image_url", image_url: { url: `data:${i.mime};base64,${i.dataBase64}` } }))] : req.prompt }] }),
         });
       } catch { throw new LlmError("openai", "unavailable", "network error reaching OpenAI"); }
       if (!res.ok) {

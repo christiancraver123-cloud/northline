@@ -2,7 +2,8 @@
 export type LlmProviderName = "openai" | "gemini" | "mock";
 export const LLM_PROVIDERS: LlmProviderName[] = ["gemini", "openai", "mock"];
 
-export interface LlmRequest { system?: string; prompt: string; json?: boolean; maxOutputTokens?: number; temperature?: number; model?: string }
+export interface LlmImage { mime: string; dataBase64: string }
+export interface LlmRequest { system?: string; prompt: string; json?: boolean; maxOutputTokens?: number; temperature?: number; model?: string; /** Inline images for vision calls (e.g. image QA). Never logged. */ images?: LlmImage[] }
 export interface LlmUsage { inputTokens: number | null; outputTokens: number | null; totalTokens: number | null }
 export interface LlmResult { provider: LlmProviderName; model: string; text: string; usage: LlmUsage | null; costUsd: number | null; latencyMs: number; requestId: string | null }
 
@@ -15,6 +16,8 @@ export class LlmError extends Error {
 export interface LlmProvider {
   readonly name: LlmProviderName;
   readonly defaultModel: string;
+  /** Can this provider/model inspect images? */
+  readonly vision: boolean;
   /** True when credentials/config are present (says nothing about live reachability). */
   configured(): boolean;
   complete(req: LlmRequest): Promise<Omit<LlmResult, "costUsd" | "latencyMs">>;

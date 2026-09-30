@@ -43,6 +43,16 @@ export class SupabaseRepo implements Repo {
     if (error) this.fail("update", t, error);
     return mapKeys(data, camel) as unknown as Tables[T];
   }
+  async claim<T extends TableName>(t: T, id: string, expect: Partial<Tables[T]>, patch: Partial<Tables[T]>) {
+    // Single conditional UPDATE ... WHERE id = $1 AND <expected columns>: Postgres row locking guarantees only one caller matches.
+    const p = mapKeys(patch as Record<string, unknown>, snake);
+    delete p.id;
+    let q = this.db.from(table(t)).update({ ...p, updated_at: new Date().toISOString() }).eq("id", id);
+    for (const [k, v] of Object.entries(expect)) if (v !== undefined) q = v === null ? q.is(snake(k), null) : q.eq(snake(k), v as never);
+    const { data, error } = await q.select();
+    if (error) this.fail("claim", t, error);
+    return data && data.length ? (mapKeys(data[0], camel) as unknown as Tables[T]) : null;
+  }
   async nextProductionSeq(code: string, year: number) {
     const { data, error } = await this.db.rpc("next_production_seq", { p_code: code, p_year: year });
     if (error) this.fail("rpc next_production_seq", "production_sequences", error);

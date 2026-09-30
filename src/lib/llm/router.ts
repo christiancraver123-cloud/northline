@@ -13,9 +13,9 @@ import { mockLlm } from "./mock";
 import { LlmError, type LlmProvider, type LlmProviderName, type LlmRequest, type LlmResult, type ModelPreference } from "./types";
 
 /** Task kinds where switching provider silently could change identity-relevant output. */
-export const IDENTITY_CRITICAL_KINDS = new Set(["identity_qa.review", "prompt.build", "image.generate", "production.create"]);
+export const IDENTITY_CRITICAL_KINDS = new Set(["identity_qa.review", "identity_qa.attempt", "prompt.build", "image.generate", "production.create", "production.regenerate"]);
 /** Jobs suited to background/asynchronous analysis (Gemini-friendly by default when configured). */
-export const ANALYSIS_KINDS = new Set(["strategist.concepts", "director.concepts", "growth.recommendations", "performance.report", "content_qa.review", "production.digest", "orchestrator.report", "orchestrator.consolidate"]);
+export const ANALYSIS_KINDS = new Set(["strategist.concepts", "director.concepts", "growth.recommendations", "performance.report", "content_qa.review", "content_qa.audit", "technical_qa.attempt", "production.digest", "orchestrator.report", "orchestrator.consolidate"]);
 
 export interface Attempt { provider: LlmProviderName; model: string; status: "COMPLETE" | "FAILED" | "RATE_LIMITED" | "UNAVAILABLE" | "SKIPPED"; error: string | null; startedAt: string; finishedAt: string; latencyMs: number; usage: LlmResult["usage"]; costUsd: number | null; fallbackFrom: LlmProviderName | null }
 export interface RouteResult { result: LlmResult | null; attempts: Attempt[]; usedFallback: boolean; error: LlmError | null }
@@ -71,6 +71,11 @@ export function createRouter(providers: Record<LlmProviderName, LlmProvider>): R
         if (st.state !== "configured") {
           lastErr = new LlmError(c.provider, st.state === "rate_limited" ? "rate_limited" : "unavailable", st.detail ?? st.state);
           attempts.push({ provider: c.provider, model: c.model, status: "SKIPPED", error: `${st.state}: ${st.detail ?? ""}`.trim(), startedAt: s0, finishedAt: s0, latencyMs: 0, usage: null, costUsd: null, fallbackFrom: first === c.provider ? null : first });
+          continue;
+        }
+        if (req.images?.length && !prov.vision) {
+          lastErr = new LlmError(c.provider, "unavailable", "provider has no vision support");
+          attempts.push({ provider: c.provider, model: c.model, status: "SKIPPED", error: "no vision support", startedAt: s0, finishedAt: s0, latencyMs: 0, usage: null, costUsd: null, fallbackFrom: first === c.provider ? null : first });
           continue;
         }
         try {

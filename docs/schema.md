@@ -7,4 +7,5 @@ Migrations: `supabase/migrations/0001_init.sql` (tables, enums, RLS enabled with
 - `provider_jobs.cost_usd/credits` are nullable: unknown stays unknown.
 - Every operational row has `origin` (`demo`|`live`).
 - Migrations 0003 (agent ops) and 0004 (LLM routing: `agent_runs.provider/model/used_fallback`, `llm_calls`).
-- **Status**: all four migrations are applied and checked in CI against an embedded Postgres (PGlite) — schema, seed, sequence function, constraints, RLS. `supabase-store.ts` (supabase-js/PostgREST) has NOT been exercised against a live Supabase project (no credentials here).
+- Migration 0005: `canonical_identities` (immutable versioned snapshots), rebuilt `reference_assets` (types, authority, one-active-master index, source/promotion), `generation_briefs`, `generation_attempts`, `qa_results` (`inspected_image` flag), lineage columns on `assets/prompts/productions`, `provider_jobs.state` → explicit job states + retry/failure columns, `approvals.selected_asset_ids`, task claim/lease/idempotency columns, private storage bucket `northline-assets` (skipped on plain Postgres).
+- **Status**: all five migrations are applied and checked in CI against an embedded Postgres (PGlite) — schema, seed, sequence function, constraints, RLS. `supabase-store.ts` (supabase-js/PostgREST) has NOT been exercised against a live Supabase project (no credentials here).

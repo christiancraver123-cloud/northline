@@ -29,10 +29,24 @@ export type ApprovalState = (typeof APPROVAL_STATES)[number];
 export const WORKFLOW_STATES = ["QUEUED", "RUNNING", "WAITING", "FAILED", "RETRYING", "COMPLETE"] as const;
 export type WorkflowState = (typeof WORKFLOW_STATES)[number];
 
-export const REFERENCE_SLOTS = [
-  "MASTER_FACE", "FRONT", "THREE_QUARTER", "PROFILE", "UPPER_BODY", "FULL_BODY", "NATURAL", "CHARACTER_SHEET",
+export const REFERENCE_TYPES = [
+  "MASTER_FACE", "FACE_FRONT", "FACE_3Q_LEFT", "FACE_3Q_RIGHT", "FACE_PROFILE", "UPPER_BODY", "FULL_BODY", "NATURAL_CANDID",
 ] as const;
-export type ReferenceSlot = (typeof REFERENCE_SLOTS)[number];
+export type ReferenceType = (typeof REFERENCE_TYPES)[number];
+/** MASTER_FACE is the single highest-authority reference; other canonical types are supporting; generated content has zero canonical authority. */
+export type ReferenceAuthority = "MASTER" | "SUPPORTING";
+export const authorityFor = (t: ReferenceType): ReferenceAuthority => (t === "MASTER_FACE" ? "MASTER" : "SUPPORTING");
+export const AUTHORITY_RANK: Record<ReferenceAuthority, number> = { MASTER: 100, SUPPORTING: 80 };
+export const GENERATED_AUTHORITY_RANK = 0;
+
+/** Generation/provider job lifecycle. */
+export const JOB_STATES = ["QUEUED", "SUBMITTED", "PROCESSING", "SUCCEEDED", "FAILED", "RETRYING"] as const;
+export type JobState = (typeof JOB_STATES)[number];
+
+/** QA outcome for an asset/attempt. QA_PENDING = not yet checked; MANUAL_REVIEW_REQUIRED = no capable inspector ran, a human must look. */
+export const QA_STATUSES = ["QA_PENDING", "PASS", "REVIEW", "HARD_FAIL", "MANUAL_REVIEW_REQUIRED"] as const;
+export type QaStatus = (typeof QA_STATUSES)[number];
+export type QaSeverity = "PASS" | "REVIEW" | "HARD_FAIL";
 
 /** Whether a record is demo/seed data or real operational data. Never mix silently. */
 export type Origin = "demo" | "live";

@@ -1,9 +1,12 @@
 // Provider abstractions. Provider-specific logic lives ONLY in adapters under this folder.
-import type { TalentCode } from "@/lib/domain/types";
+import type { ReferenceType, TalentCode } from "@/lib/domain/types";
 
-export interface ImageRequest { productionCode: string; shotN: number; prompt: string; negative: string; talent: TalentCode; referencePaths: string[] }
-export interface ImageResult { provider: string; model: string | null; bytes: Uint8Array | null; mime: string; costUsd: number | null; credits: number | null; externalId: string | null }
-export interface ImageProvider { readonly name: string; generate(req: ImageRequest): Promise<ImageResult> }
+export type FailureCategory = "provider_unavailable" | "rate_limited" | "auth" | "invalid_request" | "content_policy" | "timeout" | "unknown";
+
+export interface ImageReference { bytes: Uint8Array; mime: string; type: ReferenceType }
+export interface ImageRequest { productionCode: string; shotN: number; prompt: string; negative: string; talent: TalentCode; references: ImageReference[]; size?: string }
+export interface ImageResult { provider: string; model: string | null; bytes: Uint8Array | null; mime: string; costUsd: number | null; credits: number | null; externalId: string | null; metadata?: Record<string, unknown> }
+export interface ImageProvider { readonly name: string; readonly model?: string | null; generate(req: ImageRequest): Promise<ImageResult> }
 
 export interface VideoRequest { productionCode: string; prompt: string; sourceStillPath: string | null; durationSec: number }
 export interface VideoResult { provider: string; externalId: string; state: "QUEUED" | "RUNNING" | "COMPLETE" | "FAILED"; url: string | null; credits: number | null }
@@ -13,5 +16,5 @@ export interface StorageProvider { save(path: string, bytes: Uint8Array, mime: s
 
 /** Publishing is intentionally NOT implemented: Northline is draft-first. See lib/publishing/gate.ts. */
 export class ProviderError extends Error {
-  constructor(public provider: string, message: string, public retryable = true) { super(`[${provider}] ${message}`); }
+  constructor(public provider: string, message: string, public retryable = true, public category: FailureCategory = "unknown") { super(`[${provider}] ${message}`); }
 }

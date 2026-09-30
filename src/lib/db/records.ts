@@ -1,8 +1,9 @@
 // Persistent record shapes (camelCase in TS; snake_case in Postgres — see supabase/migrations).
 import type {
-  ApprovalState, AssetKind, AssetStatus, CollabScope, ContentType, Origin, Platform, ProductionStatus,
-  ReferenceSlot, TalentCode, WorkflowState,
+  ApprovalState, AssetKind, AssetStatus, CollabScope, ContentType, JobState, Origin, Platform, ProductionStatus,
+  QaSeverity, QaStatus, ReferenceAuthority, ReferenceType, TalentCode, WorkflowState,
 } from "@/lib/domain/types";
+import type { CanonicalIdentity } from "@/lib/identity/canonical";
 
 export interface Base { id: string; origin: Origin; createdAt: string; updatedAt: string }
 
@@ -36,6 +37,9 @@ export interface Production extends Base {
   brief: CreativeBrief | null;
   qaNotes: string[];
   costUsd: number;
+  /** Canonical identity version used (e.g. "SIE-IDENTITY-v1.0"). Facts live in canonical_identities, not here. */
+  identityVersion: string | null;
+  currentAttemptId: string | null;
 }
 
 export interface Asset extends Base {
@@ -49,18 +53,62 @@ export interface Asset extends Base {
   promptId: string | null;
   storagePath: string | null; // null = no file yet (mock/demo placeholder)
   filename: string; // organisational only — metadata lives in this record
-  isReference: false;
+  isReference: false; // generated assets NEVER carry canonical authority
   publication: "UNPUBLISHED" | "PUBLISHED";
+  // --- lineage: exactly how was this image created? ---
+  attemptId: string | null; attemptNo: number; briefId: string | null; generationJobId: string | null;
+  identityVersion: string | null; referenceIds: string[]; model: string | null;
+  qaStatus: QaStatus; current: boolean; // current = part of the production's live set (latest attempt per shot)
+  width: number | null; height: number | null; bytes: number | null; sha256: string | null;
 }
 
-/** Canonical identity references — separate from generated assets and never auto-promoted. */
+/** Canonical identity references — a separate authority from generated assets. Only explicit operator actions create them. */
 export interface ReferenceAsset extends Base {
-  talent: TalentCode; slot: ReferenceSlot; storagePath: string | null; approvedBy: string | null;
+  talent: TalentCode; referenceType: ReferenceType; authority: ReferenceAuthority; status: "ACTIVE" | "ARCHIVED";
+  storagePath: string; filename: string; mime: string; bytes: number; sha256: string; notes: string;
+  identityVersion: string; createdBy: string;
+  source: "upload" | "promoted_from_generated"; sourceAssetId: string | null; replacedById: string | null;
+}
+
+/** Immutable versioned snapshot of a creator's canonical identity (id e.g. SIE-IDENTITY-v1.0). */
+export interface CanonicalIdentityRecord extends Base {
+  code: TalentCode; version: string; identityId: string; contentHash: string; status: "ACTIVE" | "SUPERSEDED"; data: CanonicalIdentity;
+}
+
+export interface GenerationBriefData {
+  production: { code: string; format: string; platform: string };
+  creator: { code: TalentCode; name: string };
+  identityVersion: string; identityBlock: string; hardLocks: { id: string; label: string }[]; negativeConstraints: string[];
+  references: { id: string; type: ReferenceType; authority: ReferenceAuthority; hasImage: boolean }[];
+  referencePolicy: string;
+  concept: string; location: string; timeOfDay: string;
+  visualDirection: { outfit: string; lighting: string; palette: string[]; mood: string };
+  continuity: string[]; recentConsiderations: string[];
+  providerRequirements: { provider: string; model: string | null; size: string; aspect: string; count: number };
+  shots: { n: number; kind: string; description: string; camera?: string }[];
+  revision: { fromAttemptId: string; feedback: string[] } | null;
+}
+export interface GenerationBrief extends Base {
+  productionId: string; version: number; identityVersion: string; referenceIds: string[]; data: GenerationBriefData;
+}
+export interface GenerationAttempt extends Base {
+  productionId: string; attemptNo: number; briefId: string; trigger: "initial" | "regenerate" | "retry";
+  status: "GENERATING" | "QA_PENDING" | "PASS" | "REVIEW" | "HARD_FAIL" | "MANUAL_REVIEW_REQUIRED" | "ERROR";
+  shots: number[]; parentAttemptId: string | null; reason: string; feedback: string[]; finishedAt: string | null;
+}
+export interface QaFindingRecord { lockId: string | null; severity: Exclude<QaSeverity, "PASS">; message: string }
+/** One QA evaluation. `inspectedImage` is true ONLY if something actually looked at image content (vision model / human). */
+export interface QaResult extends Base {
+  productionId: string; attemptId: string | null; assetId: string | null; kind: "IDENTITY" | "TECHNICAL" | "CONTENT";
+  method: "prompt_rules" | "file_inspection" | "vision_model" | "data_rules" | "manual";
+  status: QaStatus; inspectedImage: boolean; provider: string | null; model: string | null;
+  findings: QaFindingRecord[]; summary: string; recommendation: string | null; decidedBy: string | null;
 }
 
 export interface Prompt extends Base {
   productionId: string; provider: string; version: number; shotN: number;
-  positive: string; negative: string; identityRefs: ReferenceSlot[]; qa: { ok: boolean; issues: string[] };
+  positive: string; negative: string; identityRefs: string[]; qa: { ok: boolean; issues: string[] };
+  briefId: string | null; attemptId: string | null;
 }
 
 export interface Caption extends Base {
@@ -70,6 +118,7 @@ export interface Caption extends Base {
 export interface Approval extends Base {
   productionId: string; subject: "PRODUCTION" | "ASSET" | "CAPTION" | "CAMPAIGN" | "PUBLISH";
   subjectId: string; state: ApprovalState; decidedBy: string | null; decidedAt: string | null; notes: string;
+  selectedAssetIds: string[]; // assets the operator approved; only these become eligible for Calendar/Launch
 }
 
 export interface WorkflowRun extends Base {
@@ -80,8 +129,11 @@ export interface WorkflowRun extends Base {
 
 export interface ProviderJob extends Base {
   runId: string | null; productionId: string; provider: string; model: string | null; operation: string;
-  state: WorkflowState; externalId: string | null; error: string | null; assetId: string | null; shotN: number;
+  state: JobState; externalId: string | null; error: string | null; assetId: string | null; shotN: number;
   costUsd: number | null; credits: number | null;
+  briefId: string | null; attemptId: string | null; promptId: string | null;
+  retryCount: number; retryOfJobId: string | null; startedAt: string | null; finishedAt: string | null;
+  failureCategory: string | null; metadata: Record<string, unknown>;
 }
 
 export interface CalendarEntry extends Base {
@@ -120,6 +172,10 @@ export interface AgentTask extends Base {
   status: TaskStatus; priority: number; // 1 = highest, 5 = lowest
   dependsOn: string[]; parentTaskId: string | null; assignmentId: string | null; productionId: string | null; talent: TalentCode | null;
   createdBy: string; // operator | orchestrator | schedule:<id> | event:<name> | n8n
+  /** Atomic claim + lease: only the worker that wins the QUEUED→RUNNING transition runs the task. */
+  claimedBy: string | null; leaseExpiresAt: string | null; attempts: number;
+  /** Optional dedupe key: enqueue with an existing key returns the existing task (idempotent retries from n8n). */
+  idempotencyKey: string | null;
   waitingOn: string | null; runAfter: string | null; startedAt: string | null; finishedAt: string | null; error: string | null;
 }
 export interface AgentRun extends Base {
@@ -154,6 +210,7 @@ export interface AgentSchedule extends Base {
 }
 
 export interface Tables {
+  canonicalIdentities: CanonicalIdentityRecord; generationBriefs: GenerationBrief; generationAttempts: GenerationAttempt; qaResults: QaResult;
   agents: Agent; agentTasks: AgentTask; agentRuns: AgentRun; agentEvents: AgentEvent; agentMessages: AgentMessage;
   agentReports: AgentReport; agentSchedules: AgentSchedule; llmCalls: LlmCall;
   campaigns: Campaign; productions: Production; assets: Asset; referenceAssets: ReferenceAsset; prompts: Prompt;
@@ -165,4 +222,5 @@ export const TABLE_NAMES: TableName[] = [
   "campaigns", "productions", "assets", "referenceAssets", "prompts", "captions", "approvals", "workflowRuns",
   "providerJobs", "calendarEntries", "storylines", "launchStates", "analytics",
   "agents", "agentTasks", "agentRuns", "agentEvents", "agentMessages", "agentReports", "agentSchedules", "llmCalls",
+  "canonicalIdentities", "generationBriefs", "generationAttempts", "qaResults",
 ];

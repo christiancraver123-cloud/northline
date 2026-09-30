@@ -29,17 +29,30 @@ export async function logEvent(repo: Repo, agentId: AgentCode, kind: string, mes
 }
 
 export interface EnqueueInput {
+  /** Dedupe key: enqueueing with an existing key returns the existing task instead of creating a duplicate. */
+  idempotencyKey?: string | null;
   agentId: AgentCode; kind: string; title: string; input?: Record<string, unknown>; priority?: number; dependsOn?: string[];
   parentTaskId?: string | null; assignmentId?: string | null; productionId?: string | null; talent?: TalentCode | null;
   createdBy?: string; waitingOn?: string | null; runAfter?: string | null; status?: TaskStatus; origin?: O;
 }
 export async function enqueue(repo: Repo, t: EnqueueInput): Promise<AgentTask> {
-  const task = await repo.insert("agentTasks", {
+  if (t.idempotencyKey) {
+    const dup = (await repo.list("agentTasks", { idempotencyKey: t.idempotencyKey }))[0];
+    if (dup) return dup;
+  }
+  let task: AgentTask;
+  try { task = await repo.insert("agentTasks", {
     agentId: t.agentId, kind: t.kind, title: t.title, input: t.input ?? {}, output: null, status: t.status ?? "QUEUED", priority: t.priority ?? 3,
     dependsOn: t.dependsOn ?? [], parentTaskId: t.parentTaskId ?? null, assignmentId: t.assignmentId ?? null, productionId: t.productionId ?? null,
     talent: t.talent ?? null, createdBy: t.createdBy ?? "operator", waitingOn: t.waitingOn ?? null, runAfter: t.runAfter ?? null,
+    claimedBy: null, leaseExpiresAt: null, attempts: 0, idempotencyKey: t.idempotencyKey ?? null,
     startedAt: null, finishedAt: null, error: null, origin: t.origin ?? "live",
-  });
+  }); } catch (e) {
+    // A concurrent enqueue with the same key won the unique index: return that task (idempotent).
+    const dup = t.idempotencyKey ? (await repo.list("agentTasks", { idempotencyKey: t.idempotencyKey }))[0] : undefined;
+    if (dup) return dup;
+    throw e;
+  }
   await logEvent(repo, t.agentId, t.status === "WAITING" ? "WAITING" : "TASK_QUEUED", `${t.status === "WAITING" ? "Waiting" : "Queued"}: ${t.title}`, { taskId: task.id, origin: t.origin, data: { kind: t.kind, createdBy: t.createdBy ?? "operator", priority: task.priority } });
   return task;
 }

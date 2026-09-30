@@ -1,7 +1,7 @@
 import { getRepo } from "@/lib/db";
 import { approvalBlockers } from "@/lib/orchestrator/approvals";
 import { decideAction } from "../actions";
-import { AssetTile, Btn, Card, DemoBadge, Empty, PageHeader, ProdLink, StatusPill, TalentChips } from "@/components/ui";
+import { AssetTile, Btn, Card, DemoBadge, Empty, PageHeader, ProdLink, QaPill, StatusPill, TalentChips } from "@/components/ui";
 import Link from "next/link";
 
 export default async function Approvals({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
@@ -10,7 +10,7 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
   const items = await Promise.all(pending.map(async (a) => {
     const p = await repo.get("productions", a.productionId);
     if (!p) return null;
-    return { a, p, assets: (await repo.list("assets", { productionId: p.id })).sort((x, y) => x.seq - y.seq), captions: await repo.list("captions", { productionId: p.id }), blockers: await approvalBlockers(repo, p.id) };
+    return { a, p, assets: (await repo.list("assets", { productionId: p.id })).filter((x) => x.current).sort((x, y) => x.seq - y.seq), qa: await repo.list("qaResults", { productionId: p.id }), captions: await repo.list("captions", { productionId: p.id }), blockers: await approvalBlockers(repo, p.id) };
   }));
   const err = (await searchParams).error;
   const decided = (await repo.list("approvals")).filter((a) => a.state !== "PENDING").slice(0, 8);
@@ -20,15 +20,20 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
       {err && <div role="alert" className="mb-4 rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">{err}</div>}
       {pending.length === 0 ? <Empty>Nothing to review. <Link className="text-blue2" href="/create">Create something →</Link></Empty> : (
         <div className="grid gap-4">{items.filter(Boolean).map((it) => {
-          const { a, p, assets, captions, blockers } = it!;
+          const { a, p, assets, captions, blockers, qa } = it!;
+          const manual = assets.filter((x) => x.qaStatus === "MANUAL_REVIEW_REQUIRED").length;
           return (
             <Card key={a.id}>
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-3"><ProdLink p={p} /><TalentChips codes={p.talent} /><span className="text-muted">{p.contentType} · {p.concept}</span><DemoBadge origin={p.origin} /></span><StatusPill status={p.status} /></div>
-              <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-6 lg:grid-cols-8">{assets.map((x) => <AssetTile key={x.id} asset={x} />)}</div>
+              <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6">{assets.map((x) => (
+                <label key={x.id} className="block cursor-pointer"><AssetTile asset={x} /><span className="mt-1 flex items-center gap-1.5 text-[11px]"><input form={`f-${a.id}`} type="checkbox" name="asset" value={x.id} defaultChecked={x.status === "RAW" && x.qaStatus !== "HARD_FAIL"} className="!w-auto" />approve <QaPill status={x.qaStatus} /></span></label>
+              ))}</div>
+              {manual > 0 && <p className="mb-2 rounded-lg border border-warn/30 bg-warn/10 p-2 text-[12.5px] text-warn">{manual} asset(s) were NOT visually verified by any automated inspector — you are the identity/technical check. Compare against the canonical references before approving.</p>}
+              <details className="mb-3 text-[12px] text-muted"><summary className="cursor-pointer">QA details ({qa.length})</summary>{qa.map((q) => <p key={q.id} className="border-t border-edge py-1"><b>{q.kind}</b> · {q.method} · <QaPill status={q.status} /> {q.inspectedImage ? "(image inspected)" : "(image not inspected)"} — {q.summary}</p>)}</details>
               {captions.map((c) => <p key={c.id} className="mb-3 rounded-lg border border-edge p-2 text-[13px]">“{c.text}”</p>)}
               {p.qaNotes.length > 0 && <p className="mb-2 text-warn">QA: {p.qaNotes.join("; ")}</p>}
               {blockers.length > 0 && <p className="mb-2 text-warn">Blocked: {blockers.join("; ")}. <Link href="/launch" className="text-blue2">Launch →</Link></p>}
-              <form action={decideAction} className="flex flex-wrap items-center gap-2"><input type="hidden" name="approvalId" value={a.id} />
+              <form id={`f-${a.id}`} action={decideAction} className="flex flex-wrap items-center gap-2"><input type="hidden" name="approvalId" value={a.id} />
                 <input name="notes" placeholder="Notes / revision reason" aria-label="Notes" className="min-w-48 flex-1" />
                 <Btn primary name="decision" value="APPROVED" disabled={blockers.length > 0}>Approve</Btn>
                 <Btn name="decision" value="REVISION_REQUESTED">Request revision</Btn>

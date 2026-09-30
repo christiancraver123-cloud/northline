@@ -1,27 +1,32 @@
 import { notFound } from "next/navigation";
 import { getRepo } from "@/lib/db";
 import { approvalBlockers } from "@/lib/orchestrator/approvals";
-import { retryAssetAction, reelVideoAction, resubmitAction } from "../../actions";
-import { AssetTile, Btn, Card, DemoBadge, Empty, PageHeader, Pill, StatusPill, TalentChips } from "@/components/ui";
+import { retryAssetAction, reelVideoAction, resubmitAction, regenerateAction } from "../../actions";
+import Link from "next/link";
+import { AssetTile, Btn, Card, DemoBadge, Empty, PageHeader, Pill, QaPill, StatusPill, TalentChips } from "@/components/ui";
 
 export default async function ProductionDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
   const { id } = await params;
   const repo = await getRepo();
   const p = await repo.get("productions", id);
   if (!p) notFound();
+  const [attempts, briefs, qaAll] = await Promise.all([repo.list("generationAttempts", { productionId: id }), repo.list("generationBriefs", { productionId: id }), repo.list("qaResults", { productionId: id })]);
   const [assets, prompts, captions, approvals, jobs, blockers, campaign] = await Promise.all([
     repo.list("assets", { productionId: id }), repo.list("prompts", { productionId: id }), repo.list("captions", { productionId: id }),
     repo.list("approvals", { productionId: id }), repo.list("providerJobs", { productionId: id }), approvalBlockers(repo, id),
     p.campaignId ? repo.get("campaigns", p.campaignId) : null,
   ]);
-  assets.sort((a, b) => a.kind.localeCompare(b.kind) || a.seq - b.seq);
+  assets.sort((a, b) => a.kind.localeCompare(b.kind) || a.seq - b.seq || a.attemptNo - b.attemptNo);
+  const currentAssets = assets.filter((a) => a.current);
+  attempts.sort((a, b) => a.attemptNo - b.attemptNo);
+  const canRegenerate = !["APPROVED", "SCHEDULED", "PUBLISHED", "REJECTED"].includes(p.status) && attempts.length > 0;
   const err = (await searchParams).error;
   const reel = assets.find((a) => a.kind === "REEL");
   return (
     <>
       <PageHeader title={p.code} sub={`${p.contentType} · ${p.concept}`} actions={<span className="flex items-center gap-2"><DemoBadge origin={p.origin} /><StatusPill status={p.status} /></span>} />
       {err && <div role="alert" className="mb-4 rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">{err}</div>}
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-muted"><TalentChips codes={p.talent} />{campaign && <Pill tone="info">Campaign: {campaign.name}</Pill>}<Pill>{p.scope}</Pill><Pill>{p.platform}</Pill><Pill>cost {p.costUsd ? `$${p.costUsd.toFixed(2)}` : "unknown/none"}</Pill></div>
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-muted"><TalentChips codes={p.talent} />{campaign && <Pill tone="info">Campaign: {campaign.name}</Pill>}<Pill>{p.scope}</Pill><Pill>{p.platform}</Pill>{p.identityVersion && <Pill tone="info">{p.identityVersion}</Pill>}<Pill>cost {p.costUsd ? `$${p.costUsd.toFixed(2)}` : "unknown/none"}</Pill></div>
       {p.qaNotes.length > 0 && <Card className="mb-4 border-warn/30"><h2 className="mb-1 font-bold text-warn">QA notes</h2><ul className="list-disc pl-4 text-[13px]">{p.qaNotes.map((n) => <li key={n}>{n}</li>)}</ul></Card>}
       <Card className="mb-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">Assets</h2>
@@ -29,11 +34,31 @@ export default async function ProductionDetail({ params, searchParams }: { param
             {reel && reel.status === "PENDING" && <form action={reelVideoAction}><input type="hidden" name="productionId" value={p.id} /><Btn>Generate video (Higgsfield stage)</Btn></form>}
             {p.status === "RAW" && !assets.some((a) => a.status === "FAILED" || a.status === "PENDING") && <form action={resubmitAction}><input type="hidden" name="productionId" value={p.id} /><Btn primary>Submit for review</Btn></form>}
           </span></div>
-        {assets.length === 0 ? <Empty>No assets — generation was blocked (see QA notes).</Empty> : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">{assets.map((a) => (
-            <div key={a.id}><AssetTile asset={a} /><div className="mt-1 truncate font-mono text-[10px] text-faint" title={a.filename}>{a.filename}</div>
+        {currentAssets.length === 0 ? <Empty>No assets — generation was blocked (see QA notes).</Empty> : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">{currentAssets.map((a) => (
+            <div key={a.id}><Link href={`/assets/${a.id}`}><AssetTile asset={a} /></Link><div className="mt-1"><QaPill status={a.qaStatus} /></div><div className="mt-1 truncate font-mono text-[10px] text-faint" title={a.filename}>{a.filename}</div>
               {a.status === "FAILED" && <form action={retryAssetAction}><input type="hidden" name="productionId" value={p.id} /><input type="hidden" name="assetId" value={a.id} /><Btn className="mt-1 w-full">Retry</Btn></form>}</div>
           ))}</div>
+        )}
+      </Card>
+      <Card className="mb-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">Generation attempts</h2><span className="text-[12px] text-faint">{briefs.length} brief version(s) · failed attempts are preserved, never overwritten</span></div>
+        {attempts.map((at) => {
+          const ats = assets.filter((a) => a.attemptId === at.id);
+          const qs = qaAll.filter((q) => q.attemptId === at.id);
+          return (
+            <div key={at.id} className="border-t border-edge py-2 text-[13px] first:border-0">
+              <div className="flex flex-wrap items-center gap-2"><b>ATTEMPT-{String(at.attemptNo).padStart(2, "0")}</b><QaPill status={at.status} /><span className="text-faint">{at.trigger} · shots {at.shots.join(", ")} · {at.reason}</span></div>
+              <div className="mt-1 flex flex-wrap gap-1.5">{ats.map((a) => <Link key={a.id} href={`/assets/${a.id}`} className="inline-flex items-center gap-1 font-mono text-[11px] text-blue2 hover:underline">{a.kind}-{String(a.seq).padStart(2, "0")}<QaPill status={a.qaStatus} /></Link>)}</div>
+              {qs.filter((q) => q.assetId === null).map((q) => <p key={q.id} className="mt-1 text-[12px] text-muted"><b>{q.kind}</b> ({q.method}): <QaPill status={q.status} /> {q.summary}{q.recommendation ? ` — ${q.recommendation}` : ""}</p>)}
+              {at.feedback.length > 0 && <p className="mt-1 text-[12px] text-warn">Feedback used: {at.feedback.join(" | ")}</p>}
+            </div>
+          );
+        })}
+        {canRegenerate && (
+          <form action={regenerateAction} className="mt-3 flex flex-wrap items-end gap-2 border-t border-edge pt-3"><input type="hidden" name="productionId" value={p.id} />
+            <label className="min-w-64 flex-1 text-[12px] text-muted">Revision notes (optional) — hard-failed shots regenerate; if none failed, all shots do<input name="notes" maxLength={500} placeholder="e.g. keep the eyes exactly as in the master" /></label>
+            <Btn primary>Regenerate (new attempt)</Btn></form>
         )}
       </Card>
       <div className="grid gap-4 xl:grid-cols-2">

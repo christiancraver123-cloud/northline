@@ -3,12 +3,6 @@
 // Identity > outfit > pose > location > lighting > composition > styling.
 import type { LaunchStatus, TalentCode } from "@/lib/domain/types";
 
-export interface QaRule {
-  label: string;
-  /** Regex source tested (case-insensitive) against a prompt/caption. */
-  pattern: string;
-}
-
 export interface Talent {
   code: TalentCode;
   name: string;
@@ -30,8 +24,6 @@ export interface Talent {
     signature: string[]; // identity-critical markers, listed verbatim into every prompt
   };
   criticalRules: string[]; // human-readable, shown in UI
-  /** Every generated prompt for this creator must match each `required` rule and none of `forbidden`. */
-  qa: { required: QaRule[]; forbidden: QaRule[] };
   visual: { palette: string[]; lighting: string[]; environments: string[]; lifestyle: string[]; expression: string };
   voice: { tone: string; style: string; sample: string };
 }
@@ -52,10 +44,6 @@ export const ROSTER: Talent[] = [
       signature: ["both eyes matching light green-gray", "freckles", "long dark chocolate-brown messy waves, center part", "small gold hoops", "thin gold necklace"],
     },
     criticalRules: ["NO heterochromia — both eyes must match (light green-gray)", "Gold hoops + thin gold necklace are her jewelry language"],
-    qa: {
-      required: [{ label: "matching eyes", pattern: "match(ing)? (light )?green-?gray" }, { label: "gold hoops", pattern: "gold hoops" }],
-      forbidden: [{ label: "heterochromia", pattern: "heterochromia|one (blue|green)" }, { label: "silver jewelry", pattern: "silver" }, { label: "blunt bob", pattern: "blunt bob" }],
-    },
     visual: {
       palette: ["cream", "chocolate brown", "deep red", "golden-hour tones"],
       lighting: ["golden hour", "warm sunset glow", "soft rooftop dusk"],
@@ -80,10 +68,6 @@ export const ROSTER: Talent[] = [
       signature: ["sleek jet-black blunt bob at collarbone length", "no freckles", "dark brown eyes, sharp winged liner", "pearl studs", "gold signet ring"],
     },
     criticalRules: ["Blunt bob only — NEVER long flowing waves", "NO freckles", "Pearl studs + gold signet ring; NEVER hoops", "Rarely/never a broad smile"],
-    qa: {
-      required: [{ label: "blunt bob", pattern: "blunt bob" }, { label: "pearl studs", pattern: "pearl studs" }, { label: "no freckles", pattern: "no freckles" }],
-      forbidden: [{ label: "hoops", pattern: "hoops" }, { label: "long waves", pattern: "long (flowing )?waves|long hair" }, { label: "broad smile", pattern: "broad smile|big grin|laughing" }],
-    },
     visual: {
       palette: ["black", "white", "oxblood"],
       lighting: ["night flash", "candlelight", "film grain editorial"],
@@ -108,10 +92,6 @@ export const ROSTER: Talent[] = [
       signature: ["messy honey-brown balayage (not red)", "hazel eyes", "prominent freckles", "soft rounder face", "petite adult woman", "small gold hoops"],
     },
     criticalRules: ["Honey-brown balayage — NEVER red hair", "Always clearly an adult, age 22 — never schoolgirl-coded", "Most expressive: laughs, winks, goofy faces, photo dumps"],
-    qa: {
-      required: [{ label: "honey-brown balayage", pattern: "honey-brown balayage" }, { label: "hazel eyes", pattern: "hazel" }, { label: "adult", pattern: "adult" }],
-      forbidden: [{ label: "red hair", pattern: "red hair|auburn|ginger" }, { label: "schoolgirl", pattern: "school ?girl|school uniform|teen" }],
-    },
     visual: {
       palette: ["denim blue", "warm amber", "cream", "neon bar glow"],
       lighting: ["direct phone flash", "warm bar light", "stadium lights", "lake sun"],
@@ -140,10 +120,6 @@ export const ROSTER: Talent[] = [
       "SILVER jewelry only — never gold",
       "Faint scar through LEFT eyebrow",
     ],
-    qa: {
-      required: [{ label: "heterochromia", pattern: "heterochromia" }, { label: "eye orientation", pattern: "image-left eye emerald green,? image-right eye icy blue-gray" }, { label: "silver", pattern: "silver" }],
-      forbidden: [{ label: "gold jewelry", pattern: "gold" }, { label: "reversed eyes", pattern: "image-left eye icy|image-right eye emerald|(?<!image-)left eye (is )?(emerald|green)|(?<!image-)right eye (is )?(icy|blue)" }],
-    },
     visual: {
       palette: ["cool blue night", "black leather", "chrome", "silver"],
       lighting: ["direct flash", "cool blue night", "neon reflections"],
@@ -168,10 +144,6 @@ export const ROSTER: Talent[] = [
       signature: ["dark natural curls, often a high puff", "brown eyes", "small gold stud in LEFT nostril", "layered thin gold necklaces", "light freckles"],
     },
     criticalRules: ["Small GOLD stud in the LEFT nostril — always", "BROWN eyes", "Layered thin gold necklaces"],
-    qa: {
-      required: [{ label: "left nostril stud", pattern: "gold stud in (the )?left nostril" }, { label: "brown eyes", pattern: "brown eyes" }],
-      forbidden: [{ label: "right nostril", pattern: "right nostril" }, { label: "silver", pattern: "silver" }],
-    },
     visual: {
       palette: ["sage", "blush", "white", "warm daylight"],
       lighting: ["bright clean daylight", "soft window light", "sunset walk"],
@@ -196,10 +168,6 @@ export const ROSTER: Talent[] = [
       signature: ["sun-bleached blonde with darker roots", "green-hazel eyes", "heavy freckles", "beauty mark on left cheek", "tiny shell necklace"],
     },
     criticalRules: ["Beauty mark on LEFT cheek", "Tiny shell necklace — NO gold hoops", "Minimal/no makeup"],
-    qa: {
-      required: [{ label: "beauty mark", pattern: "beauty mark on (her )?left cheek" }, { label: "shell necklace", pattern: "shell necklace" }],
-      forbidden: [{ label: "hoops", pattern: "hoops" }, { label: "dark hair", pattern: "black hair|dark brown hair" }],
-    },
     visual: {
       palette: ["ocean blue", "sand", "sun-faded white", "coral"],
       lighting: ["bright midday sun", "dawn", "salty golden afternoon"],

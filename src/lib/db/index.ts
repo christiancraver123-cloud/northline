@@ -17,7 +17,7 @@ export function getRepo(): Promise<Repo> {
       return new SupabaseRepo(url, key);
     }
     const repo = new FileRepo();
-    if (!repo.seeded) { await seedDemo(repo); repo.markSeeded(); }
+    if (!repo.seeded) { await seedDemo(repo, { productions: process.env.NORTHLINE_DEMO_SEED !== "false" }); repo.markSeeded(); }
     return repo;
   })();
   return g.__northlineRepo;

@@ -11,7 +11,8 @@ export async function POST(req: Request) {
   if (!authorized(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   let body: unknown;
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "invalid JSON" }, { status: 400 }); }
-  const parsed = CreateRequestSchema.safeParse(body);
+  const hdrKey = req.headers.get("idempotency-key");
+  const parsed = CreateRequestSchema.safeParse(hdrKey && body && typeof body === "object" ? { idempotency_key: hdrKey, ...(body as object) } : body);
   if (!parsed.success) return NextResponse.json({ ok: false, error: "validation failed", issues: parsed.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })) }, { status: 422 });
   try {
     const r = await submitCreate(await getRepo(), parsed.data, { createdBy: "n8n", trigger: "n8n" });

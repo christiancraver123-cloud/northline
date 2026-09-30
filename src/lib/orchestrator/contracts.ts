@@ -13,6 +13,8 @@ export const CreateRequestSchema = z.object({
   quantity: z.number().int().min(1).max(10).default(1),
   asset_count: z.number().int().min(1).max(10).optional(),
   campaign_name: z.string().trim().max(120).optional(),
+  /** Optional dedupe key (n8n retries): the same key never creates a second production run. */
+  idempotency_key: z.string().trim().min(1).max(120).optional(),
 });
 export type CreateRequest = z.infer<typeof CreateRequestSchema>;
 export type CreateRequestInput = z.input<typeof CreateRequestSchema>;

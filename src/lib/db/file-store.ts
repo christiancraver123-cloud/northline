@@ -35,6 +35,9 @@ export class FileRepo implements Repo {
     return r ? structuredClone(r) : null;
   }
   async insert<T extends TableName>(t: T, rec: NewRecord<T>) {
+    // Mirror the Postgres unique index on agent_tasks.idempotency_key.
+    const key = (rec as { idempotencyKey?: string | null }).idempotencyKey;
+    if (t === "agentTasks" && key && (this.dump.tables.agentTasks as { idempotencyKey: string | null }[]).some((x) => x.idempotencyKey === key)) throw new Error("duplicate key value violates unique constraint agent_tasks_idempotency");
     const now = new Date().toISOString();
     const row = { origin: "live", ...rec, id: randomUUID(), createdAt: now, updatedAt: now } as unknown as Tables[T];
     (this.dump.tables[t] as Tables[T][]).push(row);
@@ -45,6 +48,15 @@ export class FileRepo implements Repo {
     const rows = this.dump.tables[t] as Tables[T][];
     const i = rows.findIndex((x) => x.id === id);
     if (i < 0) throw new Error(`${t}/${id} not found`);
+    rows[i] = { ...rows[i], ...patch, id, updatedAt: new Date().toISOString() };
+    this.flush();
+    return structuredClone(rows[i]);
+  }
+  async claim<T extends TableName>(t: T, id: string, expect: Partial<Tables[T]>, patch: Partial<Tables[T]>) {
+    // No await between check and set: atomic within the process (single-writer demo store).
+    const rows = this.dump.tables[t] as Tables[T][];
+    const i = rows.findIndex((x) => x.id === id);
+    if (i < 0 || !matches(rows[i], expect)) return null;
     rows[i] = { ...rows[i], ...patch, id, updatedAt: new Date().toISOString() };
     this.flush();
     return structuredClone(rows[i]);

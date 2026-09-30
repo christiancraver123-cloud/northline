@@ -5,7 +5,13 @@ import type { AgentCode, AgentReport, AgentTask } from "@/lib/db/records";
 import type { ContentType, TalentCode } from "@/lib/domain/types";
 import { ROSTER_BY_CODE } from "@/lib/talent/roster";
 import { CreateRequestSchema } from "@/lib/orchestrator/contracts";
-import { executeCreate, defaultDeps, type Deps } from "@/lib/orchestrator/execute";
+import { executeCreate, defaultDeps, completeAttempt, type Deps } from "@/lib/orchestrator/execute";
+import { regenerateProduction } from "@/lib/pipeline/revise";
+import { runContentQa, runIdentityQa, runTechnicalQa, type VisionInspector } from "@/lib/pipeline/qa";
+import { finalizeAttempt } from "@/lib/pipeline/finalize";
+import { loadIdentity } from "@/lib/identity/service";
+import { loadReferences } from "@/lib/references/service";
+import { enqueue } from "./service";
 import { identityQa } from "@/lib/agents/identity";
 import { creativeDirector } from "@/lib/agents/agents";
 import { buildCreatorsReport, buildStatusReport, countBy, explainQa, type ReportDraft } from "./reports";
@@ -164,11 +170,75 @@ const productionCreate: Handler = async (c) => {
   const base = { ...defaultDeps(), ...c.deps };
   const deps: Deps = { ...base, origin: c.origin, trace: async (agent, kind, message, o) => { await c.log(kind, message, { ...o, agent }); } };
   await c.log("RECEIVED", `Received production request: ${req.format} for ${req.talent.join("+")} — "${req.concept || "no concept"}"`, { agent: "ORCHESTRATOR" });
-  const res = await executeCreate(c.repo, req, deps);
-  for (const p of res.productions) if (p.status === "REVIEW") await ensureApprovalWait(c.repo, p.id, p.code, c.origin);
+  const res = await executeCreate(c.repo, req, { ...deps, vision: visionOf(c) }, { deferQa: true });
+  for (const p of res.productions) if (p.attemptId && p.status === "GENERATING") await enqueueQaFamily(c.repo, c.task, p.id, p.code, p.attemptId);
   const ids: string[] = [];
   if (res.failures.length) ids.push((await c.report({ kind: "ALERT", title: `Production needs attention (${res.productions.map((p) => p.code).join(", ")})`, body: res.failures.join("\n"), data: { runId: res.runId }, sources: ["productions", "provider_jobs", "prompts"] }, "PRODUCTION_MANAGER")).id);
   return { output: { runId: res.runId, productions: res.productions, failures: res.failures }, summary: `${res.productions.length} production(s): ${res.productions.map((p) => p.code).join(", ")}${res.failures.length ? ` — ${res.failures.length} issue(s)` : ""}`, reportIds: ids };
+};
+
+/** Vision inspector backed by the model router (per-agent preference; identity-critical kinds only use an explicitly configured provider). */
+function visionOf(c: HandlerCtx): VisionInspector {
+  return async (req) => {
+    const o = await c.llm({ system: req.system, prompt: req.prompt, images: req.images, json: true, maxOutputTokens: 1500, temperature: 0 });
+    return { text: o.text, provider: o.provider, model: o.model, error: o.error ?? (o.attempted ? null : "no vision-capable provider is configured for this agent (set a preferred provider in Agent settings)") };
+  };
+}
+
+/** QA as separate agent tasks (Identity QA, Technical QA, Content QA) followed by finalize (Production Manager), linked by dependencies. */
+export async function enqueueQaFamily(repo: Repo, parent: AgentTask, productionId: string, code: string, attemptId: string) {
+  const base = { parentTaskId: parent.id, productionId, talent: parent.talent, createdBy: `event:attempt.generated`, origin: parent.origin, input: { productionId, attemptId } };
+  const idq = await enqueue(repo, { ...base, agentId: "IDENTITY_QA", kind: "identity_qa.attempt", title: `Identity QA: ${code}` });
+  const tq = await enqueue(repo, { ...base, agentId: "CONTENT_QA", kind: "technical_qa.attempt", title: `Technical QA: ${code}` });
+  const cq = await enqueue(repo, { ...base, agentId: "CONTENT_QA", kind: "content_qa.production", title: `Content QA: ${code}` });
+  const fin = await enqueue(repo, { ...base, agentId: "PRODUCTION_MANAGER", kind: "production.finalize", title: `Finalize: ${code}`, dependsOn: [idq.id, tq.id, cq.id] });
+  return [idq, tq, cq, fin];
+}
+
+async function attemptCtx(c: HandlerCtx) {
+  const productionId = String(c.task.input.productionId), attemptId = String(c.task.input.attemptId);
+  const [p, attempt] = await Promise.all([c.repo.get("productions", productionId), c.repo.get("generationAttempts", attemptId)]);
+  if (!p || !attempt) throw new Error("Production or attempt not found.");
+  const deps: Deps = { ...defaultDeps(), ...c.deps, origin: c.origin, vision: visionOf(c), trace: async (agent, kind, message, o) => { await c.log(kind, message, { ...o, agent }); } };
+  const assets = (await c.repo.list("assets", { productionId })).filter((a) => a.attemptId === attemptId && a.kind !== "REEL" && a.status === "RAW");
+  return { p, attempt, deps, assets };
+}
+
+const identityQaAttempt: Handler = async (c) => {
+  const { p, attempt, deps, assets } = await attemptCtx(c);
+  const { identity } = await loadIdentity(c.repo, p.talent[0]);
+  await c.log("LOAD_IDENTITY", `Loaded ${identity.id} and ${assets.length} asset(s) of attempt ${attempt.attemptNo} for Identity QA`);
+  const rs = await runIdentityQa(c.repo, deps, p, attempt, assets, identity, await loadReferences(c.repo, p.talent[0]));
+  const inspected = rs.filter((r) => r.inspectedImage).length;
+  return { output: { results: rs.map((r) => ({ id: r.id, assetId: r.assetId, status: r.status, method: r.method })), inspectedImages: inspected }, summary: `${rs.length} identity result(s); ${inspected} visually inspected; ${rs.filter((r) => r.status === "MANUAL_REVIEW_REQUIRED").length} need manual review` };
+};
+const technicalQaAttempt: Handler = async (c) => {
+  const { p, attempt, deps, assets } = await attemptCtx(c);
+  const rs = await runTechnicalQa(c.repo, deps, p, attempt, assets);
+  return { output: { results: rs.map((r) => ({ id: r.id, assetId: r.assetId, status: r.status, method: r.method })) }, summary: `${rs.length} technical result(s); ${rs.filter((r) => r.inspectedImage).length} visually inspected` };
+};
+const contentQaProduction: Handler = async (c) => {
+  const { p, attempt, deps } = await attemptCtx(c);
+  const r = await runContentQa(c.repo, deps, p, attempt);
+  const ids: string[] = [];
+  if (r.status === "REVIEW") ids.push((await c.report({ kind: "QA", title: `Content QA REVIEW — ${p.code}`, body: `${r.summary}\n\nRecommendation: ${r.recommendation ?? "—"}`, data: { productionId: p.id }, sources: ["productions", "qa_results"] })).id);
+  return { output: { status: r.status, findings: r.findings }, summary: `${p.code}: ${r.status}${r.findings.length ? ` — ${r.summary}` : ""}`, reportIds: ids };
+};
+const productionFinalize: Handler = async (c) => {
+  const { p, attempt, deps } = await attemptCtx(c);
+  const f = await finalizeAttempt(c.repo, deps, p.id, attempt.id);
+  if (f.productionStatus === "REVIEW") await ensureApprovalWait(c.repo, p.id, p.code, c.origin);
+  const ids: string[] = [];
+  if (f.attemptStatus === "HARD_FAIL") ids.push((await c.report({ kind: "ALERT", title: `${p.code} attempt ${attempt.attemptNo} HARD_FAIL`, body: `QA hard-failed this attempt. Previous attempts are preserved. Use Regenerate on the production page.`, data: { productionId: p.id }, sources: ["qa_results", "generation_attempts"] }, "PRODUCTION_MANAGER")).id);
+  return { output: { ...f }, summary: `${p.code} attempt ${attempt.attemptNo}: ${f.attemptStatus} → ${f.productionStatus}`, reportIds: ids };
+};
+const productionRegenerate: Handler = async (c) => {
+  const id = String(c.task.input.productionId);
+  const deps: Deps = { ...defaultDeps(), ...c.deps, origin: c.origin, vision: visionOf(c), trace: async (agent, kind, message, o) => { await c.log(kind, message, { ...o, agent }); } };
+  const r = await regenerateProduction(c.repo, deps, id, { notes: String(c.task.input.notes ?? ""), shots: c.task.input.shots as number[] | undefined }, c.runId);
+  const p = (await c.repo.get("productions", id))!;
+  await enqueueQaFamily(c.repo, c.task, id, p.code, r.attempt.id);
+  return { output: { attemptId: r.attempt.id, attemptNo: r.attempt.attemptNo, shots: r.shots, failures: r.failures }, summary: `${p.code} attempt ${r.attempt.attemptNo}: regenerated shot(s) ${r.shots.join(", ")}${r.failures.length ? ` — ${r.failures.length} issue(s)` : ""}` };
 };
 
 const productionDigest: Handler = async (c) => {
@@ -219,7 +289,7 @@ export { summarise };
 export const HANDLERS: Record<string, Handler> = {
   "strategist.concepts": strategistConcepts, "director.concepts": directorConcepts, "growth.recommendations": growthRecommendations,
   "performance.report": performanceReport, "identity_qa.review": identityReview, "content_qa.review": contentReview, "content_qa.audit": contentAudit,
-  "production.create": productionCreate, "production.digest": productionDigest, "orchestrator.report": orchestratorReport, "orchestrator.consolidate": consolidate,
+  "production.create": productionCreate, "identity_qa.attempt": identityQaAttempt, "technical_qa.attempt": technicalQaAttempt, "content_qa.production": contentQaProduction, "production.finalize": productionFinalize, "production.regenerate": productionRegenerate, "production.digest": productionDigest, "orchestrator.report": orchestratorReport, "orchestrator.consolidate": consolidate,
 };
 /** Kinds whose dependencies may be FAILED/CANCELLED (they consolidate whatever completed). */
 export const PARTIAL_DEPS_OK = new Set(["orchestrator.consolidate"]);

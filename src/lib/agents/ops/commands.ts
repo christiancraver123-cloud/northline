@@ -8,13 +8,28 @@ import { CreateRequestSchema, type CreateRequestInput } from "@/lib/orchestrator
 import type { Deps } from "@/lib/orchestrator/execute";
 import { enqueue, ensureApprovalWait, ensureAgents } from "./service";
 import { processQueue } from "./worker";
+import type { Router } from "@/lib/llm/router";
 
 /** Which task kind each agent can take as a standalone operator assignment. */
 export const ASSIGNABLE: Partial<Record<AgentCode, string>> = {
   CONTENT_STRATEGIST: "strategist.concepts", CREATIVE_DIRECTOR: "director.concepts", GROWTH_STRATEGIST: "growth.recommendations", PERFORMANCE_AGENT: "performance.report", CONTENT_QA: "content_qa.audit",
 };
 
-export interface SubmitOpts { createdBy?: string; origin?: Origin; deps?: Partial<Deps>; trigger?: "operator" | "n8n" | "queue" }
+export interface SubmitOpts { createdBy?: string; origin?: Origin; deps?: Partial<Deps>; trigger?: "operator" | "n8n" | "queue"; idempotencyKey?: string | null; router?: Router }
+
+/** Run a root task and every task it spawns (QA family, finalize) to completion. */
+export async function processFamily(repo: Repo, rootId: string, o: { trigger?: "operator" | "n8n" | "queue"; deps?: Partial<Deps>; router?: Router } = {}) {
+  const ran: Awaited<ReturnType<typeof processQueue>>["ran"] = [];
+  for (let i = 0; i < 25; i++) {
+    const all = await repo.list("agentTasks");
+    const fam = new Set<string>([rootId]);
+    for (let grew = true; grew;) { grew = false; for (const t of all) if (t.parentTaskId && fam.has(t.parentTaskId) && !fam.has(t.id)) { fam.add(t.id); grew = true; } }
+    const res = await processQueue(repo, { onlyIds: [...fam], trigger: o.trigger ?? "operator", deps: o.deps, router: o.router });
+    if (!res.ran.length) break;
+    ran.push(...res.ran);
+  }
+  return ran;
+}
 
 /** Queue + run a production workflow through the Production Manager (existing executeCreate pipeline, now with activity logging). */
 export async function submitCreate(repo: Repo, input: CreateRequestInput | CreateRequest, o: SubmitOpts = {}) {
@@ -22,11 +37,14 @@ export async function submitCreate(repo: Repo, input: CreateRequestInput | Creat
   const request = CreateRequestSchema.parse(input);
   const task = await enqueue(repo, {
     agentId: "PRODUCTION_MANAGER", kind: "production.create", title: `Create ${request.format} for ${request.talent.join("+")}${request.concept ? ` — ${request.concept}` : ""}`,
-    input: { request }, talent: request.talent[0], priority: 3, createdBy: o.createdBy ?? "operator", origin: o.origin,
+    input: { request }, talent: request.talent[0], priority: 3, createdBy: o.createdBy ?? "operator", origin: o.origin, idempotencyKey: o.idempotencyKey ?? request.idempotency_key ?? null,
   });
-  const res = await processQueue(repo, { onlyIds: [task.id], trigger: o.trigger ?? "operator", deps: o.deps });
+  const ran = await processFamily(repo, task.id, { trigger: o.trigger, deps: o.deps, router: o.router });
   const done = (await repo.get("agentTasks", task.id))!;
-  return { task: done, result: res.ran[0], output: done.output as { runId?: string; productions?: { id: string; code: string; status: string; qaOk: boolean }[]; failures?: string[] } | null };
+  const output = done.output as { runId?: string; productions?: { id: string; code: string; status: string; qaOk: boolean; attemptId?: string | null }[]; failures?: string[] } | null;
+  // The handler reports status at generation time; QA/finalize ran afterwards as separate tasks — report the CURRENT status.
+  if (output?.productions) for (const p of output.productions) p.status = (await repo.get("productions", p.id))?.status ?? p.status;
+  return { task: done, result: ran[0], output };
 }
 
 export async function delegate(repo: Repo, agentId: AgentCode, talent: TalentCode | null, count: number, o: { createdBy?: string; run?: boolean; input?: Record<string, unknown> } = {}) {
@@ -60,3 +78,12 @@ export async function createAssignment(repo: Repo, a: { title: string; agents: A
 
 export { ensureApprovalWait };
 export type { Production };
+
+/** Regenerate a production (new attempt, same production) via the Production Manager, then run its QA family. */
+export async function submitRegenerate(repo: Repo, productionId: string, o: { notes?: string; shots?: number[]; deps?: Partial<Deps>; createdBy?: string } = {}) {
+  const p = await repo.get("productions", productionId);
+  if (!p) throw new Error("Production not found.");
+  const task = await enqueue(repo, { agentId: "PRODUCTION_MANAGER", kind: "production.regenerate", title: `Regenerate ${p.code}`, input: { productionId, notes: o.notes ?? "", shots: o.shots }, productionId, talent: p.talent[0], createdBy: o.createdBy ?? "operator", origin: p.origin });
+  await processFamily(repo, task.id, { deps: o.deps });
+  return (await repo.get("agentTasks", task.id))!;
+}

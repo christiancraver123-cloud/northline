@@ -46,10 +46,15 @@ export function parseIntent(text: string): ParsedIntent {
     .replace(/\b(a|an|the|me)\b\s*/gi, (m, _w, off) => (off === 0 ? "" : m))
     .replace(/\b(for|with|between|involving)\s+(all six creators|all six|everyone|[A-Za-z, &]+?)(?=$|[.,])/i, (m) =>
       ROSTER.some((t) => m.toLowerCase().includes(t.first.toLowerCase())) || /all six|everyone/i.test(m) ? "" : m)
+    .replace(/\b(?:with\s+)?(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:images?|frames?|photos?|pictures?|slides?)\b/gi, "")
     .replace(/\b(carousels?|reels?|posts?|campaigns?|collabs?|stor(?:y|ies))\b/gi, "")
     .replace(/\s{2,}/g, " ").replace(/^[\s,.\-–—]+|[\s,.\-–—]+$/g, "");
+  concept = concept.replace(new RegExp(`\\b(${ROSTER.map((t) => t.first).join("|")})\\b`, "gi"), "").replace(/\s{2,}/g, " ").replace(/^[\s,.\-–—]+|[\s,.\-–—]+$/g, "");
   if (concept.length < 3) concept = "";
 
+  // "with 5 images" / "6 frames" → frames per production
+  const fr = lower.match(/\b(\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s+(?:images?|frames?|photos?|pictures?|slides?)\b/);
+  const assetCount = fr ? Math.min(10, Math.max(1, NUM[fr[1]] ?? parseInt(fr[1], 10))) : undefined;
   if (issues.length) return { request: null, issues };
-  return { request: { talent, platform: "instagram", format, concept, quantity }, issues: [] };
+  return { request: { talent, platform: "instagram", format, concept, quantity: fr && !num ? 1 : quantity, ...(assetCount ? { asset_count: assetCount } : {}) }, issues: [] };
 }

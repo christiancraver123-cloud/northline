@@ -19,6 +19,7 @@ Flow: request → orchestrator → task plan → agents → production records �
 - `lib/publishing/gate.ts` — draft-first gate. There is **no publishing adapter**; any future one must call `assertPublishable`.
 - `app/` — pages (Dashboard, Talent, Create, Productions, Approvals, Launch, Calendar, Assets, Analytics, Agents, Automations, Settings), `actions.ts` (server actions), `api/` (n8n webhook, create, health, asset file).
 - `lib/agents/ops/` — **Agent Operations Center**: `registry.ts` (10 agents), `service.ts` (ensureAgents, enqueue, derived status, controls, schedules, approval waits), `worker.ts` (concurrent queue runner, per-provider lanes), `handlers.ts` (task kinds), `commands.ts` (submitCreate, delegate, createAssignment), `chat.ts` (operator chat), `reports.ts`, `cron.ts`.
+- `lib/identity/` — **versioned canonical identity records** (`canonical.ts`: hard/soft locks, provider block; `service.ts`: immutable snapshots). `lib/references/` — canonical reference library + explicit promotion. `lib/pipeline/` — Generation Brief (`brief.ts`), prompts, image jobs + lineage (`generate.ts`), QA stages (`qa.ts`), content QA (`content.ts`), finalize, revision loop (`revise.ts`). `lib/orchestrator/execute.ts` wires them. `lib/media/` — image inspection + dev placeholder PNG. See `docs/pipeline.md`.
 - `lib/llm/` — multi-model router: `gemini.ts`, `openai.ts`, `mock.ts`, `router.ts` (preference, fallback policy), `health.ts` (provider states), `pricing.ts`, `status.ts`.
 - `lib/auth/`, `proxy.ts` — operator session auth (HMAC cookie); fail-closed in production.
 - `docs/n8n.md` (webhook contract), `docs/schema.md`, `docs/agents.md` (agent ops, tick endpoint, LLM routing).
@@ -34,7 +35,13 @@ SIE Sienna Veyra · ALE Alessia Varenne · MIL Mila Calloway · VES Vesper Laure
 - **Skye**: sun-bleached blonde with darker roots, green-hazel eyes, heavy freckles, beauty mark on LEFT cheek, tiny shell necklace, no gold hoops.
 - Generated images NEVER become identity references automatically (`reference_assets` is separate from `assets`; `assets.is_reference` is constrained false).
 - Creators are fictional virtual personalities; support transparent AI/virtual disclosure. Never build deception/impersonation features.
-- Identity QA checks the POSITIVE prompt only; negatives live in `Prompt.negative`.
+- Identity facts live ONLY in `identity/canonical.ts` (+ roster.ts data). Productions/assets store the version id (`SIE-IDENTITY-v1.0`), never copies. Bump `IDENTITY_VERSION` when facts change.
+- Identity prompt checks run on the POSITIVE prompt only; negatives live in `Prompt.negative`.
+- **QA honesty**: never report a visual check unless a capable inspector received the image (`qa_results.inspected_image`). No inspector → `MANUAL_REVIEW_REQUIRED`, never PASS. Identity QA never auto-routes to a model or falls back silently.
+- Reference authority: MASTER_FACE > supporting > generated (0). One active master per creator. Generated assets become references ONLY via `promoteGeneratedAsset` (explicit operator action on an approved asset, with a note). Never write `referenceAssets` from the pipeline.
+- Never overwrite failed attempts/assets: regeneration = new attempt, old assets `current=false`.
+- Image provider: `IMAGE_PROVIDER=openai` without a key is UNAVAILABLE, never a silent mock.
+- Task execution must go through `repo.claim` (atomic); don't mutate task status to RUNNING with plain `update`.
 
 ## Security rules
 - Never commit secrets. `.env.example` has names only; `.env*` is gitignored. Service-role key is server-side only; never import `db/supabase-store.ts` from client components.

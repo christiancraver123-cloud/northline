@@ -11,7 +11,7 @@ import { processQueue } from "./worker";
 
 /** Which task kind each agent can take as a standalone operator assignment. */
 export const ASSIGNABLE: Partial<Record<AgentCode, string>> = {
-  CONTENT_STRATEGIST: "strategist.concepts", CREATIVE_DIRECTOR: "director.concepts", GROWTH_STRATEGIST: "growth.recommendations", PERFORMANCE_AGENT: "performance.report",
+  CONTENT_STRATEGIST: "strategist.concepts", CREATIVE_DIRECTOR: "director.concepts", GROWTH_STRATEGIST: "growth.recommendations", PERFORMANCE_AGENT: "performance.report", CONTENT_QA: "content_qa.audit",
 };
 
 export interface SubmitOpts { createdBy?: string; origin?: Origin; deps?: Partial<Deps>; trigger?: "operator" | "n8n" | "queue" }
@@ -45,7 +45,7 @@ export async function createAssignment(repo: Repo, a: { title: string; agents: A
   if (!agents.length) throw new Error("Name at least one agent.");
   const assignmentId = randomUUID();
   const children: AgentTask[] = [];
-  const order: AgentCode[] = ["CONTENT_STRATEGIST", "CREATIVE_DIRECTOR", "GROWTH_STRATEGIST", "PERFORMANCE_AGENT"];
+  const order: AgentCode[] = ["CONTENT_STRATEGIST", "CREATIVE_DIRECTOR", "GROWTH_STRATEGIST", "PERFORMANCE_AGENT", "CONTENT_QA"];
   for (const ag of order.filter((x) => agents.includes(x))) {
     const strat = children.find((c) => c.agentId === "CONTENT_STRATEGIST");
     children.push(await enqueue(repo, {

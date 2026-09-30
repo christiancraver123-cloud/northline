@@ -113,7 +113,7 @@ export type TaskStatus = "QUEUED" | "RUNNING" | "WAITING" | "COMPLETE" | "FAILED
 export interface Agent extends Base {
   code: AgentCode; name: string; role: string; paused: boolean; notes: string;
   /** Orchestrator-only operational flags (priority / paused creators). */
-  config: { priorityTalent?: TalentCode[]; pausedTalent?: TalentCode[] };
+  config: { priorityTalent?: TalentCode[]; pausedTalent?: TalentCode[]; model?: { provider: "gemini" | "openai" | "mock" | "rules" | "auto"; model?: string; allowFallback?: boolean } };
 }
 export interface AgentTask extends Base {
   agentId: AgentCode; kind: string; title: string; input: Record<string, unknown>; output: Record<string, unknown> | null;
@@ -126,6 +126,15 @@ export interface AgentRun extends Base {
   agentId: AgentCode; taskId: string | null; trigger: "queue" | "schedule" | "event" | "operator" | "n8n";
   state: WorkflowState; startedAt: string; finishedAt: string | null; error: string | null; summary: string;
   costUsd: number | null; tokens: number | null; // null = no model call was made / unknown
+  /** Actual provider/model that did the work: "gemini"/"openai"/"mock", an image/video provider, or "rules" (deterministic, no model). */
+  provider: string | null; model: string | null; usedFallback: boolean;
+}
+/** One model-provider attempt (success or failure), linked to an agent run. Usage/cost null = not reported / no reliable pricing. */
+export interface LlmCall extends Base {
+  runId: string | null; taskId: string | null; agentId: AgentCode; provider: string; model: string;
+  status: "COMPLETE" | "FAILED" | "RATE_LIMITED" | "UNAVAILABLE" | "SKIPPED"; error: string | null;
+  startedAt: string; finishedAt: string; latencyMs: number; inputTokens: number | null; outputTokens: number | null; totalTokens: number | null;
+  costUsd: number | null; fallbackFrom: string | null;
 }
 /** Operational activity log: what happened (tool/task results), NOT model reasoning. */
 export interface AgentEvent extends Base {
@@ -146,7 +155,7 @@ export interface AgentSchedule extends Base {
 
 export interface Tables {
   agents: Agent; agentTasks: AgentTask; agentRuns: AgentRun; agentEvents: AgentEvent; agentMessages: AgentMessage;
-  agentReports: AgentReport; agentSchedules: AgentSchedule;
+  agentReports: AgentReport; agentSchedules: AgentSchedule; llmCalls: LlmCall;
   campaigns: Campaign; productions: Production; assets: Asset; referenceAssets: ReferenceAsset; prompts: Prompt;
   captions: Caption; approvals: Approval; workflowRuns: WorkflowRun; providerJobs: ProviderJob;
   calendarEntries: CalendarEntry; storylines: Storyline; launchStates: LaunchState; analytics: AnalyticsRecord;
@@ -155,5 +164,5 @@ export type TableName = keyof Tables;
 export const TABLE_NAMES: TableName[] = [
   "campaigns", "productions", "assets", "referenceAssets", "prompts", "captions", "approvals", "workflowRuns",
   "providerJobs", "calendarEntries", "storylines", "launchStates", "analytics",
-  "agents", "agentTasks", "agentRuns", "agentEvents", "agentMessages", "agentReports", "agentSchedules",
+  "agents", "agentTasks", "agentRuns", "agentEvents", "agentMessages", "agentReports", "agentSchedules", "llmCalls",
 ];

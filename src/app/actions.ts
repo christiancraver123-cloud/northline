@@ -81,7 +81,7 @@ async function syncWait(productionId: string) {
 
 // ---- Agent Operations Center ---------------------------------------------------------
 import { handleMessage } from "@/lib/agents/ops/chat";
-import { cancelTask, reprioritize, retryTask, setNotes, setPaused, setScheduleEnabled } from "@/lib/agents/ops/service";
+import { cancelTask, reprioritize, retryTask, setModelPreference, setNotes, setPaused, setScheduleEnabled } from "@/lib/agents/ops/service";
 import { materializeDueSchedules } from "@/lib/agents/ops/service";
 import { processQueue } from "@/lib/agents/ops/worker";
 import type { AgentCode } from "@/lib/db/records";
@@ -105,6 +105,10 @@ export async function agentControlAction(formData: FormData) {
     else if (op === "cancel") await cancelTask(repo, taskId);
     else if (op === "retry") { await retryTask(repo, taskId); await processQueue(repo, { onlyIds: [taskId], trigger: "operator" }); }
     else if (op === "prioritize") await reprioritize(repo, taskId, 1);
+    else if (op === "model") {
+      const fb = String(formData.get("fallback") ?? "default");
+      await setModelPreference(repo, agent, { provider: String(formData.get("provider")) as never, model: String(formData.get("model") ?? ""), allowFallback: fb === "default" ? undefined : fb === "allow" });
+    }
     else if (op === "run") await processQueue(repo, { trigger: "operator", max: 10 });
     else if (op === "schedule") await setScheduleEnabled(repo, String(formData.get("scheduleId")), formData.get("enabled") === "1");
     else if (op === "tick") { await materializeDueSchedules(repo); await processQueue(repo, { trigger: "operator", max: 25 }); }

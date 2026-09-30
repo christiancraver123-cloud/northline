@@ -10,8 +10,12 @@ import { identityQa } from "@/lib/agents/identity";
 import { creativeDirector } from "@/lib/agents/agents";
 import { buildCreatorsReport, buildStatusReport, countBy, explainQa, type ReportDraft } from "./reports";
 import { ensureApprovalWait, logEvent } from "./service";
+import type { LlmRequest } from "@/lib/llm/types";
 
+export interface LlmOutcome { text: string | null; provider: string | null; model: string | null; error: string | null; usedFallback: boolean; attempted: boolean }
 export interface HandlerCtx {
+  /** Route a model call through the provider router (per-agent preference, fallback policy, usage tracking). text=null → no model output. */
+  llm: (req: LlmRequest) => Promise<LlmOutcome>;
   repo: Repo; task: AgentTask; runId: string; origin: "demo" | "live";
   log: (kind: string, message: string, o?: { level?: "info" | "warn" | "error"; data?: Record<string, unknown>; agent?: AgentCode }) => Promise<void>;
   report: (d: ReportDraft, agent?: AgentCode) => Promise<AgentReport>;
@@ -19,6 +23,17 @@ export interface HandlerCtx {
 }
 export interface HandlerResult { output: Record<string, unknown>; summary: string; reportIds?: string[] }
 export type Handler = (c: HandlerCtx) => Promise<HandlerResult>;
+
+/** Ask the routed model for grounded analysis of REAL facts. Returns a labelled block, or "" when no model ran (facts-only). */
+async function narrate(c: HandlerCtx, what: string, facts: string): Promise<string> {
+  const out = await c.llm({
+    system: `You are the ${c.task.agentId.replace("_", " ").toLowerCase()} for Northline, a virtual-creator media studio. Write concise, practical analysis using ONLY the facts provided. If data is missing, say so; never invent metrics, results or background work.`,
+    prompt: `Task: ${what}\n\nFACTS (authoritative):\n${facts}\n\nWrite 3-6 short bullet points.`, maxOutputTokens: 600,
+  });
+  if (out.text) return `\n\nAI analysis (${out.provider} · ${out.model}${out.usedFallback ? ", fallback" : ""}):\n${out.text.trim()}`;
+  if (out.attempted) await c.log("LLM_UNAVAILABLE", `Model analysis unavailable (${out.error}); report contains facts only`, { level: "warn" });
+  return "";
+}
 
 const talentOf = (t: AgentTask): TalentCode | null => (t.talent ?? (t.input.talent as TalentCode | undefined) ?? null);
 const FORMATS: ContentType[] = ["POST", "CAROUSEL", "REEL"];
@@ -84,7 +99,8 @@ const growthRecommendations: Handler = async (c) => {
     const missing = Object.entries(byType).filter(([, n]) => n === 0).map(([k]) => k);
     return { talent: t, mix: byType, recommendation: missing.length ? `${ROSTER_BY_CODE[t].first} has no ${missing.join("/")} productions yet — try one to balance the mix.` : `${ROSTER_BY_CODE[t].first}'s format mix is balanced so far.` };
   });
-  return { output: { basis: real.length ? "analytics+history" : "production-history-only", performanceDataAvailable: real.length > 0, recommendations: recs }, summary: real.length ? `Recommendations from ${real.length} analytics record(s)` : "Structural recommendations only (no performance data exists)" };
+  const narrative = await narrate(c, "Recommend content experiments and mix changes", JSON.stringify({ analyticsRecords: real.length, recommendations: recs }));
+  return { output: { basis: real.length ? "analytics+history" : "production-history-only", performanceDataAvailable: real.length > 0, recommendations: recs, narrative: narrative || null }, summary: real.length ? `Recommendations from ${real.length} analytics record(s)` : "Structural recommendations only (no performance data exists)" };
 };
 
 const performanceReport: Handler = async (c) => {
@@ -95,7 +111,8 @@ const performanceReport: Handler = async (c) => {
   const body = real.length
     ? `Analytics records: ${real.length} (${countBy(real.map((r) => r.source))}).\nTotal views: ${real.reduce((s, r) => s + (r.views ?? 0), 0)}; likes: ${real.reduce((s, r) => s + (r.likes ?? 0), 0)}.`
     : `No real or manual analytics data exists, and ${published} production(s) are recorded as published. There is nothing to interpret yet — no performance claims are made.`;
-  const r = await c.report({ kind: "PERFORMANCE", title: "Performance report", body, data: { real: real.length, published }, sources: ["analytics", "productions"] });
+  const extra = await narrate(c, "Interpret performance data", body);
+  const r = await c.report({ kind: "PERFORMANCE", title: "Performance report", body: body + extra, data: { real: real.length, published }, sources: ["analytics", "productions"] });
   return { output: { real: real.length, published }, summary: real.length ? `Reported on ${real.length} analytics record(s)` : "No analytics data to report", reportIds: [r.id] };
 };
 
@@ -126,6 +143,22 @@ const contentReview: Handler = async (c) => {
   return { output: { ok: !issues.length, issues }, summary: issues.length ? `${issues.length} content issue(s) in ${p.code}` : `${p.code} passed content QA` };
 };
 
+const contentAudit: Handler = async (c) => {
+  const [prods, assets, prompts] = await Promise.all([c.repo.list("productions"), c.repo.list("assets"), c.repo.list("prompts")]);
+  const recent = prods.slice(0, 30);
+  const byLoc: Record<string, number> = {};
+  for (const p of recent) if (p.brief?.location) byLoc[`${p.talent[0]} @ ${p.brief.location}`] = (byLoc[`${p.talent[0]} @ ${p.brief.location}`] ?? 0) + 1;
+  const repeats = Object.entries(byLoc).filter(([, n]) => n > 1).map(([k, n]) => `${k} ×${n}`);
+  const ids = new Set(recent.map((p) => p.id));
+  const failed = assets.filter((a) => ids.has(a.productionId) && a.status === "FAILED").length;
+  const idIssues = prompts.filter((p) => ids.has(p.productionId) && !p.qa.ok).length;
+  await c.log("READ_STATE", `Audited ${recent.length} recent production(s)`);
+  const facts = `Productions audited: ${recent.length}. Repeated creator/location pairs: ${repeats.join("; ") || "none"}. Failed assets: ${failed}. Prompts failing identity QA: ${idIssues}.`;
+  const extra = await narrate(c, "Audit recent content for repetition, quality and brand fit", facts);
+  const r = await c.report({ kind: "QA", title: "Content audit", body: `${facts}${extra}`, data: { audited: recent.length, repeats, failed, idIssues }, sources: ["productions", "assets", "prompts"] });
+  return { output: { audited: recent.length, repeats, failed, idIssues }, summary: `Audited ${recent.length} production(s): ${repeats.length} repeat(s), ${failed} failed asset(s)`, reportIds: [r.id] };
+};
+
 const productionCreate: Handler = async (c) => {
   const req = CreateRequestSchema.parse(c.task.input.request);
   const base = { ...defaultDeps(), ...c.deps };
@@ -140,14 +173,17 @@ const productionCreate: Handler = async (c) => {
 
 const productionDigest: Handler = async (c) => {
   const d = await buildStatusReport(c.repo);
-  const r = await c.report({ ...d, kind: "DIGEST", title: "Production digest" }, "PRODUCTION_MANAGER");
+  const extra = await narrate(c, "Summarise production status and what needs attention", d.body);
+  const r = await c.report({ ...d, body: d.body + extra, kind: "DIGEST", title: "Production digest" }, "PRODUCTION_MANAGER");
   return { output: { reportId: r.id }, summary: "Production digest published", reportIds: [r.id] };
 };
 
 const orchestratorReport: Handler = async (c) => {
   const scope = c.task.input.scope === "status" ? "status" : "creators";
   await c.log("READ_STATE", `Reading Northline records for the ${scope} report`);
-  const r = await c.report(scope === "status" ? await buildStatusReport(c.repo) : await buildCreatorsReport(c.repo));
+  const d = scope === "status" ? await buildStatusReport(c.repo) : await buildCreatorsReport(c.repo);
+  const extra = await narrate(c, `Highlight what matters in this ${scope} report`, d.body);
+  const r = await c.report({ ...d, body: d.body + extra });
   return { output: { reportId: r.id, scope }, summary: `${r.title} created`, reportIds: [r.id] };
 };
 
@@ -182,7 +218,7 @@ export { summarise };
 
 export const HANDLERS: Record<string, Handler> = {
   "strategist.concepts": strategistConcepts, "director.concepts": directorConcepts, "growth.recommendations": growthRecommendations,
-  "performance.report": performanceReport, "identity_qa.review": identityReview, "content_qa.review": contentReview,
+  "performance.report": performanceReport, "identity_qa.review": identityReview, "content_qa.review": contentReview, "content_qa.audit": contentAudit,
   "production.create": productionCreate, "production.digest": productionDigest, "orchestrator.report": orchestratorReport, "orchestrator.consolidate": consolidate,
 };
 /** Kinds whose dependencies may be FAILED/CANCELLED (they consolidate whatever completed). */

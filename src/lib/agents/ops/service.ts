@@ -2,7 +2,7 @@
 // Agents are persistent workers: they do nothing (and cost nothing) until a task is queued by an operator message,
 // an event, or a due schedule. "Status" is derived from real rows, never stored or faked.
 import type { Repo } from "@/lib/db/repo";
-import type { Agent, AgentCode, AgentEvent, AgentSchedule, AgentStatus, AgentTask, TaskStatus } from "@/lib/db/records";
+import type { Agent, AgentCode, AgentRun, AgentEvent, AgentSchedule, AgentStatus, AgentTask, TaskStatus } from "@/lib/db/records";
 import type { Origin as OriginT, TalentCode } from "@/lib/domain/types";
 import { AGENT_DEFS, DEFAULT_SCHEDULES } from "./registry";
 import { nextRun } from "./cron";
@@ -47,6 +47,7 @@ export async function enqueue(repo: Repo, t: EnqueueInput): Promise<AgentTask> {
 const TERMINAL: TaskStatus[] = ["COMPLETE", "FAILED", "CANCELLED"];
 
 export interface AgentSnapshot {
+  lastRun: AgentRun | null;
   agent: Agent; status: AgentStatus; current: AgentTask | null; queued: number; blocked: number; waiting: number;
   lastEvent: AgentEvent | null; lastError: string | null; nextSchedule: AgentSchedule | null;
 }
@@ -79,11 +80,12 @@ export async function heldTalent(repo: Repo): Promise<TalentCode[]> {
 
 export async function snapshots(repo: Repo): Promise<AgentSnapshot[]> {
   const agents = await ensureAgents(repo);
-  const [tasks, schedules, events, held] = await Promise.all([repo.list("agentTasks"), repo.list("agentSchedules"), repo.list("agentEvents"), heldTalent(repo)]);
+  const [tasks, schedules, events, held, runs] = await Promise.all([repo.list("agentTasks"), repo.list("agentSchedules"), repo.list("agentEvents"), heldTalent(repo), repo.list("agentRuns")]);
   return agents.map((agent) => {
     const d = deriveStatus(agent, tasks, schedules, held);
     const lastEvent = events.filter((e) => e.agentId === agent.code).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
-    return { agent, lastEvent, ...d };
+    const lastRun = runs.filter((r) => r.agentId === agent.code).sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0] ?? null;
+    return { agent, lastEvent, lastRun, ...d };
   });
 }
 
@@ -167,4 +169,13 @@ export async function resolveApprovalWaits(repo: Repo, productionId: string, dec
     await repo.update("agentTasks", t.id, { status: "COMPLETE", output: { decision }, finishedAt: new Date().toISOString() });
     await logEvent(repo, "PRODUCTION_MANAGER", "APPROVAL_DECIDED", `Approval ${decision} — ${t.title.replace("Waiting for approval: ", "")}`, { taskId: t.id, data: { decision } });
   }
+}
+
+/** Set an agent's preferred provider/model. `rules` = deterministic only; `auto` = router default. Validated against known providers. */
+export async function setModelPreference(repo: Repo, code: AgentCode, pref: NonNullable<Agent["config"]["model"]>) {
+  if (!["gemini", "openai", "mock", "rules", "auto"].includes(pref.provider)) throw new Error("Unknown provider");
+  const a = await agentRow(repo, code);
+  const model = pref.model?.trim().slice(0, 80) || undefined;
+  await repo.update("agents", a.id, { config: { ...a.config, model: { provider: pref.provider, model, allowFallback: pref.allowFallback } } });
+  await logEvent(repo, code, "MODEL_PREFERENCE", `Preferred provider set to ${pref.provider}${model ? `/${model}` : ""}${pref.allowFallback === undefined ? "" : pref.allowFallback ? " (fallback allowed)" : " (no fallback)"}`);
 }

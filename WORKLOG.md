@@ -14,3 +14,16 @@
 **Bug caught by tests**: Vesper's "reversed eyes" QA regex matched the correct phrase "image-left eye emerald green"; fixed with lookbehind.
 **Known issues**: Supabase SQL/adapter unverified against a live project; OpenAI adapter unverified; Higgsfield is a stub; no operator login; no reference-image upload; captions are template v0; analytics empty (by design).
 **Next**: see TODO.md (auth, apply/verify Supabase, reference uploads, OpenAI live test).
+
+## 2026-09-30 — Session 2: auth, Agent Operations Center, multi-model routing
+**Git**: milestone branch `claude/gracious-knuth-kwtmz5` (commit c0c3afe) is the base; no `main` exists on the remote. An attempt to push `main` was blocked by the permission policy (not worked around) — create `main` from that commit yourself or approve it.
+**Built**
+- Operator auth: HMAC-signed session cookie, `proxy.ts` gate (fail-closed in production), `requireOperator()` in every server action, login/logout, throttling; machine endpoints stay Bearer-only.
+- Agent Operations Center (migration 0003): persistent agents/tasks/runs/events/messages/reports/schedules; derived status (WORKING/QUEUED/WAITING/SCHEDULED/IDLE/FAILED/PAUSED); queue worker; `/api/agents/tick` for n8n/cron; event-driven WAITING approval tasks; existing production pipeline now emits agent activity; operator chat (Orchestrator + per-agent) doing real actions (status, reports, QA explanations, prioritise/pause creators, delegation, multi-agent assignments with consolidation, content audit, create); UI: /agents overview + chat, agent workspace (Chat|Activity|Queue|Reports|Settings), /agents/reports inbox, dashboard agent card, sidebar badge.
+- Multi-model routing (migration 0004): Gemini + OpenAI text + mock adapters, router with per-agent preference and fallback policy (identity-critical never silent), provider health states, per-run provider/model, `llm_calls` table, concurrency by provider lane, cost only from operator pricing + real usage, provider status in UI.
+- Migrations verified against embedded Postgres (PGlite) in tests.
+**Tests**: 59 pass (`npm test`), typecheck clean, build OK. Browser e2e (headless Chromium): login gate (redirect/401), bad/good password, orchestrator chat instructions, multi-agent assignment, reports inbox, per-agent activity showing provider/model after routing a report through the (mock) provider.
+**Decisions**: status derived not stored; agents deterministic by default with optional LLM narrative layered on top of authoritative facts; provider lanes for concurrency; seeded schedules disabled; single-operator password auth now, Supabase Auth later.
+**Bugs caught by tests/e2e**: specialist "report" chat fell through to the Orchestrator; fixed.
+**Known issues / not verified**: Gemini & OpenAI adapters only contract-tested with mocked fetch (no keys); `SupabaseRepo` untested against live Supabase; Higgsfield stub; concurrency is in-process (single Node instance; no distributed locking yet — run one tick caller); no reference uploads.
+**Next**: see TODO.md.

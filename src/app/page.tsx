@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getRepo } from "@/lib/db";
 import { ROSTER } from "@/lib/talent/roster";
 import { snapshots } from "@/lib/agents/ops/service";
-import { AgentStatusPill, Avatar, Card, ago, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips } from "@/components/ui";
+import { AgentStatusPill, Avatar, Card, ProviderPill, ago, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips } from "@/components/ui";
 
 export default async function Dashboard() {
   const repo = await getRepo();
@@ -47,7 +47,7 @@ export default async function Dashboard() {
           <Card>
             <div className="mb-3 flex items-center justify-between"><h2 className="font-bold">Agent activity</h2><Link className="text-blue2" href="/agents">Open →</Link></div>
             <div className="mb-3 flex flex-wrap gap-1.5 text-[12px]">{(["WORKING", "QUEUED", "WAITING", "SCHEDULED", "IDLE", "FAILED", "PAUSED"] as const).map((k) => { const n = snaps.filter((x) => x.status === k).length; return n ? <span key={k} className="inline-flex items-center gap-1"><AgentStatusPill status={k} /><b className="font-mono">{n}</b></span> : null; })}</div>
-            <div className="grid gap-1.5">{snaps.map((x) => <Link key={x.agent.code} href={`/agents/${x.agent.code}`} className="flex items-center justify-between gap-2 text-[13px]"><span className="truncate">{x.agent.name}<span className="ml-2 text-[11px] text-faint">{x.current ? x.current.title.slice(0, 34) : x.lastEvent ? ago(x.lastEvent.createdAt) : ""}</span></span><AgentStatusPill status={x.status} /></Link>)}</div>
+            <div className="grid gap-1.5">{snaps.map((x) => <Link key={x.agent.code} href={`/agents/${x.agent.code}`} className="flex items-center justify-between gap-2 text-[13px]"><span className="truncate">{x.agent.name}<span className="ml-2 text-[11px] text-faint">{x.current ? x.current.title.slice(0, 34) : x.lastEvent ? ago(x.lastEvent.createdAt) : ""}</span></span><span className="flex items-center gap-1.5">{x.lastRun && <ProviderPill provider={x.lastRun.provider} />}<AgentStatusPill status={x.status} /></span></Link>)}</div>
             {reports.length > 0 && <Link href="/agents/reports" className="mt-3 block text-warn">{reports.length} unread agent report{reports.length > 1 ? "s" : ""} →</Link>}
           </Card>
           <Card>

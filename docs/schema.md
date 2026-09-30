@@ -6,4 +6,5 @@ Migrations: `supabase/migrations/0001_init.sql` (tables, enums, RLS enabled with
 - `assets` (generated) and `reference_assets` (canonical identity) are separate; `assets.is_reference` is constrained false.
 - `provider_jobs.cost_usd/credits` are nullable: unknown stays unknown.
 - Every operational row has `origin` (`demo`|`live`).
-- **Status**: SQL is written but NOT yet applied to a live Supabase project, and `supabase-store.ts` has not been exercised against one (no credentials in the build environment).
+- Migrations 0003 (agent ops) and 0004 (LLM routing: `agent_runs.provider/model/used_fallback`, `llm_calls`).
+- **Status**: all four migrations are applied and checked in CI against an embedded Postgres (PGlite) — schema, seed, sequence function, constraints, RLS. `supabase-store.ts` (supabase-js/PostgREST) has NOT been exercised against a live Supabase project (no credentials here).

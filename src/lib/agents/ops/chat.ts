@@ -103,6 +103,12 @@ async function route(repo: Repo, me: AgentCode, text: string): Promise<ChatReply
     return none(note + ex.text);
   }
 
+  // --- specialist asked for its own report/audit ---
+  if (me !== "ORCHESTRATOR" && ASSIGNABLE[me] && /\b(report|audit|recommend\w*)\b/.test(lower)) {
+    const t = await delegate(repo, me, talent.length === 1 ? talent[0] : null, countIn(text));
+    return taskReply(repo, t.id, AGENT_BY_CODE[me].name, true);
+  }
+
   // --- reports ---
   if (/\breport\b/.test(lower) || /\bsummar(y|ise|ize)\b/.test(lower)) {
     if (agents.includes("PERFORMANCE_AGENT") || /\b(performance|analytics)\b/.test(lower)) {
@@ -125,6 +131,10 @@ async function route(repo: Repo, me: AgentCode, text: string): Promise<ChatReply
   if ((have && agents.length) || (me !== "ORCHESTRATOR" && ASSIGNABLE[me] && /\b(create|give|propose|come up|develop|draft|generate|make)\b/.test(lower))) {
     const assignable = targetAgents.filter((a) => a !== "ORCHESTRATOR");
     const t = talent.length === 1 ? talent[0] : null;
+    if (assignable.includes("CONTENT_QA") && /\baudit\b/.test(lower)) {
+      const task = await delegate(repo, "CONTENT_QA", null, 1);
+      return taskReply(repo, task.id, "Content QA", true);
+    }
     if (assignable.some((a) => a === "IDENTITY_QA" || a === "CONTENT_QA")) {
       const code = text.match(PROD_CODE)?.[1]?.toUpperCase();
       const p = code ? (await repo.list("productions")).find((x) => x.code === code) : undefined;

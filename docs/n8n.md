@@ -20,3 +20,7 @@ Response `200`:
 Webhook → Validate → Northline creates Production ID, loads talent/identity/recent content, runs Strategist + Creative Director, saves brief → Return. Later: Prompt Builder → Image Generation → Save Asset → Identity QA → Content QA → Caption → Approval queue.
 Today the chain runs inside Northline (`lib/orchestrator/execute.ts`); n8n triggers it. Runs are recorded in `workflow_runs` (QUEUED/RUNNING/WAITING/FAILED/RETRYING/COMPLETE).
 No live n8n instance is connected; nothing on the Automations page reflects a real n8n server.
+
+## Worker tick (scheduled/event-driven agent work)
+`POST {NORTHLINE_URL}/api/agents/tick` — same Bearer auth. Materialises due agent schedules and runs eligible queued tasks. Use an n8n Schedule Trigger (e.g. every 5 min). See `docs/agents.md`.
+Production webhook responses now also include `taskId` (the Production Manager task that ran the workflow).

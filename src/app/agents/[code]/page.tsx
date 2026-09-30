@@ -7,7 +7,7 @@ import { ROSTER } from "@/lib/talent/roster";
 import type { AgentCode } from "@/lib/db/records";
 import { agentControlAction } from "../../actions";
 import { ChatPanel } from "@/components/ChatPanel";
-import { AgentStatusPill, Btn, Card, Empty, PageHeader, Pill, StatusPill, ago } from "@/components/ui";
+import { AgentStatusPill, Btn, Card, Empty, PageHeader, Pill, ProviderPill, StatusPill, ago } from "@/components/ui";
 
 const TABS = ["chat", "activity", "queue", "reports", "settings"] as const;
 const SUGGEST: Partial<Record<AgentCode, string[]>> = {
@@ -23,9 +23,9 @@ export default async function AgentWorkspace({ params, searchParams }: { params:
   const tab = (TABS as readonly string[]).includes((await searchParams).tab ?? "") ? (await searchParams).tab! : "chat";
   const repo = await getRepo();
   const snap = (await snapshots(repo)).find((s) => s.agent.code === code)!;
-  const [messages, events, tasks, runs, reports, schedules] = await Promise.all([
+  const [messages, events, tasks, runs, reports, schedules, llmCalls] = await Promise.all([
     repo.list("agentMessages", { agentId: code }), repo.list("agentEvents", { agentId: code }), repo.list("agentTasks", { agentId: code }),
-    repo.list("agentRuns", { agentId: code }), repo.list("agentReports", { agentId: code }), repo.list("agentSchedules", { agentId: code }),
+    repo.list("agentRuns", { agentId: code }), repo.list("agentReports", { agentId: code }), repo.list("agentSchedules", { agentId: code }), repo.list("llmCalls", { agentId: code }),
   ]);
   const byNew = <T extends { createdAt: string }>(a: T[]) => [...a].sort((x, y) => y.createdAt.localeCompare(x.createdAt));
   const ctl = (op: string, extra: Record<string, string> = {}) => <><input type="hidden" name="agent" value={code} /><input type="hidden" name="op" value={op} />{Object.entries(extra).map(([k, v]) => <input key={k} type="hidden" name={k} value={v} />)}</>;
@@ -33,7 +33,7 @@ export default async function AgentWorkspace({ params, searchParams }: { params:
   const history = byNew(tasks.filter((t) => ["COMPLETE", "FAILED", "CANCELLED"].includes(t.status))).slice(0, 25);
   return (
     <>
-      <PageHeader title={def.name} sub={def.role} actions={<span className="flex items-center gap-2"><AgentStatusPill status={snap.status} />{snap.current && <Pill tone="info">{snap.current.title.slice(0, 40)}</Pill>}</span>} />
+      <PageHeader title={def.name} sub={def.role} actions={<span className="flex items-center gap-2"><AgentStatusPill status={snap.status} />{snap.current && <Pill tone="info">{snap.current.title.slice(0, 40)}</Pill>}{snap.lastRun && <ProviderPill provider={snap.lastRun.provider} model={snap.lastRun.model} fallback={snap.lastRun.usedFallback} />}</span>} />
       <nav className="mb-4 flex flex-wrap gap-1 border-b border-edge" aria-label="Agent workspace">
         {TABS.map((t) => <Link key={t} href={`/agents/${code}?tab=${t}`} aria-current={tab === t ? "page" : undefined} className={`rounded-t-lg px-4 py-2 font-semibold capitalize ${tab === t ? "border-b-2 border-blue2 text-ink" : "text-muted hover:text-ink"}`}>{t}{t === "queue" && snap.queued + snap.waiting > 0 ? ` (${snap.queued + snap.waiting})` : ""}{t === "reports" && reports.filter((r) => !r.read).length ? ` (${reports.filter((r) => !r.read).length})` : ""}</Link>)}
         <Link href="/agents" className="ml-auto px-3 py-2 text-muted">← All agents</Link>
@@ -56,7 +56,11 @@ export default async function AgentWorkspace({ params, searchParams }: { params:
           <Card>
             <h2 className="mb-2 font-bold">Run history</h2>
             {runs.length === 0 ? <Empty>No runs yet.</Empty> : byNew(runs).slice(0, 20).map((r) => (
-              <div key={r.id} className="border-t border-edge py-1.5 text-[12.5px] first:border-0"><div className="flex items-center justify-between"><span className="font-mono text-faint">{r.startedAt.slice(0, 16).replace("T", " ")} · {r.trigger}</span><StatusPill status={r.state} /></div><div className="text-muted">{r.error ?? r.summary}</div><div className="text-[11px] text-faint">model cost: {r.costUsd == null ? "none (no model call)" : `$${r.costUsd}`}</div></div>
+              <div key={r.id} className="border-t border-edge py-1.5 text-[12.5px] first:border-0"><div className="flex items-center justify-between"><span className="font-mono text-faint">{r.startedAt.slice(0, 16).replace("T", " ")} · {r.trigger}</span><StatusPill status={r.state} /></div><div className="text-muted">{r.error ?? r.summary}</div><div className="mt-0.5 flex flex-wrap items-center gap-1.5"><ProviderPill provider={r.provider} model={r.model} fallback={r.usedFallback} /><span className="text-[11px] text-faint">tokens: {r.tokens ?? "n/a"} · cost: {r.costUsd == null ? (r.provider === "rules" ? "none (no model call)" : "unknown") : `$${r.costUsd.toFixed(4)}`}</span></div></div>
+            ))}
+            <h2 className="mb-2 mt-4 font-bold">Model calls</h2>
+            {llmCalls.length === 0 ? <p className="text-[12.5px] text-muted">No model calls. Deterministic work uses none.</p> : byNew(llmCalls).slice(0, 15).map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center justify-between gap-1 border-t border-edge py-1 text-[12px] first:border-0"><span className="font-mono text-faint">{c.startedAt.slice(11, 19)} {c.provider}/{c.model}{c.fallbackFrom ? ` ← ${c.fallbackFrom}` : ""}</span><span className="flex items-center gap-2 text-faint">{c.totalTokens != null ? `${c.totalTokens} tok` : "tok n/a"} · {c.latencyMs}ms<StatusPill status={c.status === "RATE_LIMITED" ? "WAITING" : c.status === "COMPLETE" ? "COMPLETE" : "FAILED"} /></span></div>
             ))}
           </Card>
         </div>
@@ -103,6 +107,13 @@ export default async function AgentWorkspace({ params, searchParams }: { params:
             <h2 className="mb-2 font-bold">Identity &amp; configuration</h2>
             <p className="text-[13px] text-muted">{def.purpose}</p>
             <dl className="mt-3 grid grid-cols-[110px_1fr] gap-y-1 text-[13px]"><dt className="text-muted">Code</dt><dd className="font-mono">{code}</dd><dt className="text-muted">Engine</dt><dd>{def.mode} (no model calls)</dd><dt className="text-muted">Task kinds</dt><dd className="font-mono text-[12px]">{def.handles.join(", ") || "runs inside production workflows"}</dd></dl>
+            <form action={agentControlAction} className="mt-4 grid gap-2 rounded-xl border border-edge p-3">{ctl("model")}
+              <b className="text-[13px]">Preferred provider / model</b>
+              <div className="grid grid-cols-2 gap-2"><label className="text-[12px] text-muted">Provider<select name="provider" defaultValue={snap.agent.config.model?.provider ?? "auto"}><option value="auto">auto (router default)</option><option value="gemini">Gemini</option><option value="openai">OpenAI</option><option value="mock">mock (dev)</option><option value="rules">rules only (no model)</option></select></label>
+              <label className="text-[12px] text-muted">Model (optional)<input name="model" defaultValue={snap.agent.config.model?.model ?? ""} placeholder="provider default" /></label></div>
+              <label className="text-[12px] text-muted">If the provider is unavailable / rate-limited<select name="fallback" defaultValue={snap.agent.config.model?.allowFallback === undefined ? "default" : snap.agent.config.model.allowFallback ? "allow" : "deny"}><option value="default">default policy (fallback for analysis only)</option><option value="allow">allow fallback to another provider</option><option value="deny">never fall back (fail honestly)</option></select></label>
+              <p className="text-[11px] text-faint">Identity-critical jobs (identity QA, prompts, image generation) never switch provider silently; fallback only happens if you set “allow” here.</p>
+              <Btn>Save model preference</Btn></form>
             <div className="mt-3 flex items-center gap-2">{snap.agent.paused ? <form action={agentControlAction}>{ctl("resume")}<Btn primary>Resume agent</Btn></form> : <form action={agentControlAction}>{ctl("pause")}<Btn>Pause agent</Btn></form>}<AgentStatusPill status={snap.status} /></div>
             <form action={agentControlAction} className="mt-3 grid gap-2">{ctl("notes")}<label className="text-[12px] text-muted">Operator notes<textarea name="notes" rows={3} defaultValue={snap.agent.notes} /></label><Btn>Save notes</Btn></form>
             {code === "ORCHESTRATOR" && <div className="mt-4 text-[13px]"><b>Creator controls</b><p className="text-muted">Prioritised: {snap.agent.config.priorityTalent?.map((c) => ROSTER.find((t) => t.code === c)!.first).join(", ") || "none"} · Production held: {snap.agent.config.pausedTalent?.map((c) => ROSTER.find((t) => t.code === c)!.first).join(", ") || "none"}. Change via chat ("Prioritize Vesper", "Pause Skye production").</p></div>}

@@ -18,7 +18,10 @@ Flow: request → orchestrator → task plan → agents → production records �
 - `lib/providers/` — `ImageProvider`/`VideoProvider`/`StorageProvider` interfaces; adapters: mock (default), openai (stills, untested without a key), higgsfield (**stub**), local storage. Provider-specific code stays in this folder.
 - `lib/publishing/gate.ts` — draft-first gate. There is **no publishing adapter**; any future one must call `assertPublishable`.
 - `app/` — pages (Dashboard, Talent, Create, Productions, Approvals, Launch, Calendar, Assets, Analytics, Agents, Automations, Settings), `actions.ts` (server actions), `api/` (n8n webhook, create, health, asset file).
-- `docs/n8n.md` (webhook contract), `docs/schema.md`.
+- `lib/agents/ops/` — **Agent Operations Center**: `registry.ts` (10 agents), `service.ts` (ensureAgents, enqueue, derived status, controls, schedules, approval waits), `worker.ts` (concurrent queue runner, per-provider lanes), `handlers.ts` (task kinds), `commands.ts` (submitCreate, delegate, createAssignment), `chat.ts` (operator chat), `reports.ts`, `cron.ts`.
+- `lib/llm/` — multi-model router: `gemini.ts`, `openai.ts`, `mock.ts`, `router.ts` (preference, fallback policy), `health.ts` (provider states), `pricing.ts`, `status.ts`.
+- `lib/auth/`, `proxy.ts` — operator session auth (HMAC cookie); fail-closed in production.
+- `docs/n8n.md` (webhook contract), `docs/schema.md`, `docs/agents.md` (agent ops, tick endpoint, LLM routing).
 
 ## Canonical creator rules (never violate)
 SIE Sienna Veyra · ALE Alessia Varenne · MIL Mila Calloway · VES Vesper Laurent · ZOE Zoe Avell · SKY Skye Halston. Names are canonical; ignore names rendered inside old generated reference sheets.
@@ -37,7 +40,8 @@ SIE Sienna Veyra · ALE Alessia Varenne · MIL Mila Calloway · VES Vesper Laure
 - Never commit secrets. `.env.example` has names only; `.env*` is gitignored. Service-role key is server-side only; never import `db/supabase-store.ts` from client components.
 - Never log secrets or echo upstream provider bodies. Settings shows set/not-set only.
 - Machine endpoints are Bearer-protected via `NORTHLINE_WEBHOOK_SECRET` and fail closed when unset.
-- **The operator UI itself has no login yet** (TODO P0 before any public deploy). Server actions are unauthenticated.
+- Operator UI is gated by `NORTHLINE_ADMIN_PASSWORD` + `NORTHLINE_SESSION_SECRET` (proxy.ts + `requireOperator()` in every server action). Production without them = locked. `NORTHLINE_AUTH_DISABLED=true` is a local-only escape hatch. Machine endpoints (`/api/n8n/*`, `/api/create`, `/api/agents/tick`) use Bearer `NORTHLINE_WEBHOOK_SECRET` and fail closed.
+- LLM keys (`GEMINI_API_KEY`, `OPENAI_API_KEY`) are server-only; adapters send them in headers and never echo upstream bodies.
 
 ## Conventions / don't break
 - Draft-first: nothing publishes, schedules externally, DMs, follows, comments, or spends money without an approval workflow. Approval only changes internal state.
@@ -47,3 +51,11 @@ SIE Sienna Veyra · ALE Alessia Varenne · MIL Mila Calloway · VES Vesper Laure
 - Production IDs `CODE-YYYY-###` come from `repo.nextProductionSeq`. Filenames are organisational; metadata lives in records.
 - The DB is the source of truth; no hardcoded arrays as state. Update `WORKLOG.md` and `TODO.md` at every milestone.
 - Don't `pkill -f` patterns that match your own shell command line.
+
+## Agent Ops rules (don't break)
+- Agents are persistent workers: work only via queue/event/schedule; idle = no model calls. Never claim background work that no run recorded.
+- Status is derived from rows (`deriveStatus`), not stored. Activity log = operational events only (no chain-of-thought).
+- Reports must come from real records and list `sources`; empty data is stated plainly.
+- Route model calls only through `lib/llm/router.ts`. Identity-critical kinds never fall back silently. Cost = null unless real usage + operator pricing exist.
+- Every run records the ACTUAL provider/model (`rules` when no model ran).
+- Tests run the migrations against embedded Postgres (PGlite) — keep migrations and `records.ts` in sync (`src/lib/db/migrations.test.ts`).

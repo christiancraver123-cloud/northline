@@ -69,3 +69,11 @@ export function ago(iso: string | null | undefined, now = Date.now()): string {
   if (s < 86400) return `${Math.round(s / 3600)}h ago`;
   return `${Math.round(s / 86400)}d ago`;
 }
+
+/** Shows the ACTUAL provider/model that did the work ("rules" = deterministic, no model call). */
+export function ProviderPill({ provider, model, fallback }: { provider: string | null | undefined; model?: string | null; fallback?: boolean }) {
+  if (!provider) return null;
+  const tone = provider === "rules" ? "mute" : provider === "mock" ? "warn" : "info";
+  return <Pill tone={tone}>{provider}{model ? ` · ${model}` : ""}{fallback ? " · fallback" : ""}</Pill>;
+}
+export const PROVIDER_STATE_TONE: Record<string, string> = { configured: "ok", unavailable: "mute", rate_limited: "warn", failed: "bad" };

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import fs from "node:fs";
 import path from "node:path";
-import { TABLE_NAMES } from "./records";
+import { TABLE_NAMES, type AssetDerivative, type QaResult } from "./records";
 
 const dir = path.join(process.cwd(), "supabase", "migrations");
 const files = fs.readdirSync(dir).filter((f) => f.endsWith(".sql")).sort();
@@ -89,5 +89,14 @@ describe("supabase migrations (embedded Postgres)", () => {
     await expect(d("asset-1", "abc")).rejects.toThrow(); // one derivative per source asset + kind + source bytes
     await d("asset-1", "def"); // a different source file (e.g. replaced) may have its own
     await expect(db.query("insert into asset_derivatives (production_id, source_asset_id, kind, storage_path, filename) values ($1,'a','CROP_X','p','f')", [pid])).rejects.toThrow();
+  });
+  it("every field of QaResult / AssetDerivative maps (camel -> snake) to a real migrated column (guards code <-> SQL drift)", async () => {
+    const db = await migrated();
+    const cols = async (t: string) => new Set((await db.query<{ column_name: string }>("select column_name from information_schema.columns where table_schema='public' and table_name=$1", [t])).rows.map((r) => r.column_name));
+    const qa: QaResult = { id: "", origin: "live", createdAt: "", updatedAt: "", productionId: "", attemptId: null, assetId: null, kind: "CONTINUITY", method: "manual", status: "PASS", inspectedImage: false, provider: null, model: null, findings: [], summary: "", recommendation: null, decidedBy: null, qaAttempt: 1, supersededBy: null, retry: null };
+    const dv: AssetDerivative = { id: "", origin: "live", createdAt: "", updatedAt: "", productionId: "", sourceAssetId: "", kind: "DELIVERY_4X5", storagePath: "", filename: "", mime: "", width: null, height: null, bytes: null, sha256: null, sourceSha256: null, derivation: {}, createdBy: null };
+    const qc = await cols("qa_results"), dc = await cols("asset_derivatives");
+    expect(Object.keys(qa).map(snake).filter((c) => !qc.has(c))).toEqual([]);
+    expect(Object.keys(dv).map(snake).filter((c) => !dc.has(c))).toEqual([]);
   });
 });

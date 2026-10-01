@@ -49,9 +49,9 @@ export default async function AssetDetail({ params, searchParams }: { params: Pr
           <Card>
             <h2 className="mb-2 font-bold">QA results</h2>
             {myQa.length === 0 ? <Empty>No QA results yet.</Empty> : [...myQa].sort((x, y) => x.createdAt.localeCompare(y.createdAt)).map((q) => (
-              <div key={q.id} className={`border-t border-edge py-2 text-[12.5px] first:border-0 ${q.supersededById ? "opacity-60" : ""}`}>
+              <div key={q.id} className={`border-t border-edge py-2 text-[12.5px] first:border-0 ${q.supersededBy ? "opacity-60" : ""}`}>
                 <div className="flex flex-wrap items-center gap-2"><b>{q.kind}</b><span className="font-mono text-[11px] text-faint">{q.method}</span><QaPill status={q.status} />{q.inspectedImage ? <Pill tone="ok">image inspected{q.provider ? ` · ${q.provider}/${q.model}` : ""}</Pill> : <Pill>image not inspected</Pill>}
-                  {(q.qaAttempt ?? 1) > 1 && <Pill>evaluation #{q.qaAttempt}</Pill>}{q.supersededById ? <Pill>superseded · kept for audit</Pill> : <Pill tone="info">active</Pill>}</div>
+                  {(q.qaAttempt ?? 1) > 1 && <Pill>evaluation #{q.qaAttempt}</Pill>}{q.supersededBy ? <Pill>superseded · kept for audit</Pill> : <Pill tone="info">active</Pill>}</div>
                 <p className="mt-1 text-muted">{q.summary}</p>
                 {q.retry && <p className={q.retry.exhausted ? "text-warn" : "text-faint"}>Retry: {q.retry.attempts}/{q.retry.maxAttempts} attempt(s){q.retry.note ? ` · ${q.retry.note}` : ""}{q.retry.errors.length ? ` · ${q.retry.errors.join("; ")}` : ""}</p>}
                 {q.findings.map((f, i) => <p key={i} className={f.severity === "HARD_FAIL" ? "text-bad" : "text-warn"}>• {f.severity}: {f.message}</p>)}

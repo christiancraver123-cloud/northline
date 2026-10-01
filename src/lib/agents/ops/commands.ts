@@ -4,7 +4,7 @@ import type { Repo } from "@/lib/db/repo";
 import type { AgentCode, AgentTask, Production } from "@/lib/db/records";
 import type { Origin, TalentCode } from "@/lib/domain/types";
 import type { CreateRequest } from "@/lib/orchestrator/contracts";
-import { CreateRequestSchema, type CreateRequestInput } from "@/lib/orchestrator/contracts";
+import { CreateRequestSchema, type CreateRequestInput, type CreativeInput } from "@/lib/orchestrator/contracts";
 import type { Deps } from "@/lib/orchestrator/execute";
 import { enqueue, ensureApprovalWait, ensureAgents } from "./service";
 import { processQueue } from "./worker";
@@ -109,10 +109,10 @@ export { ensureApprovalWait };
 export type { Production };
 
 /** Regenerate a production (new attempt, same production) via the Production Manager, then run its QA family. */
-export async function submitRegenerate(repo: Repo, productionId: string, o: { notes?: string; shots?: number[]; deps?: Partial<Deps>; createdBy?: string } = {}) {
+export async function submitRegenerate(repo: Repo, productionId: string, o: { notes?: string; shots?: number[]; creative?: CreativeInput; deps?: Partial<Deps>; createdBy?: string } = {}) {
   const p = await repo.get("productions", productionId);
   if (!p) throw new Error("Production not found.");
-  const task = await enqueue(repo, { agentId: "PRODUCTION_MANAGER", kind: "production.regenerate", title: `Regenerate ${p.code}`, input: { productionId, notes: o.notes ?? "", shots: o.shots }, productionId, talent: p.talent[0], createdBy: o.createdBy ?? "operator", origin: p.origin });
+  const task = await enqueue(repo, { agentId: "PRODUCTION_MANAGER", kind: "production.regenerate", title: `Regenerate ${p.code}`, input: { productionId, notes: o.notes ?? "", shots: o.shots, ...(o.creative ? { creative: o.creative } : {}) }, productionId, talent: p.talent[0], createdBy: o.createdBy ?? "operator", origin: p.origin });
   await processFamily(repo, task.id, { deps: o.deps });
   return (await repo.get("agentTasks", task.id))!;
 }

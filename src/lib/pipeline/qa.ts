@@ -25,9 +25,9 @@ const parseJson = (t: string) => { try { return JSON.parse(t.trim().replace(/^``
 const worstOf = (s: QaStatus[]): QaStatus => (["HARD_FAIL", "MANUAL_REVIEW_REQUIRED", "REVIEW", "QA_PENDING", "PASS"] as QaStatus[]).find((x) => s.includes(x)) ?? "PASS";
 
 /** QA results that still count: a superseded result stays in history but no longer affects the aggregate. */
-export const activeQa = <T extends { supersededById?: string | null }>(rs: T[]): T[] => rs.filter((r) => !r.supersededById);
+export const activeQa = <T extends { supersededBy?: string | null }>(rs: T[]): T[] => rs.filter((r) => !r.supersededBy);
 /** Aggregate QA results into one status over ACTIVE results. HARD_FAIL > MANUAL_REVIEW_REQUIRED > REVIEW > PASS. */
-export const aggregateQa = (rs: Pick<QaResult, "status" | "supersededById">[]): QaStatus => { const a = activeQa(rs); return a.length ? worstOf(a.map((r) => r.status)) : "QA_PENDING"; };
+export const aggregateQa = (rs: Pick<QaResult, "status" | "supersededBy">[]): QaStatus => { const a = activeQa(rs); return a.length ? worstOf(a.map((r) => r.status)) : "QA_PENDING"; };
 
 async function assetBytes(deps: Deps, a: Asset) { return a.storagePath ? deps.storage.read(a.storagePath) : null; }
 const b64 = (u: Uint8Array) => Buffer.from(u).toString("base64");
@@ -37,7 +37,7 @@ export const layerOf = (method: QaResult["method"]) => (method === "prompt_rules
 /** A result is CONCLUSIVE when something actually evaluated it. `manual` = nothing could (inspector unavailable): inconclusive. */
 export const isConclusive = (r: Pick<QaResult, "method">) => r.method !== "manual";
 
-type SaveInput = Omit<QaResult, "id" | "createdAt" | "updatedAt" | "origin" | "productionId" | "attemptId" | "assetId" | "decidedBy" | "qaAttempt" | "supersededById" | "retry"> & { retry?: QaRetryInfo | null };
+type SaveInput = Omit<QaResult, "id" | "createdAt" | "updatedAt" | "origin" | "productionId" | "attemptId" | "assetId" | "decidedBy" | "qaAttempt" | "supersededBy" | "retry"> & { retry?: QaRetryInfo | null };
 /**
  * Persist one QA evaluation and maintain supersession. NOTHING is ever deleted.
  *  - a newer evaluation supersedes older ones of the same asset + type + layer (the aggregate then ignores the old ones);
@@ -46,11 +46,11 @@ type SaveInput = Omit<QaResult, "id" | "createdAt" | "updatedAt" | "origin" | "p
 export async function saveQa(repo: Repo, p: Production, attempt: GenerationAttempt, assetId: string | null, r: SaveInput): Promise<QaResult> {
   const { retry, ...rest } = r;
   const prior = (await repo.list("qaResults", { productionId: p.id })).filter((x) => x.assetId === assetId && x.kind === r.kind && layerOf(x.method) === layerOf(r.method) && (assetId !== null || x.attemptId === attempt.id));
-  const row = await repo.insert("qaResults", { productionId: p.id, attemptId: attempt.id, assetId, decidedBy: null, origin: p.origin, ...rest, qaAttempt: prior.length + 1, supersededById: null, retry: retry ?? null });
+  const row = await repo.insert("qaResults", { productionId: p.id, attemptId: attempt.id, assetId, decidedBy: null, origin: p.origin, ...rest, qaAttempt: prior.length + 1, supersededBy: null, retry: retry ?? null });
   const active = activeQa(prior);
   const keep = !isConclusive(r) ? active.find(isConclusive) : undefined;
-  if (keep) return repo.update("qaResults", row.id, { supersededById: keep.id });
-  for (const x of active) await repo.update("qaResults", x.id, { supersededById: row.id });
+  if (keep) return repo.update("qaResults", row.id, { supersededBy: keep.id });
+  for (const x of active) await repo.update("qaResults", x.id, { supersededBy: row.id });
   return row;
 }
 const save = saveQa;
@@ -66,9 +66,11 @@ export async function runIdentityQa(repo: Repo, deps: Deps, p: Production, attem
   const runState: RetryRunState = { providerDown: false };
   const prompts = (await repo.list("prompts", { productionId: p.id })).filter((x) => x.attemptId === attempt.id);
   const promptFindings: QaFindingRecord[] = prompts.flatMap((x) => x.qa.issues.map((m) => ({ lockId: null, severity: "REVIEW" as const, message: `Shot ${x.shotN}: ${m}` })));
-  if (opts.promptRules !== false) out.push(await save(repo, p, attempt, null, { kind: "IDENTITY", method: "prompt_rules", status: promptFindings.length ? "REVIEW" : "PASS", inspectedImage: false, provider: null, model: null, findings: promptFindings,
+  // The deterministic prompt-conformance row is saved on the first run, and on a re-run only if the attempt never got one.
+  const wantPromptRow = opts.promptRules !== false || !(await repo.list("qaResults", { productionId: p.id })).some((x) => x.attemptId === attempt.id && x.kind === "IDENTITY" && x.method === "prompt_rules");
+  if (wantPromptRow) out.push(await save(repo, p, attempt, null, { kind: "IDENTITY", method: "prompt_rules", status: promptFindings.length ? "REVIEW" : "PASS", inspectedImage: false, provider: null, model: null, findings: promptFindings,
     summary: promptFindings.length ? "Prompt states identity with gaps (no image inspected)." : "Prompt states every canonical hard lock and signature trait. This checks the PROMPT, not the image.", recommendation: null }));
-  if (opts.promptRules !== false) await tr("IDENTITY_QA", promptFindings.length ? "QA_REVIEW" : "QA_PASSED", `Identity prompt-conformance for ${p.code} attempt ${attempt.attemptNo}: ${promptFindings.length ? `${promptFindings.length} gap(s)` : "all locks stated"} (image not inspected)`);
+  if (wantPromptRow) await tr("IDENTITY_QA", promptFindings.length ? "QA_REVIEW" : "QA_PASSED", `Identity prompt-conformance for ${p.code} attempt ${attempt.attemptNo}: ${promptFindings.length ? `${promptFindings.length} gap(s)` : "all locks stated"} (image not inspected)`);
 
   for (const a of assets) {
     const file = await assetBytes(deps, a);

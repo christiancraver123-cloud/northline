@@ -139,7 +139,7 @@ describe("QA supersession and history", () => {
     for (const id of beforeIds) expect(after.some((q) => q.id === id), "history row kept").toBe(true); // never deleted
     expect(after.length).toBe(before.length + assets.length);
     const old = after.find((q) => q.id === manual.id)!;
-    expect(old.supersededById).toBe(fresh.find((x) => x.assetId === assets[0].id)!.id); // superseded, not removed
+    expect(old.supersededBy).toBe(fresh.find((x) => x.assetId === assets[0].id)!.id); // superseded, not removed
     expect(old.status).toBe("MANUAL_REVIEW_REQUIRED"); // original verdict untouched
     expect(aggregateQa(after.filter((q) => q.assetId === assets[0].id && q.kind === "IDENTITY"))).toBe("PASS"); // no longer poisoned
     expect(activeQa(after.filter((q) => q.assetId === assets[0].id && q.kind === "IDENTITY" && q.method !== "prompt_rules"))).toHaveLength(1);
@@ -155,8 +155,8 @@ describe("QA supersession and history", () => {
     await runIdentityQa(r, mkDeps({ vision: vision({ IDENTITY: [transient] }), storage: d.storage }), p, attempt, assets, identity, [], { promptRules: false });
     const rows = (await identityRows(r, assets[0].id)).sort((a, b) => a.qaAttempt - b.qaAttempt);
     expect(rows.map((x) => x.method)).toEqual(["vision_model", "manual"]);
-    expect(rows[1].supersededById).toBe(good.id); // the failed retry is history
-    expect(rows[0].supersededById).toBeNull();
+    expect(rows[1].supersededBy).toBe(good.id); // the failed retry is history
+    expect(rows[0].supersededBy).toBeNull();
     expect(aggregateQa(rows)).toBe("PASS");
   });
   it("supersession is scoped: a re-run of Identity QA does not touch Technical results or other assets", async () => {
@@ -164,11 +164,11 @@ describe("QA supersession and history", () => {
     await make(r, d, 2);
     const p = (await r.list("productions"))[0], attempt = (await r.list("generationAttempts"))[0];
     const assets = (await r.list("assets")).filter((a) => a.current).sort((a, b) => a.seq - b.seq);
-    const techBefore = (await r.list("qaResults")).filter((q) => q.kind === "TECHNICAL").map((q) => q.supersededById);
+    const techBefore = (await r.list("qaResults")).filter((q) => q.kind === "TECHNICAL").map((q) => q.supersededBy);
     const { identity } = await loadIdentity(r, "SIE");
     await runIdentityQa(r, mkDeps({ vision: vision({ IDENTITY: [idOk] }), storage: d.storage }), p, attempt, [assets[0]], identity, [], { promptRules: false });
-    expect((await r.list("qaResults")).filter((q) => q.kind === "TECHNICAL").map((q) => q.supersededById)).toEqual(techBefore);
-    expect((await identityRows(r, assets[1].id))[0].supersededById).toBeNull(); // asset 2 untouched, still manual
+    expect((await r.list("qaResults")).filter((q) => q.kind === "TECHNICAL").map((q) => q.supersededBy)).toEqual(techBefore);
+    expect((await identityRows(r, assets[1].id))[0].supersededBy).toBeNull(); // asset 2 untouched, still manual
   });
 });
 
@@ -204,7 +204,7 @@ describe("operator QA re-run through the agent/router path", () => {
     expect(rows.map((x) => x.method)).toEqual(["manual", "vision_model"]);
     expect(rows[1]).toMatchObject({ status: "PASS", inspectedImage: true, provider: "gemini", qaAttempt: 2 });
     expect(rows[1].retry).toMatchObject({ attempts: 3, exhausted: false });
-    expect(rows[0].supersededById).toBe(rows[1].id);
+    expect(rows[0].supersededBy).toBe(rows[1].id);
     expect(g.n).toBe(3); // 2 transient failures (retried through the cooldown) + 1 success
     expect(o.n).toBe(0); // NO silent fallback to OpenAI
 
@@ -458,3 +458,46 @@ describe("4:5 delivery derivatives", () => {
 });
 
 export type { QaResult };
+
+describe("regeneration with new creative direction (Attempt 2)", () => {
+  it("builds a fresh brief with the shared continuity spec, generates all new shots, and preserves attempt 1 exactly", async () => {
+    const r = new FileRepo(null), d = mkDeps();
+    await make(r, d, 3); // attempt 1: 3 frames from the old direction
+    const p = (await r.list("productions"))[0];
+    const a1 = (await r.list("assets")).filter((a) => a.attemptNo === 1).map((a) => ({ id: a.id, sha: a.sha256, path: a.storagePath, filename: a.filename, bytes: a.bytes }));
+    const jobs1 = (await r.list("providerJobs")).map((j) => j.id);
+    const { regenerateProduction } = await import("./revise");
+    const creative2 = { ...SIE_CREATIVE, outfit: "navy ribbed tank, black leggings, white sneakers", shots: SIE_CREATIVE.shots.slice(0, 5) };
+    const out = await regenerateProduction(r, d, p.id, { creative: creative2, notes: "Attempt 1 drifted into night; keep one morning", reason: "attempt 2: improved continuity" });
+    expect(out.attempt.attemptNo).toBe(2);
+    expect(out.shots).toEqual([1, 2, 3, 4, 5]);
+    const briefs = (await r.list("generationBriefs")).sort((a, b) => a.version - b.version);
+    expect(briefs).toHaveLength(2);
+    expect(briefs[1].data.continuitySpec).toMatchObject({ outfit: creative2.outfit, timeWindow: "one Miami morning, about 8:30-10:30 AM" });
+    expect(briefs[1].data.revision?.feedback.join(" ")).toMatch(/keep one morning/);
+    const p2 = (await r.list("prompts")).filter((x) => x.attemptId === out.attempt.id);
+    expect(p2).toHaveLength(5);
+    expect(p2.every((x) => x.positive.includes(creative2.outfit) && x.positive.includes("one Miami morning") && /HARD IDENTITY LOCKS/.test(x.positive) && /NO generated text/.test(x.negative))).toBe(true);
+    // attempt 1 preserved: same assets, bytes, paths, same brief v1, same jobs
+    for (const o of a1) { const cur = (await r.get("assets", o.id))!; expect({ sha: cur.sha256, path: cur.storagePath, filename: cur.filename, bytes: cur.bytes }).toEqual({ sha: o.sha, path: o.path, filename: o.filename, bytes: o.bytes }); }
+    expect(briefs[0].data.continuitySpec?.outfit).toBe(SIE_CREATIVE.outfit);
+    expect((await r.list("providerJobs")).map((j) => j.id)).toEqual(expect.arrayContaining(jobs1));
+    expect((await r.list("assets")).filter((a) => a.attemptNo === 2)).toHaveLength(5);
+  });
+});
+
+describe("regression: provider_jobs.run_id must reference a workflow run (live FK), never an agent run", () => {
+  it("regeneration through the agent path stores no agent-run id on provider jobs", async () => {
+    const r = new FileRepo(null), d = mkDeps();
+    await make(r, d, 2);
+    const p = (await r.list("productions"))[0];
+    const { submitRegenerate } = await import("@/lib/agents/ops/commands");
+    const t = await submitRegenerate(r, p.id, { creative: { ...SIE_CREATIVE, shots: SIE_CREATIVE.shots.slice(0, 2) }, deps: d });
+    expect(t.status).toBe("COMPLETE");
+    const workflowIds = new Set((await r.list("workflowRuns")).map((w) => w.id));
+    const agentRunIds = new Set((await r.list("agentRuns")).map((a) => a.id));
+    const jobs = await r.list("providerJobs");
+    expect(jobs.length).toBe(4);
+    for (const j of jobs) { expect(j.runId === null || workflowIds.has(j.runId), `job ${j.id} run_id`).toBe(true); expect(j.runId !== null && agentRunIds.has(j.runId)).toBe(false); }
+  });
+});

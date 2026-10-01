@@ -119,7 +119,7 @@ export interface QaResult extends Base {
   /** nth evaluation for the same asset + QA type + layer (1 = first). Older evaluations are kept for audit. */
   qaAttempt: number;
   /** When set, this result no longer counts toward the aggregate: the referenced newer result replaces it. History is never deleted. */
-  supersededById: string | null;
+  supersededBy: string | null;
   /** What the retry logic did for this evaluation (null = no model call was needed or none was retried). */
   retry: QaRetryInfo | null;
 }

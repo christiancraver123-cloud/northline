@@ -7,7 +7,10 @@
 - [ ] `NORTHLINE_WEBHOOK_SECRET` + an n8n Schedule Trigger calling `POST /api/agents/tick`.
 - [ ] Create a `main` branch on GitHub (push was blocked by permissions) and choose the default branch.
 
-## BLOCKING Attempt 2 of SIE-2026-001
+## BLOCKING real Identity/Continuity QA of SIE-2026-001 attempt 3
+- [ ] **Gemini quota**: the key is on the free tier (20 requests/day/model, exhausted). Wait for the daily reset or enable billing for the Gemini project, then use "Re-run QA (no regeneration)" on the production. Follow-up: classify a *daily quota* 429 as non-transient so it is not retried.
+
+## (done) Attempt 2 of SIE-2026-001
 - [ ] **Apply `supabase/migrations/0006_qa_retry_continuity.sql`** in the Supabase SQL Editor (additive; adds QA supersession columns, CONTINUITY kind, `asset_derivatives`). The updated code writes these columns, so apply it BEFORE running the updated app/pipeline against live Supabase.
 - [ ] Then: create Attempt 2 (same concept, one-Miami-morning continuity spec), run improved QA, create 4:5 delivery copies, review.
 

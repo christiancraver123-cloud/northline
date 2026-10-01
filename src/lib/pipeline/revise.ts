@@ -7,6 +7,9 @@ import type { Deps } from "./deps";
 import { traceOf } from "./deps";
 import { buildPrompts } from "./prompts";
 import { activeQa } from "./qa";
+import { briefData } from "./brief";
+import { contentHistory } from "./content";
+import type { CreativeInput } from "@/lib/orchestrator/contracts";
 import { saveBrief } from "./brief";
 import { createShotAsset, runImageJob } from "./generate";
 
@@ -24,7 +27,7 @@ export async function collectFeedback(repo: Repo, productionId: string, attemptI
   return { feedback, failedShots: [...failed].sort((a, b) => a - b) };
 }
 
-export interface RegenerateOpts { notes?: string; shots?: number[]; reason?: string }
+export interface RegenerateOpts { notes?: string; shots?: number[]; reason?: string; /** Operator-written creative direction for the new attempt: rebuilds the Generation Brief (shots, outfit, continuity spec) instead of reusing the previous one. */ creative?: CreativeInput }
 export interface RegenerateResult { attempt: GenerationAttempt; failures: string[]; shots: number[] }
 
 /** Create attempt N+1 and generate the requested shots (default: the failed/hard-failed ones, else all). QA + finalize run afterwards (inline or as tasks). */
@@ -40,12 +43,16 @@ export async function regenerateProduction(repo: Repo, deps: Deps, productionId:
   // Supersede any pending approval: the operator asked for another round.
   for (const ap of (await repo.list("approvals", { productionId })).filter((x) => x.state === "PENDING")) await repo.update("approvals", ap.id, { state: "REVISION_REQUESTED", decidedBy: "system", decidedAt: new Date().toISOString(), notes: "Superseded by regeneration" });
   const fb = await collectFeedback(repo, productionId, last.id, o.notes);
-  const all = prevBrief.data.shots.map((s) => s.n);
-  const shots = o.shots?.length ? o.shots : fb.failedShots.length ? fb.failedShots : all;
   const { identity } = await loadIdentity(repo, p.talent[0]);
   const refs = await loadReferences(repo, p.talent[0]);
-  const data = { ...prevBrief.data, references: refs.map((r) => ({ id: r.id, type: r.referenceType, authority: r.authority, hasImage: true })), revision: { fromAttemptId: last.id, feedback: fb.feedback } };
+  // New creative direction => a freshly built brief (all of its shots are generated); otherwise the previous brief is revised.
+  const cd = o.creative ? { ...o.creative, shots: o.creative.shots.map((s) => ({ ...s, kind: s.kind ?? "IMG" })) } : null;
+  const rebuilt = cd ? { ...briefData({ production: p, identity, brief: cd, refs, history: await contentHistory(repo, p), deps, revision: null }), revision: { fromAttemptId: last.id, feedback: fb.feedback } } : null;
+  const all = (rebuilt ?? prevBrief.data).shots.map((s) => s.n);
+  const shots = o.shots?.length ? o.shots : cd ? all : fb.failedShots.length ? fb.failedShots : all;
+  const data = rebuilt ?? { ...prevBrief.data, references: refs.map((r) => ({ id: r.id, type: r.referenceType, authority: r.authority, hasImage: true })), revision: { fromAttemptId: last.id, feedback: fb.feedback } };
   const brief = await saveBrief(repo, productionId, data, refs.map((r) => r.id), p.origin);
+  if (cd) await repo.update("productions", productionId, { brief: cd }); // the production shows its latest creative brief; every earlier brief version stays in generation_briefs
   const attempt = await repo.insert("generationAttempts", { productionId, attemptNo: last.attemptNo + 1, briefId: brief.id, trigger: "regenerate", status: "GENERATING", shots, parentAttemptId: last.id, reason: o.reason ?? (fb.failedShots.length ? "QA hard fail / generation failure" : "operator requested regeneration"), feedback: fb.feedback, finishedAt: null, origin: p.origin });
   await repo.update("productions", productionId, { status: "GENERATING", currentAttemptId: attempt.id, qaNotes: [...p.qaNotes, `Attempt ${attempt.attemptNo} started: ${attempt.reason}`] });
   await tr("PRODUCTION_MANAGER", "ATTEMPT_STARTED", `${p.code} attempt ${attempt.attemptNo} started for shot(s) ${shots.join(", ")} — feedback items: ${fb.feedback.length}`);

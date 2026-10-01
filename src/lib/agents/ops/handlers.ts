@@ -4,7 +4,7 @@ import type { Repo } from "@/lib/db/repo";
 import type { AgentCode, AgentReport, AgentTask } from "@/lib/db/records";
 import type { ContentType, TalentCode } from "@/lib/domain/types";
 import { ROSTER_BY_CODE } from "@/lib/talent/roster";
-import { CreateRequestSchema } from "@/lib/orchestrator/contracts";
+import { CreateRequestSchema, CreativeInputSchema } from "@/lib/orchestrator/contracts";
 import { executeCreate, defaultDeps, completeAttempt, type Deps } from "@/lib/orchestrator/execute";
 import { regenerateProduction } from "@/lib/pipeline/revise";
 import { runContentQa, runIdentityQa, runTechnicalQa, type VisionInspector } from "@/lib/pipeline/qa";
@@ -251,7 +251,7 @@ const productionFinalize: Handler = async (c) => {
 const productionRegenerate: Handler = async (c) => {
   const id = String(c.task.input.productionId);
   const deps: Deps = { ...defaultDeps(), ...c.deps, origin: c.origin, vision: visionOf(c), trace: async (agent, kind, message, o) => { await c.log(kind, message, { ...o, agent }); } };
-  const r = await regenerateProduction(c.repo, deps, id, { notes: String(c.task.input.notes ?? ""), shots: c.task.input.shots as number[] | undefined }, c.runId);
+  const r = await regenerateProduction(c.repo, deps, id, { notes: String(c.task.input.notes ?? ""), shots: c.task.input.shots as number[] | undefined, creative: c.task.input.creative ? CreativeInputSchema.parse(c.task.input.creative) : undefined }, null); // NOT the agent run id: provider_jobs.run_id is a foreign key to workflow_runs (agent-run lineage lives in agent_runs/events)
   const p = (await c.repo.get("productions", id))!;
   await enqueueQaFamily(c.repo, c.task, id, p.code, r.attempt.id);
   return { output: { attemptId: r.attempt.id, attemptNo: r.attempt.attemptNo, shots: r.shots, failures: r.failures }, summary: `${p.code} attempt ${r.attempt.attemptNo}: regenerated shot(s) ${r.shots.join(", ")}${r.failures.length ? ` — ${r.failures.length} issue(s)` : ""}` };

@@ -4,6 +4,7 @@ import { newestFirst } from "@/lib/db/order";
 import { ROSTER } from "@/lib/talent/roster";
 import { snapshots } from "@/lib/agents/ops/service";
 import { deriveProviderHealth, HEALTH_TONE } from "@/lib/llm/health-derived";
+import { summarizeUsage } from "@/lib/usage";
 import { AgentStatusPill, Avatar, Card, ProviderPill, ago, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips } from "@/components/ui";
 
 export default async function Dashboard() {
@@ -14,6 +15,8 @@ export default async function Dashboard() {
   ]);
   const failedJobs = jobs.filter((j) => j.state === "FAILED");
   const health = deriveProviderHealth({ llmCalls, jobs });
+  const usage7 = summarizeUsage({ jobs, llmCalls, tasks, since: new Date(Date.now() - 7 * 86_400_000) });
+  const usage1 = summarizeUsage({ jobs, llmCalls, tasks, since: new Date(Date.now() - 86_400_000) });
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const failedTasks = tasks.filter((t) => t.status === "FAILED" && t.createdAt >= weekAgo);
   const needsQa = prods.filter((p) => (p.status === "REVIEW" || p.status === "RAW") && assetsAll.some((a) => a.productionId === p.id && a.current && ["HARD_FAIL", "MANUAL_REVIEW_REQUIRED", "REVIEW"].includes(a.qaStatus)));
@@ -60,6 +63,13 @@ export default async function Dashboard() {
           <Card>
             <h2 className="mb-3 font-bold">Needs attention</h2>
             <div className="grid gap-1.5 text-[13px]">{attention.map(([l, n, href]) => <Link key={l} href={href} className="flex items-center justify-between gap-2 py-1"><span>{l}</span><Pill tone={n ? "warn" : "mute"}>{n}</Pill></Link>)}</div>
+          </Card>
+          <Card>
+            <h2 className="mb-1 font-bold">Usage</h2>
+            <p className="mb-2 text-[11.5px] text-faint">Recorded units. {usage7.costNote}.</p>
+            <div className="grid gap-1.5 text-[13px]">
+              {([["24 hours", usage1], ["7 days", usage7]] as const).map(([label, u]) => <div key={label} className="border-t border-edge pt-2 first:border-0 first:pt-0"><b>{label}</b><br /><span className="text-muted">{u.images.succeeded} image(s) generated · {u.images.failed} failed · {u.images.inputTokens.toLocaleString()} in ({u.images.imageInputTokens.toLocaleString()} image) / {u.images.outputTokens.toLocaleString()} out · {u.llm.calls} model call(s), {u.llm.failed} failed · {u.tasks.complete} task(s) done, {u.tasks.failed} failed</span></div>)}
+            </div>
           </Card>
           <Card>
             <h2 className="mb-1 font-bold">Provider health</h2>

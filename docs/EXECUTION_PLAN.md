@@ -3,6 +3,11 @@ _Last verified: started from HEAD `b0dc940` (= remote), clean tree. This session
 Statuses: DONE · IN PROGRESS · READY · BLOCKED — HUMAN · BLOCKED — EXTERNAL · FUTURE. Describes what EXISTS; anything not marked DONE is not implemented.
 
 ## DONE (verified)
+- **Docs complete**: `ARCHITECTURE.md`, `FAILURE_RECOVERY.md`, `OPERATOR_WORKFLOW.md`, `identity-strategy-sienna.md`, `design/` (budget governor, durable jobs, learning memory, Sienna pose-control options).
+- **Budget governor — built and tested IN ISOLATION** (`src/lib/governor/`, 17 tests incl. real-Postgres concurrency); proposed migration `docs/design/proposed-migrations/0007_budget_governor.sql` (NOT applied, NOT in `supabase/migrations/`). Awaiting your approval of schema + defaults.
+- **Learning guard** (`src/lib/learning/`, 10 tests): learning can never write identity/immutable fields; deny-by-default allowlist; evidence + human gates.
+- **Usage observability**: dashboard Usage card (units, never invented dollars).
+- **Mobile**: all 25 audited pages fit 390 px.
 - **Provider health** (HEALTHY/DEGRADED/RATE_LIMITED/QUOTA_EXHAUSTED/AUTH_ERROR/UNAVAILABLE/UNKNOWN) derived from persisted calls, with stale-blocker decay, on the dashboard together with a "Needs attention" card.
 - **Tap targets**: links/summaries/checkboxes get ≥32px hit areas on phones; 10 key pages fit 390px.
 - **P1 Sienna identity probe**: exactly 3 images (A control / B master high-fidelity / C cropped identity set high-fidelity), manifest + comparison sheets in storage `experiments/sie-identity-probe-v1/`, read-only page `/experiments/sie-identity-probe-v1`, inbox report. **AWAITING HUMAN IDENTITY SELECTION** (no winner chosen).
@@ -18,7 +23,7 @@ Statuses: DONE · IN PROGRESS · READY · BLOCKED — HUMAN · BLOCKED — EXTER
 - Live-only bugs found and given regression tests (agent-run-id FK, `superseded_by` column mapping).
 
 ## IN PROGRESS
-- **Identity validation** (1 image, MASTER_FACE only + high fidelity, 3/4 pose): generated; **AWAITING HUMAN VISUAL APPROVAL**. The 3/4 pose was NOT achieved (frontal again), so the pose-change question is still open.
+- **Sienna identity**: operator decision recorded — MASTER_FACE ONLY + HIGH INPUT FIDELITY is the best known OpenAI strategy; **PARTIALLY VALIDATED, POSE GENERALIZATION UNVALIDATED** (see `docs/identity-strategy-sienna.md`). No further Sienna generation until a bounded test is approved.
 
 ## READY (safe, no external dependency)
 - P3: Production detail — surface usage/cost-unknown honestly, reference set used, probe/experiment records.
@@ -28,7 +33,10 @@ Statuses: DONE · IN PROGRESS · READY · BLOCKED — HUMAN · BLOCKED — EXTER
 - Remaining docs: architecture / failure recovery / operator workflow.
 
 ## BLOCKED — HUMAN
-- Sienna identity: strategy **B (MASTER_FACE only, high input fidelity, explicit authority label) SELECTED by the operator** for the next controlled test; it is a reference *strategy*, not an asset — Probe B is not promoted and is not used as a reference. Next: human visual approval of the validation image; production prompt system stays unchanged until then.
+- Sienna identity next test: choose among pose-control options A–E (design only, `docs/design/sienna-pose-control-options.md`) and approve a bounded test (image count + spend). Until then nothing is generated.
+- Budget governor: approve the proposed migration (exact SQL + defaults + wiring map in `docs/design/budget-governor.md`) (`docs/design/proposed-migrations/0007_budget_governor.sql`) and its defaults.
+- Durable jobs: approve the rollout plan and the additive columns.
+- Learning memory: approve the schema when the time comes.
 - Approve migrations before any DB-dependent feature goes live (planned: 0007 human feedback / structured reasons, later job-system, budget, learning-memory tables). Each will be inspected read-only first; never re-run blindly.
 - Gemini: free-tier daily quota (20 requests/day/model) is exhausted → enable billing or wait for the daily reset to get real Identity/Continuity QA.
 - Next Sienna carousel (attempt 4) — only after the identity selection; spend approval.

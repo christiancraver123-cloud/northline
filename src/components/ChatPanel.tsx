@@ -1,3 +1,4 @@
+import { isReadOnly } from "@/lib/runtime/mode";
 import { agentMessageAction } from "@/app/actions";
 import type { AgentCode, AgentMessage } from "@/lib/db/records";
 import Link from "next/link";
@@ -20,12 +21,12 @@ export function ChatPanel({ agent, name, messages, suggestions }: { agent: Agent
         ))}
       </div>
       <div className="flex flex-wrap gap-1.5">
-        {suggestions.map((s) => <form key={s} action={agentMessageAction}><input type="hidden" name="agent" value={agent} /><input type="hidden" name="text" value={s} /><button className="rounded-full border border-edge px-2.5 py-1 text-[12px] text-muted hover:text-ink">{s}</button></form>)}
+        {suggestions.map((s) => <form key={s} action={agentMessageAction}><input type="hidden" name="agent" value={agent} /><input type="hidden" name="text" value={s} /><button disabled={isReadOnly()} className="rounded-full border border-edge px-2.5 py-1 text-[12px] text-muted hover:text-ink disabled:cursor-not-allowed disabled:opacity-40">{s}</button></form>)}
       </div>
       <form action={agentMessageAction} className="flex gap-2">
         <input type="hidden" name="agent" value={agent} />
         <input name="text" required maxLength={2000} autoComplete="off" placeholder={`Message ${name}…`} aria-label={`Message ${name}`} />
-        <button className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 font-bold">Send</button>
+        <button disabled={isReadOnly()} title={isReadOnly() ? "Read-only mode: changes are disabled" : undefined} className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 font-bold disabled:cursor-not-allowed disabled:opacity-40">Send</button>
       </form>
     </div>
   );

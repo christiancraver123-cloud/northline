@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import type { StorageProvider } from "./types";
+import { assertProductionConfig, isReadOnly, readOnlyStorage } from "@/lib/runtime/mode";
 
 const ROOT = () => path.join(process.cwd(), ".data", "assets");
 const safe = (p: string) => path.normalize(p).replace(/^(\.\.[/\\])+/, "").replace(/^[/\\]+/, "");
@@ -41,6 +42,7 @@ export function supabaseStorageProvider(url: string, serviceKey: string, bucket 
 }
 
 export function getStorage(env: NodeJS.ProcessEnv = process.env): StorageProvider {
-  if (env.NORTHLINE_STORE === "supabase" && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) return supabaseStorageProvider(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
-  return localStorageProvider;
+  assertProductionConfig(env); // production fails closed: never silently use local disk
+  const base = env.NORTHLINE_STORE === "supabase" && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY ? supabaseStorageProvider(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY) : localStorageProvider;
+  return isReadOnly(env) ? readOnlyStorage(base) : base;
 }

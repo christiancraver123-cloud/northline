@@ -2,6 +2,7 @@
 // Works with the Northline browser closed. Auth: Authorization: Bearer $NORTHLINE_WEBHOOK_SECRET. Idempotent and cheap when idle.
 import { NextResponse } from "next/server";
 import { authorized } from "@/lib/auth";
+import { readOnlyResponse } from "@/lib/runtime/mode";
 import { getRepo } from "@/lib/db";
 import { ensureAgents, materializeDueSchedules } from "@/lib/agents/ops/service";
 import { processQueue } from "@/lib/agents/ops/worker";
@@ -10,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   if (!authorized(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
+  const ro = readOnlyResponse();
+  if (ro) return NextResponse.json(ro, { status: 403 });
   try {
     const repo = await getRepo();
     await ensureAgents(repo);

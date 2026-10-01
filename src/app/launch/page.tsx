@@ -1,3 +1,4 @@
+import { ReadOnlyError } from "@/lib/runtime/mode";
 import { getRepo } from "@/lib/db";
 import { ensureLaunchStates } from "@/lib/db/seed";
 import { ROSTER } from "@/lib/talent/roster";
@@ -11,7 +12,7 @@ const FIELDS: [string, string][] = [
 
 export default async function Launch() {
   const repo = await getRepo();
-  await ensureLaunchStates(repo);
+  await ensureLaunchStates(repo).catch((e) => { if (!(e instanceof ReadOnlyError)) throw e; }); // read-only: show what exists, create nothing
   const rows = await repo.list("launchStates");
   return (
     <>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getRepo } from "@/lib/db";
 import { AGENT_BY_CODE } from "@/lib/agents/ops/registry";
 import { markReportAction } from "../../actions";
+import { isReadOnly } from "@/lib/runtime/mode";
 import { Btn, Card, DemoBadge, Empty, PageHeader, Pill, ago } from "@/components/ui";
 
 export default async function ReportsInbox() {
@@ -17,7 +18,7 @@ export default async function ReportsInbox() {
               <summary className="flex cursor-pointer flex-wrap items-center justify-between gap-2"><span>{!r.read && <span className="mr-2 text-warn">●</span>}<b>{r.title}</b> <span className="text-[12px] text-muted">from {AGENT_BY_CODE[r.agentId]?.name} · {ago(r.createdAt)}</span></span><span className="flex gap-2"><Pill tone={r.kind === "ALERT" ? "bad" : "info"}>{r.kind}</Pill><DemoBadge origin={r.origin} /></span></summary>
               <pre className="mt-3 whitespace-pre-wrap text-[13px] text-[#c6cdf0]">{r.body}</pre>
               <div className="mt-2 flex items-center justify-between text-[11px] text-faint"><span>Sources: {r.sources.join(", ")}</span>
-                <form action={markReportAction}><input type="hidden" name="reportId" value={r.id} /><input type="hidden" name="read" value={r.read ? "0" : "1"} /><button className="text-blue2">{r.read ? "Mark unread" : "Mark read"}</button></form></div>
+                <form action={markReportAction}><input type="hidden" name="reportId" value={r.id} /><input type="hidden" name="read" value={r.read ? "0" : "1"} /><button disabled={isReadOnly()} className="text-blue2 disabled:cursor-not-allowed disabled:opacity-40">{r.read ? "Mark unread" : "Mark read"}</button></form></div>
             </details>
           </Card>
         ))}</div>

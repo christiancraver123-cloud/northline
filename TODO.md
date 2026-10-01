@@ -1,5 +1,8 @@
 # TODO (prioritized)
 
+## Deployment (review-only first)
+- [ ] Create the Render service from `render.yaml` and enter the secrets yourself — see `docs/deploy.md`. Later, to enable generation on the host: add provider keys and unset `NORTHLINE_READONLY`.
+
 ## Needs YOUR input (credentials / decisions)
 - [ ] `NORTHLINE_ADMIN_PASSWORD` + `NORTHLINE_SESSION_SECRET` (long random) — required to use the app in production.
 - [ ] Supabase: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; apply `supabase/migrations/0001-0004`; set `NORTHLINE_STORE=supabase`; then run a live smoke test of `SupabaseRepo`.

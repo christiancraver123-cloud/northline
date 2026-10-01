@@ -3,6 +3,7 @@ import type { Repo } from "@/lib/db/repo";
 import type { CanonicalIdentityRecord } from "@/lib/db/records";
 import { ROSTER } from "@/lib/talent/roster";
 import type { TalentCode } from "@/lib/domain/types";
+import { ReadOnlyError } from "@/lib/runtime/mode";
 import { IDENTITY_VERSION, buildCanonicalIdentity, identityHash, identityId, type CanonicalIdentity } from "./canonical";
 
 /** Ensure an ACTIVE snapshot exists for every creator at the current version. Never mutates an existing snapshot. */
@@ -21,8 +22,10 @@ export interface LoadedIdentity { identity: CanonicalIdentity; identityId: strin
 
 /** The identity a NEW production should use: the stored ACTIVE snapshot. `drift` = code facts changed without a version bump. */
 export async function loadIdentity(repo: Repo, code: TalentCode): Promise<LoadedIdentity> {
-  await ensureIdentities(repo);
-  const rec = (await repo.list("canonicalIdentities")).find((r) => r.code === code && r.status === "ACTIVE")!;
+  // In read-only mode nothing may be persisted: a missing snapshot is computed from code (shown, never stored).
+  try { await ensureIdentities(repo); } catch (e) { if (!(e instanceof ReadOnlyError)) throw e; }
+  const rec = (await repo.list("canonicalIdentities")).find((r) => r.code === code && r.status === "ACTIVE");
+  if (!rec) { const ci = buildCanonicalIdentity(code); return { identity: ci, identityId: ci.id, version: ci.version, drift: false }; }
   return { identity: rec.data, identityId: rec.identityId, version: rec.version, drift: identityHash(buildCanonicalIdentity(code, rec.version)) !== rec.contentHash };
 }
 export { identityId };

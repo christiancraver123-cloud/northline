@@ -26,6 +26,9 @@ npm install && npm run build && PORT=3100 npm start      # then open http://loca
 Migrations are applied once via the Supabase SQL Editor (`supabase/migrations/0001…0005`, in order). Do not re-run them.
 The cloud sandbox instance is not reachable from your browser: run the same command locally (same env) or deploy (Render/Vercel/Railway). `NORTHLINE_DEMO_SEED=false` skips seeded demo data in file mode.
 
+## Deploying
+See `docs/deploy.md` and `render.yaml` (review-only first: `NORTHLINE_READONLY=true`, no provider keys). In production the app fails closed unless Supabase and auth are configured, and `NORTHLINE_AUTH_DISABLED` is ignored.
+
 ## Real production pipeline (Sienna first)
 1. **Talent → Sienna → Canonical references**: upload a MASTER_FACE (+ supporting references). Identity is `SIE-IDENTITY-v1.0`.
 2. **Launch**: confirm virtual/AI disclosure (approval is locked until then).

@@ -2,6 +2,7 @@ import { FileRepo } from "./file-store";
 import { SupabaseRepo } from "./supabase-store";
 import { seedDemo } from "./seed";
 import type { Repo } from "./repo";
+import { assertProductionConfig, isReadOnly, readOnlyRepo } from "@/lib/runtime/mode";
 
 const g = globalThis as unknown as { __northlineRepo?: Promise<Repo> };
 
@@ -11,10 +12,12 @@ export function storeDriver(): "file" | "supabase" {
 
 export function getRepo(): Promise<Repo> {
   g.__northlineRepo ??= (async () => {
+    assertProductionConfig(); // production fails closed: never a silent demo/file store
     if (storeDriver() === "supabase") {
       const url = process.env.SUPABASE_URL, key = process.env.SUPABASE_SERVICE_ROLE_KEY;
       if (!url || !key) throw new Error("NORTHLINE_STORE=supabase requires SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (server-side env).");
-      return new SupabaseRepo(url, key);
+      const live = new SupabaseRepo(url, key);
+      return isReadOnly() ? readOnlyRepo(live) : live;
     }
     const repo = new FileRepo();
     if (!repo.seeded) { await seedDemo(repo, { productions: process.env.NORTHLINE_DEMO_SEED !== "false" }); repo.markSeeded(); }

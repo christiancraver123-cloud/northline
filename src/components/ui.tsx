@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { isReadOnly } from "@/lib/runtime/mode";
 import type { ReactNode } from "react";
 import type { Asset, Production } from "@/lib/db/records";
 import { ROSTER_BY_CODE } from "@/lib/talent/roster";
@@ -54,7 +55,7 @@ export function AssetTile({ asset, label }: { asset: Asset; label?: string }) {
 export const ProdLink = ({ p }: { p: Pick<Production, "id" | "code"> }) => <Link href={`/productions/${p.id}`} className="font-mono text-blue2 hover:underline">{p.code}</Link>;
 export const Empty = ({ children }: { children: ReactNode }) => <div className="rounded-xl border border-dashed border-edge p-6 text-center text-muted">{children}</div>;
 export const Btn = ({ children, primary, ...rest }: { children: ReactNode; primary?: boolean } & React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-  <button {...rest} className={`rounded-xl border px-3.5 py-2 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-40 ${primary ? "border-transparent bg-gradient-to-br from-blue to-[#4d5cf0] text-white" : "border-edge bg-panel2 text-ink hover:brightness-125"} ${rest.className ?? ""}`}>{children}</button>
+  <button {...rest} disabled={rest.disabled || isReadOnly()} title={isReadOnly() ? "Read-only mode: changes are disabled" : rest.title} className={`rounded-xl border px-3.5 py-2 text-[13px] font-bold disabled:cursor-not-allowed disabled:opacity-40 ${primary ? "border-transparent bg-gradient-to-br from-blue to-[#4d5cf0] text-white" : "border-edge bg-panel2 text-ink hover:brightness-125"} ${rest.className ?? ""}`}>{children}</button>
 );
 
 // ---- Agent Operations Center ------------------------------------------------

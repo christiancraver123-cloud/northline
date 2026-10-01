@@ -20,7 +20,7 @@ describe("operator session auth", () => {
     expect(authConfig({ NODE_ENV: "production" } as never).disabled).toBe(false);
     expect(authConfig({ NODE_ENV: "development" } as never).disabled).toBe(true);
     expect(authConfig({ NODE_ENV: "development", NORTHLINE_ADMIN_PASSWORD: "x" } as never).disabled).toBe(false);
-    expect(authConfig({ NODE_ENV: "production", NORTHLINE_AUTH_DISABLED: "true" } as never).disabled).toBe(true);
+    expect(authConfig({ NODE_ENV: "production", NORTHLINE_AUTH_DISABLED: "true" } as never).disabled).toBe(false); // changed: AUTH_DISABLED is ignored in production
   });
   it("only machine endpoints and login are public", () => {
     for (const p of ["/login", "/api/health", "/api/n8n/production-orchestrator", "/api/create", "/api/agents/tick"]) expect(isPublicPath(p)).toBe(true);

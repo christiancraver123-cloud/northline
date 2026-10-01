@@ -9,7 +9,7 @@ import { createAction } from "../actions";
 
 const EXAMPLES = ["Create a Miami weekend campaign for Sienna and Zoe", "Create a Pilates to coffee carousel for Zoe", "Create a Reel for Vesper at a rooftop party", "Give Sienna three Miami nightlife posts"];
 
-export function CreateForm({ error }: { error?: string }) {
+export function CreateForm({ error, readOnly = false }: { error?: string; readOnly?: boolean }) {
   const [text, setText] = useState("");
   const [talent, setTalent] = useState<TalentCode[]>([]);
   const [format, setFormat] = useState<ContentType>("CAROUSEL");
@@ -72,7 +72,7 @@ export function CreateForm({ error }: { error?: string }) {
           )}
         </div>
         <input type="hidden" name="request" value={JSON.stringify(request ?? {})} />
-        <button disabled={!request} className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-3 font-bold disabled:opacity-40">Generate drafts →</button>
+        <button disabled={!request || readOnly} title={readOnly ? "Read-only mode: changes are disabled" : undefined} className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-3 font-bold disabled:cursor-not-allowed disabled:opacity-40">Generate drafts →</button>
         <p className="text-[12px] text-faint">Creates production records and assets, then queues them for approval. Nothing is published.</p>
       </div>
     </form>

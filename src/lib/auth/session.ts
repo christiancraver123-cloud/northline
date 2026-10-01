@@ -8,8 +8,9 @@ export const SESSION_TTL_SEC = 60 * 60 * 12;
 export interface AuthConfig { password?: string; secret?: string; disabled: boolean }
 
 export function authConfig(env: NodeJS.ProcessEnv = process.env): AuthConfig {
-  const explicitlyOff = env.NORTHLINE_AUTH_DISABLED === "true";
   const dev = env.NODE_ENV !== "production";
+  // NORTHLINE_AUTH_DISABLED is honoured ONLY outside production. In production authentication can never be switched off by configuration.
+  const explicitlyOff = dev && env.NORTHLINE_AUTH_DISABLED === "true";
   return { password: env.NORTHLINE_ADMIN_PASSWORD, secret: env.NORTHLINE_SESSION_SECRET, disabled: explicitlyOff || (dev && !env.NORTHLINE_ADMIN_PASSWORD) };
 }
 

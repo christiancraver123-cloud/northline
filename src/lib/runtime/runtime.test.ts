@@ -143,12 +143,18 @@ describe("render.yaml (names only)", () => {
   const vars = [...text.matchAll(/- key: (\S+)\n((?:\s{8}\S.*\n?)*)/g)].map((m) => ({ key: m[1], body: m[2] }));
   const byKey = Object.fromEntries(vars.map((v) => [v.key, v.body]));
   it("declares exactly the review-only variables", () => {
-    expect(vars.map((v) => v.key).sort()).toEqual(["NODE_VERSION", "NORTHLINE_ADMIN_PASSWORD", "NORTHLINE_READONLY", "NORTHLINE_SESSION_SECRET", "NORTHLINE_STORE", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"]);
+    expect(vars.map((v) => v.key).sort()).toEqual(["NODE_VERSION", "NORTHLINE_ADMIN_PASSWORD", "NORTHLINE_AUTONOMOUS_GENERATION", "NORTHLINE_DURABLE_JOBS", "NORTHLINE_GOVERNOR", "NORTHLINE_READONLY", "NORTHLINE_SESSION_SECRET", "NORTHLINE_STORE", "SUPABASE_SERVICE_ROLE_KEY", "SUPABASE_URL"]);
   });
   it("review-only: read-only on, Supabase store, and no provider / webhook variables", () => {
     expect(byKey.NORTHLINE_READONLY).toMatch(/value: "true"/);
     expect(byKey.NORTHLINE_STORE).toMatch(/value: supabase/);
     expect(text).not.toMatch(/OPENAI|GEMINI|IMAGE_PROVIDER|HIGGS|N8N|WEBHOOK|AUTH_DISABLED|LLM_/);
+  });
+  it("first deployment: governor ON (reads limits), durable jobs OFF, autonomous generation OFF", () => {
+    expect(byKey.NORTHLINE_GOVERNOR).toMatch(/value: "on"/);
+    expect(byKey.NORTHLINE_DURABLE_JOBS).toMatch(/value: "off"/);
+    expect(byKey.NORTHLINE_AUTONOMOUS_GENERATION).toMatch(/value: "off"/);
+    expect(byKey.NORTHLINE_PAUSE).toBeUndefined();
   });
   it("secrets are never given a value in the file", () => {
     for (const k of ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY", "NORTHLINE_ADMIN_PASSWORD"]) { expect(byKey[k], k).toMatch(/sync: false/); expect(byKey[k], k).not.toMatch(/value:/); }

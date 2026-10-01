@@ -22,6 +22,14 @@ services:
         value: supabase
       - key: NORTHLINE_READONLY
         value: "true"
+      # Budget governor ON so the Command Center shows real limits/usage (read-only: it only READS them). Durable jobs and autonomous
+      # generation stay OFF; no provider credentials are configured on this deployment.
+      - key: NORTHLINE_GOVERNOR
+        value: "on"
+      - key: NORTHLINE_DURABLE_JOBS
+        value: "off"
+      - key: NORTHLINE_AUTONOMOUS_GENERATION
+        value: "off"
       # --- secrets: you enter these in the Render dashboard (never committed) ---
       - key: SUPABASE_URL
         sync: false

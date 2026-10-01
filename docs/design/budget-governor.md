@@ -1,3 +1,5 @@
+> **STATUS (2026-10-01): IMPLEMENTED behind `NORTHLINE_GOVERNOR=on`, default OFF.** Migration `supabase/migrations/0007_budget_governor.sql` (approved lower limits: global 10/day, OpenAI 10/day, 6/creator/day, 3 attempts/frame, 3/production, UTC reset) is **not yet applied to live**. Wiring: `src/lib/governor/{service,repo-store}.ts`; reserve in `runImageJob`, attempt caps in `regenerateProduction`, pause in the worker; `NORTHLINE_PAUSE` env always wins and works even with the flag off. Audit: `budget_decisions`. Limits are rows in `budget_limits` (change with an UPDATE or the dashboard — no migration).
+
 # Budget governor — implementation plan (DESIGN; the library is built and tested in isolation, nothing is wired or migrated)
 Unattended generation must not be able to spend without limit. When any limit is hit: **PAUSE and surface it. Never improvise around a limit.**
 

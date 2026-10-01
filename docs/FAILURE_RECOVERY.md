@@ -22,3 +22,15 @@ History is never deleted. Every failure leaves a record; recovery adds new recor
 **Before relying on a migration:** read-only probe for the columns/tables/constraints → apply once by hand → read-only verify → only then ship code that writes them.
 **After any live-touching change:** run the app in read-only mode against live data, load the key pages, compare table row counts before/after.
 **Spend safety:** nothing generates unless an operator-triggered action runs it; unattended generation is not enabled (governor + durable jobs are designed, not built).
+
+## Governor, pause and durable jobs (added 2026-10-01)
+| Situation | What happens | What you do |
+|---|---|---|
+| Daily cap reached | Provider job FAILED with category `budget_blocked`; **no provider call**; `budget_decisions` row BLOCKED | Wait for the UTC reset, or raise the limit (`update budget_limits set limit_value = N where scope='global' and metric='images_per_day'`) |
+| Attempt cap reached (3/frame, 3/production) | Regeneration refused *before* any attempt/brief is created | Raise `attempts_per_*` limit deliberately, or create a new production |
+| Emergency pause | Generation tasks stay QUEUED; any in-flight job finishes; new provider calls refused | Dashboard "Resume generation", or unset `NORTHLINE_PAUSE` (the env override wins over the DB flag) |
+| Governor state unreadable (flag ON) | Fails **closed**: no generation | Check migration 0007 / Supabase status; set `NORTHLINE_GOVERNOR` off only if you accept uncapped spend |
+| Provider returns quota/auth error | Reservation released (non-billable); durable task → BLOCKED with reason | Fix billing/key, then Unblock |
+| Timeout / unknown billing | Reservation **kept** (may have billed); audit row SETTLED_UNKNOWN | Reconcile with the provider dashboard if it matters |
+| Worker crashed mid-job | Lease expires → task re-queued with backoff (`failure_class=stuck`), bounded by `max_attempts`; generation tasks are **failed, not re-run** | Retry manually after checking nothing was produced |
+| Job keeps failing transiently | Exponential backoff via `run_after`, max 3 attempts, then FAILED with history in `agent_runs` | Operator Retry grants a fresh allowance |

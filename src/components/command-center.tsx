@@ -60,7 +60,8 @@ export function CommandCenterPanel({ cc, readOnly }: { cc: CommandCenter; readOn
           <h3 className="mb-2 font-bold">Work in flight</h3>
           <Row k="Approvals waiting"><Link href="/approvals" className="text-blue2">{cc.approvalsWaiting}</Link></Row>
           <Row k="Productions in progress">{cc.productionsInProgress.length ? cc.productionsInProgress.map((p) => p.code).join(", ") : "none"}</Row>
-          <Row k="Learnings (proposed / testing / supported / awaiting approval)">{typeof cc.learnings === "string" ? <Pill tone="mute">{cc.learnings}</Pill> : `${cc.learnings.proposed} / ${cc.learnings.testing} / ${cc.learnings.supported} / ${cc.learnings.awaitingApproval}`}</Row>
+          <Row k="Learnings (derived from decisions, advisory)">{cc.learningDerived.proposals} proposed · {cc.learningDerived.identityFlags} identity flag(s) for a human · from {cc.learningDerived.decisions} decision(s)</Row>
+          <Row k="Stored learnings (proposed / testing / supported / awaiting approval)">{typeof cc.learnings === "string" ? <Pill tone="mute">{cc.learnings}</Pill> : `${cc.learnings.proposed} / ${cc.learnings.testing} / ${cc.learnings.supported} / ${cc.learnings.awaitingApproval}`}</Row>
         </Card>
         <Card className="lg:col-span-2">
           <h3 className="mb-2 font-bold">Failures needing attention</h3>

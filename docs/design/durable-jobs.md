@@ -1,3 +1,5 @@
+> **STATUS (2026-10-01): Stage 1 IMPLEMENTED behind `NORTHLINE_DURABLE_JOBS=on`, default OFF** (`src/lib/jobs/*`, worker changes, `scripts/worker.ts`). Needs migrations 0007 + 0008 on live. Stage is set by a human via `NORTHLINE_JOB_STAGE` (default 1) and never advances automatically; stage 2 (QA/analysis) is coded but disabled until stage 1 is proven live. `production.create`/`regenerate` never auto-requeue; autonomous generation stays OFF (`NORTHLINE_AUTONOMOUS_GENERATION`).
+
 # Durable background jobs — implementation plan (DESIGN; nothing here is implemented or migrated)
 Goal: Northline keeps working through browser closure, laptop sleep, web-process restart, worker restart, provider outages and rate limits — **without redesigning the application**: reuse `agent_tasks`, `provider_jobs`, atomic claims and idempotency keys.
 

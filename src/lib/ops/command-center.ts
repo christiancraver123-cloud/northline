@@ -31,13 +31,16 @@ export interface CommandCenter {
   productionsInProgress: { id: string; code: string; status: string }[];
   attention: { kind: "task" | "job" | "blocked"; id: string; text: string; at: string }[];
   recentCompleted: { id: string; kind: string; title: string; at: string }[];
+  /** Stored learning states need the learnings table (proposed migration 0009, NOT applied) → NOT CONFIGURED until then. */
   learnings: typeof NOT_CONFIGURED | { proposed: number; testing: number; supported: number; awaitingApproval: number; active: number };
+  /** Computed on the fly from human decisions; advisory, not stored, never applied. */
+  learningDerived: { proposals: number; identityFlags: number; decisions: number };
 }
 
 export interface CommandCenterInput {
   tasks: AgentTask[]; jobs: ProviderJob[]; llmCalls?: LlmCall[]; productions: Production[]; approvalsPending: number; health: ProviderHealth[];
   budgetLimits?: BudgetStatusRow[] | null | "error"; dbPause?: { enabled: boolean; reason: string | null } | null | "error";
-  learnings?: CommandCenter["learnings"]; storeDriver: string; now?: Date; env?: Env; lastRunAt?: string | null; migrationState?: string;
+  learnings?: CommandCenter["learnings"]; learningDerived?: CommandCenter["learningDerived"]; storeDriver: string; now?: Date; env?: Env; lastRunAt?: string | null; migrationState?: string;
 }
 
 export function buildCommandCenter(i: CommandCenterInput): CommandCenter {
@@ -90,5 +93,6 @@ export function buildCommandCenter(i: CommandCenterInput): CommandCenter {
     attention,
     recentCompleted: completed.sort((a, b) => (b.finishedAt ?? "").localeCompare(a.finishedAt ?? "")).slice(0, 6).map((t) => ({ id: t.id, kind: t.kind, title: t.title, at: t.finishedAt ?? t.updatedAt })),
     learnings: i.learnings ?? NOT_CONFIGURED,
+    learningDerived: i.learningDerived ?? { proposals: 0, identityFlags: 0, decisions: 0 },
   };
 }

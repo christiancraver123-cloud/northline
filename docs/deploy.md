@@ -23,3 +23,12 @@ Never set in production: `NORTHLINE_AUTH_DISABLED`, `LLM_ENABLE_MOCK`.
 
 ## Render (Blueprint in `render.yaml`)
 Build `npm ci --include=dev && npm run build`, start `npm start`, health check `/api/health`. See the operator steps in the final report / WORKLOG. Rollback = suspend or delete the Render service; Supabase data is unaffected.
+
+## Feature flags (all default OFF; none changes behaviour until set)
+| Variable | Effect |
+|---|---|
+| `NORTHLINE_PAUSE=true` | Emergency pause for image generation (no database needed; overrides the DB flag) |
+| `NORTHLINE_GOVERNOR=on` | DB-backed daily image caps, attempt caps and audit (needs migration 0007) |
+| `NORTHLINE_DURABLE_JOBS=on` | Durable retry/backoff/BLOCKED semantics + stage gate (needs 0007 + 0008) |
+| `NORTHLINE_JOB_STAGE=1..5` | Which job kinds the background worker may start (default 1: `system.*` test jobs only) |
+| `NORTHLINE_AUTONOMOUS_GENERATION=on` | Allow machine-triggered (n8n/schedule) generation. Leave OFF until deliberately enabled |

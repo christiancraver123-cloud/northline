@@ -4,6 +4,7 @@ import { deriveProviderHealth } from "@/lib/llm/health-derived";
 import { budgetStatus } from "@/lib/governor/governor";
 import { RepoGovernorStore } from "@/lib/governor/repo-store";
 import { governorEnabled } from "@/lib/governor/service";
+import { observe, propose } from "@/lib/learning/engine";
 import { buildCommandCenter, type CommandCenter, type CommandCenterInput } from "./command-center";
 
 export async function loadCommandCenter(repo: Repo, now = new Date()): Promise<CommandCenter> {
@@ -12,6 +13,7 @@ export async function loadCommandCenter(repo: Repo, now = new Date()): Promise<C
   if (governorEnabled()) {
     try { const s = await budgetStatus(new RepoGovernorStore(repo), now); budgetLimits = s.limits; dbPause = { enabled: s.pause.enabled, reason: s.pause.reason }; } catch { budgetLimits = "error"; dbPause = "error"; }
   }
+  const decided = (await repo.list("approvals")), obs = observe(decided, productions), rep = propose(obs);
   const lastRunAt = runs.reduce<string | null>((m, r) => (!m || r.startedAt > m ? r.startedAt : m), null);
-  return buildCommandCenter({ tasks, jobs, llmCalls, productions, approvalsPending: approvals.length, health: deriveProviderHealth({ llmCalls, jobs, now: now.getTime() }), budgetLimits, dbPause, storeDriver: repo.driver, now, lastRunAt });
+  return buildCommandCenter({ tasks, jobs, llmCalls, productions, approvalsPending: approvals.length, health: deriveProviderHealth({ llmCalls, jobs, now: now.getTime() }), budgetLimits, dbPause, storeDriver: repo.driver, now, lastRunAt, learningDerived: { proposals: rep.proposals.length, identityFlags: rep.identityFlags.length, decisions: obs.length } });
 }

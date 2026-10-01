@@ -43,8 +43,8 @@ export default async function Agents() {
             {feed.length === 0 ? <Empty>No agent activity yet.</Empty> : feed.map((e) => (
               <div key={e.id} className="flex gap-2 border-t border-edge py-1.5 text-[12px] first:border-0">
                 <span className="w-16 flex-none font-mono text-faint">{ago(e.createdAt)}</span>
-                <span className="w-32 flex-none truncate text-muted">{AGENT_BY_CODE[e.agentId]?.name}</span>
-                <span className={e.level === "error" ? "text-bad" : e.level === "warn" ? "text-warn" : ""}>{e.message}</span>
+                <span className="w-20 flex-none truncate text-muted sm:w-32">{AGENT_BY_CODE[e.agentId]?.name}</span>
+                <span className={`min-w-0 break-words ${e.level === "error" ? "text-bad" : e.level === "warn" ? "text-warn" : ""}`}>{e.message}</span>
               </div>
             ))}
           </Card>

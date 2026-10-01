@@ -17,9 +17,9 @@ import { identityQa } from "@/lib/agents/identity";
 import { creativeDirector } from "@/lib/agents/agents";
 import { buildCreatorsReport, buildStatusReport, countBy, explainQa, type ReportDraft } from "./reports";
 import { ensureApprovalWait, logEvent } from "./service";
-import type { LlmRequest } from "@/lib/llm/types";
+import type { LlmErrorKind, LlmRequest } from "@/lib/llm/types";
 
-export interface LlmOutcome { text: string | null; provider: string | null; model: string | null; error: string | null; errorKind?: "unavailable" | "rate_limited" | "auth" | "failed" | null; retryAfterSec?: number | null; usedFallback: boolean; attempted: boolean }
+export interface LlmOutcome { text: string | null; provider: string | null; model: string | null; error: string | null; errorKind?: LlmErrorKind | null; retryAfterSec?: number | null; usedFallback: boolean; attempted: boolean }
 export interface HandlerCtx {
   /** Route a model call through the provider router (per-agent preference, fallback policy, usage tracking). text=null → no model output. */
   llm: (req: LlmRequest, opts?: { probe?: boolean }) => Promise<LlmOutcome>;

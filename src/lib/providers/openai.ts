@@ -29,6 +29,7 @@ export function openaiImage(apiKey: string, model = "gpt-image-1", fetchFn: type
           const form = new FormData();
           form.append("model", model); form.append("prompt", `${prompt}\n\nThe attached reference images are the authoritative identity source for face and permanent markers; text is secondary where ambiguous.`);
           form.append("size", size); form.append("n", "1");
+          if (req.inputFidelity) form.append("input_fidelity", req.inputFidelity);
           req.references.forEach((r, i) => form.append("image[]", new Blob([Buffer.from(r.bytes)], { type: r.mime }), `reference-${i + 1}-${r.type}.${r.mime.split("/")[1]}`));
           res = await fetchFn(`${API}/edits`, { method: "POST", headers: { authorization: `Bearer ${apiKey}` }, body: form, signal: AbortSignal.timeout(180_000) });
         } else {
@@ -50,7 +51,7 @@ export function openaiImage(apiKey: string, model = "gpt-image-1", fetchFn: type
       const b64 = json.data?.[0]?.b64_json;
       if (!b64) throw new ProviderError("openai", "response contained no image data", false, "unknown");
       return { provider: "openai", model, bytes: Uint8Array.from(Buffer.from(b64, "base64")), mime: "image/png", costUsd: null, credits: null, externalId: null,
-        metadata: { size, endpoint: req.references.length ? "edits" : "generations", referenceCount: req.references.length, usage: json.usage ?? null } };
+        metadata: { size, endpoint: req.references.length ? "edits" : "generations", referenceCount: req.references.length, inputFidelity: req.inputFidelity ?? null, usage: json.usage ?? null } };
     },
   };
 }

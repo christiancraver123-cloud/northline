@@ -23,7 +23,11 @@ export function openaiLlmProvider(env: NodeJS.ProcessEnv = process.env, fetchFn:
       } catch { throw new LlmError("openai", "unavailable", "network error reaching OpenAI"); }
       if (!res.ok) {
         const retry = Number(res.headers.get("retry-after")) || undefined;
-        if (res.status === 429) throw new LlmError("openai", "rate_limited", "rate limited (HTTP 429)", retry);
+        if (res.status === 429) {
+          const code = await res.json().then((j: { error?: { code?: string } }) => j.error?.code).catch(() => undefined);
+          if (code === "insufficient_quota" || code === "credit_balance_exhausted" || code === "billing_hard_limit_reached") throw new LlmError("openai", "quota_exhausted", "quota/credit exhausted (HTTP 429) — add billing credit", retry);
+          throw new LlmError("openai", "rate_limited", "rate limited (HTTP 429)", retry);
+        }
         if (res.status === 401 || res.status === 403) throw new LlmError("openai", "auth", `credentials rejected (HTTP ${res.status})`);
         if (res.status === 503) throw new LlmError("openai", "unavailable", "service unavailable (HTTP 503)", retry);
         throw new LlmError("openai", "failed", `request failed (HTTP ${res.status})`);

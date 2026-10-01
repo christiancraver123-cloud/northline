@@ -70,7 +70,7 @@ export function createRouter(providers: Record<LlmProviderName, LlmProvider>): R
         const st = providerState(prov, t0);
         first ??= c.provider;
         if (st.state !== "configured" && !(opts?.probe && st.until !== null)) {
-          lastErr = new LlmError(c.provider, st.state === "rate_limited" ? "rate_limited" : "unavailable", st.detail ?? st.state);
+          lastErr = new LlmError(c.provider, st.state === "rate_limited" ? "rate_limited" : st.state === "quota_exhausted" ? "quota_exhausted" : "unavailable", st.detail ?? st.state);
           attempts.push({ provider: c.provider, model: c.model, status: "SKIPPED", error: `${st.state}: ${st.detail ?? ""}`.trim(), startedAt: s0, finishedAt: s0, latencyMs: 0, usage: null, costUsd: null, fallbackFrom: first === c.provider ? null : first });
           continue;
         }
@@ -91,7 +91,7 @@ export function createRouter(providers: Record<LlmProviderName, LlmProvider>): R
           const err = e instanceof LlmError ? e : new LlmError(c.provider, "failed", e instanceof Error ? e.message : "unknown error");
           recordFailure(c.provider, err);
           lastErr = err;
-          attempts.push({ provider: c.provider, model: c.model, status: err.kind === "rate_limited" ? "RATE_LIMITED" : err.kind === "unavailable" ? "UNAVAILABLE" : "FAILED", error: err.message, startedAt: s0, finishedAt: new Date().toISOString(), latencyMs: Date.now() - t0, usage: null, costUsd: null, fallbackFrom: first === c.provider ? null : first });
+          attempts.push({ provider: c.provider, model: c.model, status: err.kind === "rate_limited" || err.kind === "quota_exhausted" ? "RATE_LIMITED" : err.kind === "unavailable" ? "UNAVAILABLE" : "FAILED" /* DB status set is fixed; the error text says "quota exhausted" */, error: err.message, startedAt: s0, finishedAt: new Date().toISOString(), latencyMs: Date.now() - t0, usage: null, costUsd: null, fallbackFrom: first === c.provider ? null : first });
         }
       }
       return { result: null, attempts, usedFallback: false, error: lastErr };

@@ -44,7 +44,12 @@ export function geminiProvider(env: NodeJS.ProcessEnv = process.env, fetchFn: ty
       if (!res.ok) {
         const retry = Number(res.headers.get("retry-after")) || undefined;
         // Never echo the upstream body (may contain request details); status only.
-        if (res.status === 429) throw new LlmError("gemini", "rate_limited", "rate limited (HTTP 429)", retry);
+        if (res.status === 429) {
+          // A per-DAY quota (e.g. free tier) cannot recover by retrying; a per-minute limit can. Read only the quota id from the body — never echo it.
+          const body = await res.text().catch(() => "");
+          if (/PerDay/i.test(body)) throw new LlmError("gemini", "quota_exhausted", "daily quota exhausted (HTTP 429) — resets daily or enable billing", retry);
+          throw new LlmError("gemini", "rate_limited", "rate limited (HTTP 429)", retry);
+        }
         if (res.status === 401 || res.status === 403) throw new LlmError("gemini", "auth", `credentials rejected (HTTP ${res.status})`);
         if (res.status === 503) throw new LlmError("gemini", "unavailable", "service unavailable (HTTP 503)", retry);
         throw new LlmError("gemini", "failed", `request failed (HTTP ${res.status})`);

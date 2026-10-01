@@ -12,6 +12,7 @@ import { archiveReference, promoteGeneratedAsset, setMaster, uploadReference } f
 import { getStorage } from "@/lib/providers/storage";
 import { rerunQa, submitRegenerate, type QaKind } from "@/lib/agents/ops/commands";
 import { createDelivery45 } from "@/lib/pipeline/derive";
+import { encodeDecisionNotes } from "@/lib/feedback/reasons";
 import { MAX_IMAGE_BYTES } from "@/lib/media/inspect";
 import { REFERENCE_TYPES, TALENT_CODES, type ReferenceType, type TalentCode } from "@/lib/domain/types";
 import { CreateRequestSchema } from "@/lib/orchestrator/contracts";
@@ -33,7 +34,8 @@ export async function decideAction(formData: FormData) {
   await requireOperator();
   const id = String(formData.get("approvalId"));
   const decision = String(formData.get("decision")) as Decision;
-  const notes = String(formData.get("notes") ?? "");
+  // structured reasons (learning data) + optional free text; approvals carry free text only
+  const notes = decision === "APPROVED" ? String(formData.get("notes") ?? "") : encodeDecisionNotes(formData.getAll("reason"), String(formData.get("notes") ?? ""));
   let err = "";
   try {
     const repo = await getRepo();

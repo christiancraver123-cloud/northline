@@ -77,7 +77,7 @@ export function ProviderPill({ provider, model, fallback }: { provider: string |
   const tone = provider === "rules" ? "mute" : provider === "mock" ? "warn" : "info";
   return <Pill tone={tone}>{provider}{model ? ` · ${model}` : ""}{fallback ? " · fallback" : ""}</Pill>;
 }
-export const PROVIDER_STATE_TONE: Record<string, string> = { configured: "ok", unavailable: "mute", rate_limited: "warn", failed: "bad" };
+export const PROVIDER_STATE_TONE: Record<string, string> = { configured: "ok", unavailable: "mute", rate_limited: "warn", quota_exhausted: "bad", failed: "bad" };
 
 export const QA_TONE: Record<string, string> = { PASS: "ok", REVIEW: "warn", HARD_FAIL: "bad", MANUAL_REVIEW_REQUIRED: "warn", QA_PENDING: "mute", NOT_RUN: "mute" };
 export const QaPill = ({ status }: { status: string }) => <Pill tone={QA_TONE[status] as never ?? "mute"}>{status === "MANUAL_REVIEW_REQUIRED" ? "MANUAL REVIEW" : status.replace("_", " ")}</Pill>;

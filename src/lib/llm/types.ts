@@ -7,10 +7,11 @@ export interface LlmRequest { system?: string; prompt: string; json?: boolean; m
 export interface LlmUsage { inputTokens: number | null; outputTokens: number | null; totalTokens: number | null }
 export interface LlmResult { provider: LlmProviderName; model: string; text: string; usage: LlmUsage | null; costUsd: number | null; latencyMs: number; requestId: string | null }
 
-export type LlmErrorKind = "unavailable" | "rate_limited" | "auth" | "failed";
+/** `quota_exhausted` = a DAILY/billing quota is used up: retrying cannot help until the quota resets or billing changes (never retried). */
+export type LlmErrorKind = "unavailable" | "rate_limited" | "quota_exhausted" | "auth" | "failed";
 export class LlmError extends Error {
   constructor(public provider: LlmProviderName, public kind: LlmErrorKind, message: string, public retryAfterSec?: number) { super(`[${provider}] ${message}`); }
-  get retryable() { return this.kind === "rate_limited" || this.kind === "failed" || this.kind === "unavailable"; }
+  get retryable() { return this.kind === "rate_limited" || this.kind === "failed" || this.kind === "unavailable"; } // quota_exhausted and auth are NOT retryable
 }
 
 export interface LlmProvider {
@@ -24,7 +25,7 @@ export interface LlmProvider {
 }
 
 /** Operator-visible provider state. */
-export type ProviderState = "configured" | "unavailable" | "rate_limited" | "failed";
+export type ProviderState = "configured" | "unavailable" | "rate_limited" | "quota_exhausted" | "failed";
 
 /** Per-agent preference stored in agents.config.model. `rules` = deterministic, no model call. `auto` = router default. */
 export interface ModelPreference { provider: LlmProviderName | "rules" | "auto"; model?: string; allowFallback?: boolean }

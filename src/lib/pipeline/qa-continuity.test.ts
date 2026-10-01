@@ -501,3 +501,69 @@ describe("regression: provider_jobs.run_id must reference a workflow run (live F
     for (const j of jobs) { expect(j.runId === null || workflowIds.has(j.runId), `job ${j.id} run_id`).toBe(true); expect(j.runId !== null && agentRunIds.has(j.runId)).toBe(false); }
   });
 });
+
+describe("OpenAI adapter: optional input_fidelity (default unchanged)", () => {
+  const png = Buffer.from(realPng(8, 8)).toString("base64");
+  const run = async (inputFidelity?: "high" | "low") => {
+    let form: FormData | null = null;
+    const f = (async (_u: string, init: RequestInit) => { form = init.body as FormData; return new Response(JSON.stringify({ data: [{ b64_json: png }], usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 } }), { status: 200 }); }) as never;
+    const { openaiImage } = await import("@/lib/providers/openai");
+    const res = await openaiImage("K", "gpt-image-1", f).generate({ productionCode: "c", shotN: 1, prompt: "p", negative: "n", talent: "SIE", size: "1024x1536", inputFidelity, references: [{ type: "MASTER_FACE", bytes: realPng(8, 8), mime: "image/png" } as never] });
+    return { form: form as unknown as FormData, res };
+  };
+  it("sends input_fidelity only when requested and records it in the job metadata", async () => {
+    const off = await run();
+    expect(off.form.has("input_fidelity")).toBe(false);
+    expect(off.res.metadata).toMatchObject({ inputFidelity: null, endpoint: "edits", referenceCount: 1 });
+    const on = await run("high");
+    expect(on.form.get("input_fidelity")).toBe("high");
+    expect(on.res.metadata).toMatchObject({ inputFidelity: "high" });
+  });
+});
+
+describe("quota vs rate limit (never hammer a provider that cannot recover)", () => {
+  const resp = (status: number, body: unknown) => (async () => new Response(JSON.stringify(body), { status })) as never;
+  it("Gemini: a per-DAY quota 429 is quota_exhausted (not retryable); a per-minute 429 stays rate_limited", async () => {
+    const { geminiProvider } = await import("@/lib/llm/gemini");
+    const daily = { error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerDayPerProjectPerModel-FreeTier" }] }] } };
+    const minute = { error: { message: "You exceeded your current quota", details: [{ violations: [{ quotaId: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier" }] }] } };
+    const ask = async (b: unknown) => { try { await geminiProvider({ GEMINI_API_KEY: "SECRETKEY123" } as never, resp(429, b), async () => {}).complete({ prompt: "x" }); } catch (e) { return e as import("@/lib/llm/types").LlmError; } throw new Error("expected failure"); };
+    const d = await ask(daily), m = await ask(minute);
+    expect(d.kind).toBe("quota_exhausted"); expect(d.retryable).toBe(false); expect(d.message).not.toContain("SECRETKEY123"); expect(d.message).not.toContain("GenerateRequests");
+    expect(m.kind).toBe("rate_limited"); expect(m.retryable).toBe(true);
+  });
+  it("OpenAI text: insufficient_quota is quota_exhausted; plain 429 is rate_limited", async () => {
+    const { openaiLlmProvider } = await import("@/lib/llm/openai");
+    const ask = async (code: string) => { try { await openaiLlmProvider({ OPENAI_API_KEY: "K" } as never, resp(429, { error: { code } }) as never).complete({ prompt: "x" }); } catch (e) { return e as import("@/lib/llm/types").LlmError; } throw new Error("expected failure"); };
+    expect((await ask("insufficient_quota")).kind).toBe("quota_exhausted");
+    expect((await ask("rate_limit_exceeded")).kind).toBe("rate_limited");
+  });
+  it("provider health shows QUOTA_EXHAUSTED with a long cooldown and the router skips it without calling", async () => {
+    const { recordFailure, providerState, QUOTA_COOLDOWN_MS } = await import("@/lib/llm/health");
+    const { LlmError } = await import("@/lib/llm/types");
+    let calls = 0;
+    const prov: LlmProvider = { name: "gemini", defaultModel: "g", vision: true, configured: () => true, async complete() { calls++; throw new LlmError("gemini", "quota_exhausted", "daily quota exhausted"); } };
+    const router = createRouter({ gemini: prov, openai: { ...prov, name: "openai" } as LlmProvider, mock: mockLlm({ configured: false }) });
+    const first = await router.run("IDENTITY_QA", "identity_qa.attempt", { prompt: "x" }, { provider: "gemini", allowFallback: false });
+    expect(first.error?.kind).toBe("quota_exhausted");
+    expect(first.attempts[0].status).toBe("RATE_LIMITED"); // stored with the DB's fixed status set; the error text says quota
+    const st = providerState(prov);
+    expect(st.state).toBe("quota_exhausted");
+    expect(st.until! - Date.now()).toBeGreaterThan(QUOTA_COOLDOWN_MS - 5000);
+    const second = await router.run("IDENTITY_QA", "identity_qa.attempt", { prompt: "x" }, { provider: "gemini", allowFallback: false });
+    expect(second.attempts[0].status).toBe("SKIPPED");
+    expect(second.error?.kind).toBe("quota_exhausted");
+    expect(calls).toBe(1); // not hammered
+    void recordFailure;
+  });
+  it("QA does not retry a quota-exhausted inspector (exactly one attempt, no waiting)", async () => {
+    const r = new FileRepo(null), sleeps: number[] = [];
+    const quota = (): VisionOutcome => ({ text: null, provider: "gemini", model: "g", error: "[gemini] daily quota exhausted (HTTP 429)", transient: false });
+    const v = vision({ IDENTITY: [quota] });
+    await make(r, mkDeps({ vision: v, qaRetry: { sleep: async (ms) => { sleeps.push(ms); }, backoffMs: [10, 20] } }), 2);
+    expect(v.calls.filter((c) => c.kind === "IDENTITY")).toHaveLength(2); // one per asset, never 3x
+    expect(sleeps).toEqual([]);
+    const a = (await r.list("assets"))[0];
+    expect((await identityRows(r, a.id))[0]).toMatchObject({ method: "manual", status: "MANUAL_REVIEW_REQUIRED" });
+  });
+});

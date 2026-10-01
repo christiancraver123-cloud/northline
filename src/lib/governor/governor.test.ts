@@ -113,7 +113,6 @@ const dir = path.join(process.cwd(), "supabase", "migrations");
 async function migrated() {
   const db = new PGlite();
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".sql")).sort()) await db.exec(fs.readFileSync(path.join(dir, f), "utf8"));
-  await db.exec(fs.readFileSync(path.join(process.cwd(), "docs", "design", "proposed-migrations", "0007_budget_governor.sql"), "utf8"));
   return db;
 }
 /** The port implemented with REAL SQL: the compare-and-set is UPDATE ... WHERE used = <value read>. */
@@ -137,12 +136,12 @@ class SqlGovernorStore implements GovernorStore {
   async decrement(r: CounterRef) { await this.db.query("update budget_counters set used = greatest(used - 1, 0), updated_at = now() where metric=$1 and scope=$2 and scope_key=$3 and window_key=$4", [r.metric, r.scope, r.scopeKey, r.windowKey]); }
 }
 
-describe("proposed migration 0007 (embedded Postgres, NOT applied to live)", () => {
+describe("migration 0007 (embedded Postgres)", () => {
   it("applies cleanly after 0001-0006 and is additive: new tables + one nullable column, RLS on, safe defaults", async () => {
     const db = await migrated();
-    const t = (await db.query<{ table_name: string }>("select table_name from information_schema.tables where table_schema='public' and table_name in ('system_flags','budget_limits','budget_counters')")).rows.map((r) => r.table_name).sort();
-    expect(t).toEqual(["budget_counters", "budget_limits", "system_flags"]);
-    const rls = (await db.query<{ relname: string; relrowsecurity: boolean }>("select relname, relrowsecurity from pg_class where relname in ('system_flags','budget_limits','budget_counters')")).rows;
+    const t = (await db.query<{ table_name: string }>("select table_name from information_schema.tables where table_schema='public' and table_name in ('system_flags','budget_limits','budget_counters','budget_decisions')")).rows.map((r) => r.table_name).sort();
+    expect(t).toEqual(["budget_counters", "budget_decisions", "budget_limits", "system_flags"]);
+    const rls = (await db.query<{ relname: string; relrowsecurity: boolean }>("select relname, relrowsecurity from pg_class where relname in ('system_flags','budget_limits','budget_counters','budget_decisions')")).rows;
     expect(rls.every((r) => r.relrowsecurity)).toBe(true);
     expect((await db.query("select enabled from system_flags where key='emergency_pause'")).rows).toEqual([{ enabled: false }]); // OFF by default
     const col = (await db.query<{ is_nullable: string }>("select is_nullable from information_schema.columns where table_name='agent_tasks' and column_name='blocked_reason'")).rows;
@@ -181,7 +180,25 @@ describe("proposed migration 0007 (embedded Postgres, NOT applied to live)", () 
     expect((await reserveImage(store, { creator: "SIE", provider: "openai", now: new Date("2026-10-02T01:00:00Z") }, noEnv)).decision.allowed).toBe(true);
     expect((await db.query("select count(*)::int as n from budget_counters where scope='global'")).rows[0]).toEqual({ n: 2 }); // two windows kept
   });
-  it("is NOT in supabase/migrations (cannot be applied by accident)", () => {
-    expect(fs.readdirSync(dir).some((f) => f.includes("budget"))).toBe(false);
+  it("carries the operator-approved limits (10 global / 10 openai / 6 per creator / 3 per frame / 3 per production)", async () => {
+    const db = await migrated();
+    const rows = (await db.query<{ scope: string; scope_key: string; metric: string; limit_value: number }>("select scope, scope_key, metric, limit_value from budget_limits")).rows;
+    const get = (scope: string, key: string, metric: string) => rows.find((r) => r.scope === scope && r.scope_key === key && r.metric === metric)?.limit_value;
+    expect(get("global", "", "images_per_day")).toBe(10);
+    expect(get("provider", "openai", "images_per_day")).toBe(10);
+    for (const c of ["SIE", "ALE", "MIL", "VES", "ZOE", "SKY"]) expect(get("creator", c, "images_per_day"), c).toBe(6);
+    expect(get("global", "", "attempts_per_asset")).toBe(3);
+    expect(get("global", "", "attempts_per_production")).toBe(3);
+  });
+  it("limits are DATA: changing one needs an UPDATE, not a migration", async () => {
+    const db = await migrated();
+    await db.query("update budget_limits set limit_value = 12 where scope='global' and metric='images_per_day'");
+    expect((await db.query("select limit_value from budget_limits where scope='global' and metric='images_per_day'")).rows).toEqual([{ limit_value: 12 }]);
+  });
+  it("the audit table accepts the decision vocabulary and rejects anything else", async () => {
+    const db = await migrated();
+    const ins = (d: string) => db.query("insert into budget_decisions (decision, metric, scope) values ($1,'images_per_day','global')", [d]);
+    for (const d of ["ALLOWED", "BLOCKED", "RELEASED", "SETTLED_BILLABLE", "SETTLED_UNKNOWN"]) await ins(d);
+    await expect(ins("MAYBE")).rejects.toThrow();
   });
 });

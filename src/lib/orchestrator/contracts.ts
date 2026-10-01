@@ -19,6 +19,11 @@ export const CreateRequestSchema = z.object({
   creative: z.object({
     hook: z.string().trim().min(1).max(300), location: z.string().trim().min(1).max(300), outfit: z.string().trim().min(1).max(600),
     lighting: z.string().trim().min(1).max(300), storyBeat: z.string().trim().min(1).max(600),
+    /** Optional shared continuity facts for multi-frame productions; anything omitted is derived from the brief and the canonical identity. */
+    continuity: z.object({
+      bag: z.string().trim().max(300), props: z.array(z.string().trim().min(1).max(200)).max(10), timeWindow: z.string().trim().max(300),
+      cameraStyle: z.string().trim().max(300), locationProgression: z.array(z.string().trim().min(1).max(300)).max(10),
+    }).partial().optional(),
     shots: z.array(z.object({ n: z.number().int().min(1).max(10), kind: z.enum(["IMG", "STORY"]).default("IMG"), description: z.string().trim().min(1).max(800), camera: z.string().trim().max(300).optional() })).min(1).max(10),
   }).optional(),
 });

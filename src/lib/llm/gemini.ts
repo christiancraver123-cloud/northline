@@ -4,12 +4,14 @@ import { LlmError, type LlmProvider } from "./types";
 
 const BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-/** Seen live: Gemini returns intermittent 503s under load. Retry a couple of times with short backoff before reporting unavailable. */
+/** Seen live: Gemini returns intermittent 503s (and 429s) under load. Bounded retry with short backoff (honouring a short Retry-After) before reporting the error. */
 export async function fetchWithTransientRetry(fetchFn: typeof fetch, url: string, init: RequestInit, sleep: (ms: number) => Promise<void> = (ms) => new Promise((r) => setTimeout(r, ms))): Promise<Response> {
   let res = await fetchFn(url, init);
   for (const wait of [1500, 4000]) {
-    if (res.status !== 503 && res.status !== 500) return res;
-    await sleep(wait);
+    if (res.status !== 503 && res.status !== 500 && res.status !== 429) return res;
+    const ra = Number(res.headers.get("retry-after"));
+    if (res.status === 429 && ra > 10) return res; // asked to wait too long to retry inline; surface it so callers can back off
+    await sleep(res.status === 429 && ra > 0 ? Math.min(ra * 1000, 10_000) : wait);
     res = await fetchFn(url, init);
   }
   return res;

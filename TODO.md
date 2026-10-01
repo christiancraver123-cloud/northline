@@ -7,6 +7,10 @@
 - [ ] `NORTHLINE_WEBHOOK_SECRET` + an n8n Schedule Trigger calling `POST /api/agents/tick`.
 - [ ] Create a `main` branch on GitHub (push was blocked by permissions) and choose the default branch.
 
+## BLOCKING Attempt 2 of SIE-2026-001
+- [ ] **Apply `supabase/migrations/0006_qa_retry_continuity.sql`** in the Supabase SQL Editor (additive; adds QA supersession columns, CONTINUITY kind, `asset_derivatives`). The updated code writes these columns, so apply it BEFORE running the updated app/pipeline against live Supabase.
+- [ ] Then: create Attempt 2 (same concept, one-Miami-morning continuity spec), run improved QA, create 4:5 delivery copies, review.
+
 ## BLOCKING the first real Sienna production
 - [ ] **OpenAI billing**: image generation returns `insufficient_quota / credit_balance_exhausted` — add credit to the OpenAI account (key itself is valid).
 - [ ] **Sienna's real reference files** (MASTER_FACE required; FACE_FRONT, FACE_3Q_LEFT, FACE_3Q_RIGHT, FACE_PROFILE, UPPER_BODY, FULL_BODY, NATURAL_CANDID recommended) — upload on Talent → Sienna.

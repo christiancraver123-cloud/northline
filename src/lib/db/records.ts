@@ -18,6 +18,8 @@ export interface CreativeBrief {
   lighting: string;
   storyBeat: string;
   shots: { n: number; kind: AssetKind; description: string; camera?: string }[];
+  /** Optional operator-supplied shared continuity facts for multi-frame productions (anything omitted is derived). */
+  continuity?: Partial<Pick<ContinuitySpec, "bag" | "props" | "timeWindow" | "cameraStyle" | "locationProgression">>;
   reel?: {
     sourceStill: string; durationSec: number; cameraMovement: string; subjectAction: string;
     transition: string; audioConcept: string; loopStrategy: string; higgsfieldPrompt: string;
@@ -75,6 +77,15 @@ export interface CanonicalIdentityRecord extends Base {
   code: TalentCode; version: string; identityId: string; contentHash: string; status: "ACTIVE" | "SUPERSEDED"; data: CanonicalIdentity;
 }
 
+/** Shared continuity state for a multi-frame production. Persisted in the Generation Brief and inherited by EVERY frame prompt. */
+export interface ContinuitySpec {
+  outfit: string; hair: string; jewelry: string; bag: string; props: string[];
+  /** One continuous window, e.g. "one Miami morning, ~8:30-10:30 AM" — frames must not drift across it. */
+  timeWindow: string; lighting: string;
+  /** Where the creator is in each frame, in order (index = frame number - 1). */
+  locationProgression: string[]; cameraStyle: string;
+}
+
 export interface GenerationBriefData {
   production: { code: string; format: string; platform: string };
   creator: { code: TalentCode; name: string };
@@ -86,6 +97,8 @@ export interface GenerationBriefData {
   continuity: string[]; recentConsiderations: string[];
   providerRequirements: { provider: string; model: string | null; size: string; aspect: string; count: number };
   shots: { n: number; kind: string; description: string; camera?: string }[];
+  /** Present for multi-frame productions (>= 2 frames). */
+  continuitySpec?: ContinuitySpec;
   revision: { fromAttemptId: string; feedback: string[] } | null;
 }
 export interface GenerationBrief extends Base {
@@ -99,10 +112,24 @@ export interface GenerationAttempt extends Base {
 export interface QaFindingRecord { lockId: string | null; severity: Exclude<QaSeverity, "PASS">; message: string }
 /** One QA evaluation. `inspectedImage` is true ONLY if something actually looked at image content (vision model / human). */
 export interface QaResult extends Base {
-  productionId: string; attemptId: string | null; assetId: string | null; kind: "IDENTITY" | "TECHNICAL" | "CONTENT";
+  productionId: string; attemptId: string | null; assetId: string | null; kind: "IDENTITY" | "TECHNICAL" | "CONTENT" | "CONTINUITY";
   method: "prompt_rules" | "file_inspection" | "vision_model" | "data_rules" | "manual";
   status: QaStatus; inspectedImage: boolean; provider: string | null; model: string | null;
   findings: QaFindingRecord[]; summary: string; recommendation: string | null; decidedBy: string | null;
+  /** nth evaluation for the same asset + QA type + layer (1 = first). Older evaluations are kept for audit. */
+  qaAttempt: number;
+  /** When set, this result no longer counts toward the aggregate: the referenced newer result replaces it. History is never deleted. */
+  supersededById: string | null;
+  /** What the retry logic did for this evaluation (null = no model call was needed or none was retried). */
+  retry: QaRetryInfo | null;
+}
+export interface QaRetryInfo { attempts: number; maxAttempts: number; transient: boolean; errors: string[]; exhausted: boolean; note: string | null }
+
+/** A derived delivery file (e.g. 4:5 crop). The RAW source asset is never modified. */
+export interface AssetDerivative extends Base {
+  productionId: string; sourceAssetId: string; kind: "DELIVERY_4X5"; storagePath: string; filename: string; mime: string;
+  width: number | null; height: number | null; bytes: number | null; sha256: string | null; sourceSha256: string | null;
+  derivation: Record<string, unknown>; createdBy: string | null;
 }
 
 export interface Prompt extends Base {
@@ -210,7 +237,7 @@ export interface AgentSchedule extends Base {
 }
 
 export interface Tables {
-  canonicalIdentities: CanonicalIdentityRecord; generationBriefs: GenerationBrief; generationAttempts: GenerationAttempt; qaResults: QaResult;
+  canonicalIdentities: CanonicalIdentityRecord; generationBriefs: GenerationBrief; generationAttempts: GenerationAttempt; qaResults: QaResult; assetDerivatives: AssetDerivative;
   agents: Agent; agentTasks: AgentTask; agentRuns: AgentRun; agentEvents: AgentEvent; agentMessages: AgentMessage;
   agentReports: AgentReport; agentSchedules: AgentSchedule; llmCalls: LlmCall;
   campaigns: Campaign; productions: Production; assets: Asset; referenceAssets: ReferenceAsset; prompts: Prompt;
@@ -222,5 +249,5 @@ export const TABLE_NAMES: TableName[] = [
   "campaigns", "productions", "assets", "referenceAssets", "prompts", "captions", "approvals", "workflowRuns",
   "providerJobs", "calendarEntries", "storylines", "launchStates", "analytics",
   "agents", "agentTasks", "agentRuns", "agentEvents", "agentMessages", "agentReports", "agentSchedules", "llmCalls",
-  "canonicalIdentities", "generationBriefs", "generationAttempts", "qaResults",
+  "canonicalIdentities", "generationBriefs", "generationAttempts", "qaResults", "assetDerivatives",
 ];

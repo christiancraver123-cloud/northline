@@ -10,7 +10,8 @@ import { ensureApprovalWait, resolveApprovalWaits } from "@/lib/agents/ops/servi
 import { decide, resubmitForReview, type Decision } from "@/lib/orchestrator/approvals";
 import { archiveReference, promoteGeneratedAsset, setMaster, uploadReference } from "@/lib/references/service";
 import { getStorage } from "@/lib/providers/storage";
-import { submitRegenerate } from "@/lib/agents/ops/commands";
+import { rerunQa, submitRegenerate, type QaKind } from "@/lib/agents/ops/commands";
+import { createDelivery45 } from "@/lib/pipeline/derive";
 import { MAX_IMAGE_BYTES } from "@/lib/media/inspect";
 import { REFERENCE_TYPES, TALENT_CODES, type ReferenceType, type TalentCode } from "@/lib/domain/types";
 import { CreateRequestSchema } from "@/lib/orchestrator/contracts";
@@ -185,4 +186,32 @@ export async function regenerateAction(formData: FormData) {
   } catch (e) { err = e instanceof Error ? e.message : "failed"; }
   revalidatePath("/", "layout");
   redirect(`/productions/${pid}${err ? `?error=${encodeURIComponent(err)}` : ""}`);
+}
+
+/** Re-run QA on existing assets. Never regenerates or modifies an image; older QA results stay in history. */
+export async function rerunQaAction(formData: FormData) {
+  await requireOperator();
+  const pid = String(formData.get("productionId")), assetId = String(formData.get("assetId") ?? ""), back = String(formData.get("back") ?? `/productions/${pid}`);
+  const kinds = formData.getAll("kind").map(String).filter((k): k is QaKind => ["IDENTITY", "TECHNICAL", "CONTINUITY"].includes(k));
+  let err = "";
+  try {
+    const r = await rerunQa(await getRepo(), { productionId: pid, kinds, assetIds: assetId ? [assetId] : undefined, createdBy: "operator (QA re-run)" });
+    const failed = r.tasks.find((t) => t.status === "FAILED");
+    if (failed) err = failed.error ?? "QA re-run failed";
+  } catch (e) { err = e instanceof Error ? e.message : "failed"; }
+  revalidatePath("/", "layout");
+  redirect(`${back}${err ? `?error=${encodeURIComponent(err)}` : ""}`);
+}
+/** Create 4:5 delivery copies (RAW originals are never touched). One asset, or every current frame of a production. */
+export async function deliveryAction(formData: FormData) {
+  await requireOperator();
+  const pid = String(formData.get("productionId")), assetId = String(formData.get("assetId") ?? ""), back = String(formData.get("back") ?? `/productions/${pid}`);
+  let err = "";
+  try {
+    const repo = await getRepo(), storage = getStorage();
+    const targets = assetId ? [assetId] : (await repo.list("assets", { productionId: pid })).filter((a) => a.current && a.kind !== "REEL" && a.storagePath).map((a) => a.id);
+    for (const id of targets) await createDelivery45(repo, storage, id, { createdBy: "operator (4:5 delivery)" });
+  } catch (e) { err = e instanceof Error ? e.message : "failed"; }
+  revalidatePath("/", "layout");
+  redirect(`${back}${err ? `?error=${encodeURIComponent(err)}` : ""}`);
 }

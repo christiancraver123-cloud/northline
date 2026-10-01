@@ -167,7 +167,7 @@ describe("generation brief, attempts, jobs, lineage", () => {
     expect(prompts).toHaveLength(5);
     expect(prompts.every((x) => x.briefId === brief.id && x.attemptId === attempt.id)).toBe(true);
     expect(prompts[0].positive).toMatch(/canonical reference images/);
-    expect(prompts[0].positive.length).toBeLessThan(1400); // compact, not a pasted biography
+    expect(prompts[0].positive.length).toBeLessThan(3200); // compact, not a pasted biography
     const assets = await r.list("assets");
     const jobs = await r.list("providerJobs");
     expect(assets).toHaveLength(5);

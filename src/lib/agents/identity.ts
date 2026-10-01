@@ -15,7 +15,7 @@ export function identityPromptFindings(code: TalentCode, positive: string, ci: C
   const out: QaFinding[] = [];
   for (const lock of allLocks(ci)) {
     for (const r of lock.promptRequired ?? []) if (!new RegExp(r.pattern, "i").test(positive)) out.push({ lockId: lock.id, severity: lock.severity, message: `Missing identity marker: ${r.label}` });
-    for (const r of lock.promptForbidden ?? []) if (new RegExp(r.pattern, "i").test(positive)) out.push({ lockId: lock.id, severity: lock.severity, message: `Forbidden for ${first}: ${r.label}` });
+    for (const r of lock.promptForbidden ?? []) if (new RegExp(`(?<!\\b(?:no|not|never|without|avoid)\\s)(?:${r.pattern})`, "i").test(positive)) out.push({ lockId: lock.id, severity: lock.severity, message: `Forbidden for ${first}: ${r.label}` });
   }
   return out;
 }

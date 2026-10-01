@@ -16,6 +16,7 @@ import { buildPrompts } from "@/lib/pipeline/prompts";
 import { createShotAsset, filenameFor, runImageJob } from "@/lib/pipeline/generate";
 import { runContentQa, runIdentityQa, runTechnicalQa } from "@/lib/pipeline/qa";
 import { finalizeAttempt } from "@/lib/pipeline/finalize";
+import { runContinuityQa } from "@/lib/pipeline/continuity";
 import { defaultDeps, traceOf, type Deps, type Trace } from "@/lib/pipeline/deps";
 import { ensureIdentities } from "@/lib/identity/service";
 
@@ -153,6 +154,10 @@ export async function completeAttempt(repo: Repo, deps: Deps, productionId: stri
   await runIdentityQa(repo, deps, p, attempt, assets, identity, refs);
   await runTechnicalQa(repo, deps, p, attempt, assets);
   await runContentQa(repo, deps, p, attempt);
+  // multi-frame productions are also judged as a sequence (frames of the production's current set, across attempts)
+  const brief = await repo.get("generationBriefs", attempt.briefId);
+  const frames = (await repo.list("assets", { productionId })).filter((a) => a.current && a.kind !== "REEL" && a.status === "RAW");
+  await runContinuityQa(repo, deps, p, attempt, frames, brief?.data.continuitySpec);
   return finalizeAttempt(repo, deps, productionId, attemptId);
 }
 

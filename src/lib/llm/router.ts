@@ -13,7 +13,7 @@ import { mockLlm } from "./mock";
 import { LlmError, type LlmProvider, type LlmProviderName, type LlmRequest, type LlmResult, type ModelPreference } from "./types";
 
 /** Task kinds where switching provider silently could change identity-relevant output. */
-export const IDENTITY_CRITICAL_KINDS = new Set(["identity_qa.review", "identity_qa.attempt", "prompt.build", "image.generate", "production.create", "production.regenerate"]);
+export const IDENTITY_CRITICAL_KINDS = new Set(["identity_qa.review", "identity_qa.attempt", "continuity_qa.attempt", "prompt.build", "image.generate", "production.create", "production.regenerate"]);
 /** Jobs suited to background/asynchronous analysis (Gemini-friendly by default when configured). */
 export const ANALYSIS_KINDS = new Set(["strategist.concepts", "director.concepts", "growth.recommendations", "performance.report", "content_qa.review", "content_qa.audit", "technical_qa.attempt", "production.digest", "orchestrator.report", "orchestrator.consolidate"]);
 
@@ -26,7 +26,8 @@ export interface Router {
   candidates(agent: AgentCode, kind: string, pref?: ModelPreference): { provider: LlmProviderName; model: string }[];
   /** Predicted lane (for concurrency scheduling / UI): first candidate's provider or "rules". */
   laneFor(agent: AgentCode, kind: string, pref?: ModelPreference): LlmProviderName | "rules";
-  run(agent: AgentCode, kind: string, req: LlmRequest, pref?: ModelPreference): Promise<RouteResult>;
+  /** `probe: true` = a deliberate retry after backoff: ignore the provider's failure cooldown (never ignores 'not configured'). */
+  run(agent: AgentCode, kind: string, req: LlmRequest, pref?: ModelPreference, opts?: { probe?: boolean }): Promise<RouteResult>;
 }
 
 export function createRouter(providers: Record<LlmProviderName, LlmProvider>): Router {
@@ -58,7 +59,7 @@ export function createRouter(providers: Record<LlmProviderName, LlmProvider>): R
       const c = candidates(agent, kind, pref).find((x) => providers[x.provider].configured() && providerState(providers[x.provider]).state === "configured");
       return c?.provider ?? "rules";
     },
-    async run(agent, kind, req, pref) {
+    async run(agent, kind, req, pref, opts) {
       const attempts: Attempt[] = [];
       const chain = candidates(agent, kind, pref);
       let lastErr: LlmError | null = null;
@@ -68,7 +69,7 @@ export function createRouter(providers: Record<LlmProviderName, LlmProvider>): R
         const t0 = Date.now(), s0 = new Date(t0).toISOString();
         const st = providerState(prov, t0);
         first ??= c.provider;
-        if (st.state !== "configured") {
+        if (st.state !== "configured" && !(opts?.probe && st.until !== null)) {
           lastErr = new LlmError(c.provider, st.state === "rate_limited" ? "rate_limited" : "unavailable", st.detail ?? st.state);
           attempts.push({ provider: c.provider, model: c.model, status: "SKIPPED", error: `${st.state}: ${st.detail ?? ""}`.trim(), startedAt: s0, finishedAt: s0, latencyMs: 0, usage: null, costUsd: null, fallbackFrom: first === c.provider ? null : first });
           continue;

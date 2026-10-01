@@ -4,6 +4,7 @@ import { getImageProvider, getVideoProvider } from "@/lib/providers";
 import { getStorage } from "@/lib/providers/storage";
 import type { ImageProvider, StorageProvider, VideoProvider } from "@/lib/providers/types";
 import type { VisionInspector } from "./qa";
+import type { RetryPolicy } from "./qa-retry";
 
 export type Trace = (agent: AgentCode, kind: string, message: string, opts?: { level?: "info" | "warn" | "error"; data?: Record<string, unknown> }) => Promise<void> | void;
 export interface Deps {
@@ -12,6 +13,8 @@ export interface Deps {
   trace?: Trace;
   /** Optional vision-capable inspector. When absent, image QA is reported as MANUAL_REVIEW_REQUIRED — never a fabricated PASS. */
   vision?: VisionInspector;
+  /** Override the bounded QA retry/backoff policy (tests use instant sleeps). */
+  qaRetry?: Partial<RetryPolicy>;
 }
 export const defaultDeps = (): Deps => ({ image: getImageProvider(), video: getVideoProvider(), storage: getStorage(), origin: "live" });
 export const traceOf = (deps: Deps): Trace => async (a, k, m, o) => { try { await deps.trace?.(a, k, m, o); } catch { /* tracing must never break production */ } };

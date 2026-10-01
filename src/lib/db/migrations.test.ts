@@ -72,4 +72,22 @@ describe("supabase migrations (embedded Postgres)", () => {
     const { rows } = await db.query<{ relname: string; relrowsecurity: boolean }>("select relname, relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r'");
     expect(rows.filter((r) => !r.relrowsecurity).map((r) => r.relname)).toEqual([]);
   });
+  it("0006: QA supersession columns, CONTINUITY kind, and derivative lineage table behave", async () => {
+    const db = await migrated();
+    const p = await db.query<{ id: string }>("insert into productions (code, talent, content_type) values ('SIE-2026-001','{SIE}','CAROUSEL') returning id");
+    const pid = p.rows[0].id;
+    const ins = (kind: string) => db.query("insert into qa_results (production_id, kind, method, status) values ($1,$2,'vision_model','PASS') returning qa_attempt, superseded_by, retry", [pid, kind]);
+    const row = (await ins("CONTINUITY")).rows[0];
+    expect(row).toEqual({ qa_attempt: 1, superseded_by: null, retry: null }); // existing-style inserts get safe defaults
+    await expect(ins("BOGUS")).rejects.toThrow();
+    const a = await db.query<{ id: string }>("insert into qa_results (production_id, kind, method, status) values ($1,'IDENTITY','manual','MANUAL_REVIEW_REQUIRED') returning id", [pid]);
+    const b = await db.query<{ id: string }>("insert into qa_results (production_id, kind, method, status, qa_attempt, retry) values ($1,'IDENTITY','vision_model','PASS',2,$2) returning id", [pid, JSON.stringify({ attempts: 3, exhausted: false })]);
+    await db.query("update qa_results set superseded_by=$2 where id=$1", [a.rows[0].id, b.rows[0].id]);
+    expect((await db.query("select count(*)::int as n from qa_results where production_id=$1 and kind='IDENTITY'", [pid])).rows[0]).toEqual({ n: 2 }); // history kept
+    const d = (src: string, sha: string) => db.query("insert into asset_derivatives (production_id, source_asset_id, kind, storage_path, filename, source_sha256) values ($1,$2,'DELIVERY_4X5','p/x_4x5.png','x_4x5.png',$3)", [pid, src, sha]);
+    await d("asset-1", "abc");
+    await expect(d("asset-1", "abc")).rejects.toThrow(); // one derivative per source asset + kind + source bytes
+    await d("asset-1", "def"); // a different source file (e.g. replaced) may have its own
+    await expect(db.query("insert into asset_derivatives (production_id, source_asset_id, kind, storage_path, filename) values ($1,'a','CROP_X','p','f')", [pid])).rejects.toThrow();
+  });
 });

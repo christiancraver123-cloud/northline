@@ -89,8 +89,8 @@ describe("first real production pipeline (Sienna carousel, end to end through ag
     expect(out.task.status).toBe("COMPLETE");
     const tasks = await r.list("agentTasks");
     const byKind = Object.fromEntries(tasks.map((t) => [t.kind, t]));
-    for (const k of ["production.create", "identity_qa.attempt", "technical_qa.attempt", "content_qa.production", "production.finalize"]) expect(byKind[k]?.status, k).toBe("COMPLETE");
-    expect(byKind["production.finalize"].dependsOn).toHaveLength(3); // finalize waits for all three QA tasks
+    for (const k of ["production.create", "identity_qa.attempt", "technical_qa.attempt", "content_qa.production", "continuity_qa.attempt", "production.finalize"]) expect(byKind[k]?.status, k).toBe("COMPLETE");
+    expect(byKind["production.finalize"].dependsOn).toHaveLength(4); // finalize waits for all three QA tasks
     expect(byKind["identity_qa.attempt"].agentId).toBe("IDENTITY_QA");
     const [p] = await r.list("productions");
     expect(p).toMatchObject({ status: "REVIEW", identityVersion: "SIE-IDENTITY-v1.0" });

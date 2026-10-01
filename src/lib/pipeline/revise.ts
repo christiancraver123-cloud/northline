@@ -6,13 +6,14 @@ import { loadReferences, selectReferences } from "@/lib/references/service";
 import type { Deps } from "./deps";
 import { traceOf } from "./deps";
 import { buildPrompts } from "./prompts";
+import { activeQa } from "./qa";
 import { saveBrief } from "./brief";
 import { createShotAsset, runImageJob } from "./generate";
 
 /** Plain-language feedback from a production's latest QA results + operator notes. Lock ids are kept so the prompt builder can restate the positive rule. */
 export async function collectFeedback(repo: Repo, productionId: string, attemptId: string | null, operatorNotes = ""): Promise<{ feedback: string[]; failedShots: number[] }> {
   const assets = (await repo.list("assets", { productionId })).filter((a) => a.current && a.attemptId === attemptId);
-  const results = await repo.list("qaResults", { productionId });
+  const results = activeQa(await repo.list("qaResults", { productionId }));
   const feedback: string[] = [];
   const failed = new Set<number>();
   for (const a of assets) {

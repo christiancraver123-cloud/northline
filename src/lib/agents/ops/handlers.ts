@@ -8,6 +8,7 @@ import { CreateRequestSchema } from "@/lib/orchestrator/contracts";
 import { executeCreate, defaultDeps, completeAttempt, type Deps } from "@/lib/orchestrator/execute";
 import { regenerateProduction } from "@/lib/pipeline/revise";
 import { runContentQa, runIdentityQa, runTechnicalQa, type VisionInspector } from "@/lib/pipeline/qa";
+import { runContinuityQa, isSequence } from "@/lib/pipeline/continuity";
 import { finalizeAttempt } from "@/lib/pipeline/finalize";
 import { loadIdentity } from "@/lib/identity/service";
 import { loadReferences } from "@/lib/references/service";
@@ -18,10 +19,10 @@ import { buildCreatorsReport, buildStatusReport, countBy, explainQa, type Report
 import { ensureApprovalWait, logEvent } from "./service";
 import type { LlmRequest } from "@/lib/llm/types";
 
-export interface LlmOutcome { text: string | null; provider: string | null; model: string | null; error: string | null; usedFallback: boolean; attempted: boolean }
+export interface LlmOutcome { text: string | null; provider: string | null; model: string | null; error: string | null; errorKind?: "unavailable" | "rate_limited" | "auth" | "failed" | null; retryAfterSec?: number | null; usedFallback: boolean; attempted: boolean }
 export interface HandlerCtx {
   /** Route a model call through the provider router (per-agent preference, fallback policy, usage tracking). text=null → no model output. */
-  llm: (req: LlmRequest) => Promise<LlmOutcome>;
+  llm: (req: LlmRequest, opts?: { probe?: boolean }) => Promise<LlmOutcome>;
   repo: Repo; task: AgentTask; runId: string; origin: "demo" | "live";
   log: (kind: string, message: string, o?: { level?: "info" | "warn" | "error"; data?: Record<string, unknown>; agent?: AgentCode }) => Promise<void>;
   report: (d: ReportDraft, agent?: AgentCode) => Promise<AgentReport>;
@@ -180,8 +181,10 @@ const productionCreate: Handler = async (c) => {
 /** Vision inspector backed by the model router (per-agent preference; identity-critical kinds only use an explicitly configured provider). */
 function visionOf(c: HandlerCtx): VisionInspector {
   return async (req) => {
-    const o = await c.llm({ system: req.system, prompt: req.prompt, images: req.images, json: true, maxOutputTokens: 1500, temperature: 0 });
-    return { text: o.text, provider: o.provider, model: o.model, error: o.error ?? (o.attempted ? null : "no vision-capable provider is configured for this agent (set a preferred provider in Agent settings)") };
+    // retryAttempt > 1 = a deliberate retry after backoff: re-probe the SAME provider even though its failure cooldown is active.
+    const o = await c.llm({ system: req.system, prompt: req.prompt, images: req.images, json: true, maxOutputTokens: 1500, temperature: 0 }, { probe: (req.retryAttempt ?? 1) > 1 });
+    const transient = !o.text && (o.errorKind === "unavailable" || o.errorKind === "rate_limited") && o.attempted;
+    return { text: o.text, provider: o.provider, model: o.model, error: o.error ?? (o.attempted ? null : "no vision-capable provider is configured for this agent (set a preferred provider in Agent settings)"), transient, retryAfterMs: o.retryAfterSec ? o.retryAfterSec * 1000 : null };
   };
 }
 
@@ -191,8 +194,11 @@ export async function enqueueQaFamily(repo: Repo, parent: AgentTask, productionI
   const idq = await enqueue(repo, { ...base, agentId: "IDENTITY_QA", kind: "identity_qa.attempt", title: `Identity QA: ${code}` });
   const tq = await enqueue(repo, { ...base, agentId: "CONTENT_QA", kind: "technical_qa.attempt", title: `Technical QA: ${code}` });
   const cq = await enqueue(repo, { ...base, agentId: "CONTENT_QA", kind: "content_qa.production", title: `Content QA: ${code}` });
-  const fin = await enqueue(repo, { ...base, agentId: "PRODUCTION_MANAGER", kind: "production.finalize", title: `Finalize: ${code}`, dependsOn: [idq.id, tq.id, cq.id] });
-  return [idq, tq, cq, fin];
+  // Multi-frame productions are also judged as a SEQUENCE (same person/outfit/jewelry/hair/time-of-day/signage...).
+  const frames = (await repo.list("assets", { productionId })).filter((a) => a.current && a.kind !== "REEL");
+  const seq = isSequence(frames) ? await enqueue(repo, { ...base, agentId: "IDENTITY_QA", kind: "continuity_qa.attempt", title: `Continuity QA: ${code}` }) : null;
+  const fin = await enqueue(repo, { ...base, agentId: "PRODUCTION_MANAGER", kind: "production.finalize", title: `Finalize: ${code}`, dependsOn: [idq.id, tq.id, cq.id, ...(seq ? [seq.id] : [])] });
+  return [idq, tq, cq, ...(seq ? [seq] : []), fin];
 }
 
 async function attemptCtx(c: HandlerCtx) {
@@ -200,15 +206,16 @@ async function attemptCtx(c: HandlerCtx) {
   const [p, attempt] = await Promise.all([c.repo.get("productions", productionId), c.repo.get("generationAttempts", attemptId)]);
   if (!p || !attempt) throw new Error("Production or attempt not found.");
   const deps: Deps = { ...defaultDeps(), ...c.deps, origin: c.origin, vision: visionOf(c), trace: async (agent, kind, message, o) => { await c.log(kind, message, { ...o, agent }); } };
-  const assets = (await c.repo.list("assets", { productionId })).filter((a) => a.attemptId === attemptId && a.kind !== "REEL" && a.status === "RAW");
-  return { p, attempt, deps, assets };
+  const only = Array.isArray(c.task.input.assetIds) ? (c.task.input.assetIds as string[]) : null;
+  const assets = (await c.repo.list("assets", { productionId })).filter((a) => a.attemptId === attemptId && a.kind !== "REEL" && a.status === "RAW" && (!only || only.includes(a.id)));
+  return { p, attempt, deps, assets, rerun: c.task.input.rerun === true };
 }
 
 const identityQaAttempt: Handler = async (c) => {
-  const { p, attempt, deps, assets } = await attemptCtx(c);
+  const { p, attempt, deps, assets, rerun } = await attemptCtx(c);
   const { identity } = await loadIdentity(c.repo, p.talent[0]);
   await c.log("LOAD_IDENTITY", `Loaded ${identity.id} and ${assets.length} asset(s) of attempt ${attempt.attemptNo} for Identity QA`);
-  const rs = await runIdentityQa(c.repo, deps, p, attempt, assets, identity, await loadReferences(c.repo, p.talent[0]));
+  const rs = await runIdentityQa(c.repo, deps, p, attempt, assets, identity, await loadReferences(c.repo, p.talent[0]), { promptRules: !rerun });
   const inspected = rs.filter((r) => r.inspectedImage).length;
   return { output: { results: rs.map((r) => ({ id: r.id, assetId: r.assetId, status: r.status, method: r.method })), inspectedImages: inspected }, summary: `${rs.length} identity result(s); ${inspected} visually inspected; ${rs.filter((r) => r.status === "MANUAL_REVIEW_REQUIRED").length} need manual review` };
 };
@@ -216,6 +223,15 @@ const technicalQaAttempt: Handler = async (c) => {
   const { p, attempt, deps, assets } = await attemptCtx(c);
   const rs = await runTechnicalQa(c.repo, deps, p, attempt, assets);
   return { output: { results: rs.map((r) => ({ id: r.id, assetId: r.assetId, status: r.status, method: r.method })) }, summary: `${rs.length} technical result(s); ${rs.filter((r) => r.inspectedImage).length} visually inspected` };
+};
+const continuityQaAttempt: Handler = async (c) => {
+  const { p, attempt, deps } = await attemptCtx(c);
+  const brief = await c.repo.get("generationBriefs", attempt.briefId);
+  // the sequence = the production's CURRENT frames (latest attempt per shot), not just this attempt's subset
+  const frames = (await c.repo.list("assets", { productionId: p.id })).filter((a) => a.current && a.kind !== "REEL" && a.status === "RAW");
+  const rs = await runContinuityQa(c.repo, deps, p, attempt, frames, brief?.data.continuitySpec);
+  const visual = rs.find((r) => r.method === "vision_model" || r.method === "manual");
+  return { output: { results: rs.map((r) => ({ id: r.id, status: r.status, method: r.method, retry: r.retry })), inspectedImages: rs.filter((r) => r.inspectedImage).length }, summary: rs.length ? `${p.code} continuity: ${visual?.status ?? "n/a"}${visual?.retry?.exhausted ? ` (inspector unavailable after ${visual.retry.attempts} attempt(s))` : ""}` : `${p.code}: not a multi-frame sequence` };
 };
 const contentQaProduction: Handler = async (c) => {
   const { p, attempt, deps } = await attemptCtx(c);
@@ -289,7 +305,7 @@ export { summarise };
 export const HANDLERS: Record<string, Handler> = {
   "strategist.concepts": strategistConcepts, "director.concepts": directorConcepts, "growth.recommendations": growthRecommendations,
   "performance.report": performanceReport, "identity_qa.review": identityReview, "content_qa.review": contentReview, "content_qa.audit": contentAudit,
-  "production.create": productionCreate, "identity_qa.attempt": identityQaAttempt, "technical_qa.attempt": technicalQaAttempt, "content_qa.production": contentQaProduction, "production.finalize": productionFinalize, "production.regenerate": productionRegenerate, "production.digest": productionDigest, "orchestrator.report": orchestratorReport, "orchestrator.consolidate": consolidate,
+  "production.create": productionCreate, "identity_qa.attempt": identityQaAttempt, "continuity_qa.attempt": continuityQaAttempt, "technical_qa.attempt": technicalQaAttempt, "content_qa.production": contentQaProduction, "production.finalize": productionFinalize, "production.regenerate": productionRegenerate, "production.digest": productionDigest, "orchestrator.report": orchestratorReport, "orchestrator.consolidate": consolidate,
 };
 /** Kinds whose dependencies may be FAILED/CANCELLED (they consolidate whatever completed). */
 export const PARTIAL_DEPS_OK = new Set(["orchestrator.consolidate"]);

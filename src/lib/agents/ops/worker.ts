@@ -95,8 +95,8 @@ async function runTask(repo: Repo, task: AgentTask, opts: ProcessOptions, router
   const handler = HANDLERS[task.kind];
   const calls = { n: 0, tokens: 0, tokensKnown: true, cost: 0, costKnown: true, provider: null as string | null, model: null as string | null, fallback: false };
 
-  const llm = async (req: LlmRequest): Promise<LlmOutcome> => {
-    const out = await router.run(task.agentId, task.kind, req, agent?.config.model);
+  const llm = async (req: LlmRequest, o?: { probe?: boolean }): Promise<LlmOutcome> => {
+    const out = await router.run(task.agentId, task.kind, req, agent?.config.model, o);
     for (const a of out.attempts) {
       await repo.insert("llmCalls", { runId: run.id, taskId: task.id, agentId: task.agentId, provider: a.provider, model: a.model, status: a.status, error: a.error, startedAt: a.startedAt, finishedAt: a.finishedAt, latencyMs: a.latencyMs, inputTokens: a.usage?.inputTokens ?? null, outputTokens: a.usage?.outputTokens ?? null, totalTokens: a.usage?.totalTokens ?? null, costUsd: a.costUsd, fallbackFrom: a.fallbackFrom, origin: task.origin });
       await logEvent(repo, task.agentId, a.status === "COMPLETE" ? "LLM_CALL" : "LLM_ATTEMPT_FAILED",
@@ -108,7 +108,7 @@ async function runTask(repo: Repo, task: AgentTask, opts: ProcessOptions, router
       if (out.result.usage?.totalTokens != null) calls.tokens += out.result.usage.totalTokens; else calls.tokensKnown = false;
       if (out.result.costUsd != null) calls.cost += out.result.costUsd; else calls.costKnown = false;
     }
-    return { text: out.result?.text ?? null, provider: out.result?.provider ?? null, model: out.result?.model ?? null, error: out.error?.message ?? null, usedFallback: out.usedFallback, attempted: out.attempts.length > 0 };
+    return { text: out.result?.text ?? null, provider: out.result?.provider ?? null, model: out.result?.model ?? null, error: out.error?.message ?? null, errorKind: out.error?.kind ?? null, retryAfterSec: out.error?.retryAfterSec ?? null, usedFallback: out.usedFallback, attempted: out.attempts.length > 0 };
   };
 
   const ctx: HandlerCtx = {

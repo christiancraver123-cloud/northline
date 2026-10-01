@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { getRepo } from "@/lib/db";
 import { approvalBlockers } from "@/lib/orchestrator/approvals";
-import { retryAssetAction, reelVideoAction, resubmitAction, regenerateAction } from "../../actions";
+import { retryAssetAction, reelVideoAction, resubmitAction, regenerateAction, rerunQaAction, deliveryAction } from "../../actions";
 import Link from "next/link";
 import { AssetTile, Btn, Card, DemoBadge, Empty, PageHeader, Pill, QaPill, StatusPill, TalentChips } from "@/components/ui";
 
@@ -50,11 +50,19 @@ export default async function ProductionDetail({ params, searchParams }: { param
             <div key={at.id} className="border-t border-edge py-2 text-[13px] first:border-0">
               <div className="flex flex-wrap items-center gap-2"><b>ATTEMPT-{String(at.attemptNo).padStart(2, "0")}</b><QaPill status={at.status} /><span className="text-faint">{at.trigger} · shots {at.shots.join(", ")} · {at.reason}</span></div>
               <div className="mt-1 flex flex-wrap gap-1.5">{ats.map((a) => <Link key={a.id} href={`/assets/${a.id}`} className="inline-flex items-center gap-1 font-mono text-[11px] text-blue2 hover:underline">{a.kind}-{String(a.seq).padStart(2, "0")}<QaPill status={a.qaStatus} /></Link>)}</div>
-              {qs.filter((q) => q.assetId === null).map((q) => <p key={q.id} className="mt-1 text-[12px] text-muted"><b>{q.kind}</b> ({q.method}): <QaPill status={q.status} /> {q.summary}{q.recommendation ? ` — ${q.recommendation}` : ""}</p>)}
+              {qs.filter((q) => q.assetId === null).sort((x, y) => x.createdAt.localeCompare(y.createdAt)).map((q) => <p key={q.id} className={`mt-1 text-[12px] text-muted ${q.supersededById ? "opacity-60" : ""}`}><b>{q.kind}</b> ({q.method}{(q.qaAttempt ?? 1) > 1 ? ` · evaluation #${q.qaAttempt}` : ""}): <QaPill status={q.status} />{q.supersededById ? <Pill>superseded · kept for audit</Pill> : null} {q.summary}{q.retry ? ` [retry ${q.retry.attempts}/${q.retry.maxAttempts}${q.retry.exhausted ? " — exhausted" : ""}]` : ""}{q.recommendation ? ` — ${q.recommendation}` : ""}</p>)}
               {at.feedback.length > 0 && <p className="mt-1 text-[12px] text-warn">Feedback used: {at.feedback.join(" | ")}</p>}
             </div>
           );
         })}
+        <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-edge pt-3">
+          <form action={rerunQaAction} className="flex flex-wrap items-center gap-2"><input type="hidden" name="productionId" value={p.id} />
+            <label className="text-[12px] text-muted"><input type="checkbox" name="kind" value="IDENTITY" defaultChecked className="mr-1" />Identity</label>
+            <label className="text-[12px] text-muted"><input type="checkbox" name="kind" value="TECHNICAL" defaultChecked className="mr-1" />Technical</label>
+            <label className="text-[12px] text-muted"><input type="checkbox" name="kind" value="CONTINUITY" defaultChecked className="mr-1" />Continuity</label>
+            <Btn>Re-run QA (no regeneration)</Btn></form>
+          <form action={deliveryAction}><input type="hidden" name="productionId" value={p.id} /><Btn>Create 4:5 delivery copies</Btn></form>
+        </div>
         {canRegenerate && (
           <form action={regenerateAction} className="mt-3 flex flex-wrap items-end gap-2 border-t border-edge pt-3"><input type="hidden" name="productionId" value={p.id} />
             <label className="min-w-64 flex-1 text-[12px] text-muted">Revision notes (optional) — hard-failed shots regenerate; if none failed, all shots do<input name="notes" maxLength={500} placeholder="e.g. keep the eyes exactly as in the master" /></label>

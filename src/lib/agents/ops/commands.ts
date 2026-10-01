@@ -47,6 +47,35 @@ export async function submitCreate(repo: Repo, input: CreateRequestInput | Creat
   return { task: done, result: ran[0], output };
 }
 
+export type QaKind = "IDENTITY" | "TECHNICAL" | "CONTINUITY";
+const QA_TASK: Record<QaKind, { agentId: AgentCode; kind: string; label: string }> = {
+  IDENTITY: { agentId: "IDENTITY_QA", kind: "identity_qa.attempt", label: "Identity QA" },
+  TECHNICAL: { agentId: "CONTENT_QA", kind: "technical_qa.attempt", label: "Technical QA" },
+  CONTINUITY: { agentId: "IDENTITY_QA", kind: "continuity_qa.attempt", label: "Continuity QA" },
+};
+
+/**
+ * Operator re-run of QA on EXISTING assets. NEVER regenerates or modifies an image: it only adds new QA evaluations (older ones are kept and
+ * superseded where appropriate) and re-finalizes the aggregate. Runs through the normal agent tasks, so routing, no-fallback policy,
+ * bounded retry and activity logging are identical to a first-time QA run.
+ */
+export async function rerunQa(repo: Repo, o: { productionId: string; attemptId?: string; assetIds?: string[]; kinds?: QaKind[]; createdBy?: string; deps?: Partial<Deps>; router?: Router; run?: boolean }) {
+  await ensureAgents(repo);
+  const p = await repo.get("productions", o.productionId);
+  if (!p) throw new Error("Production not found.");
+  const attemptId = o.attemptId ?? p.currentAttemptId;
+  if (!attemptId) throw new Error("This production has no attempt to re-run QA for.");
+  const kinds = o.kinds?.length ? o.kinds : (["IDENTITY", "TECHNICAL", "CONTINUITY"] as QaKind[]);
+  const input = { productionId: p.id, attemptId, rerun: true, ...(o.assetIds?.length ? { assetIds: o.assetIds } : {}) };
+  const base = { productionId: p.id, talent: p.talent[0], createdBy: o.createdBy ?? "operator", origin: p.origin, input };
+  const tasks: AgentTask[] = [];
+  for (const k of kinds) tasks.push(await enqueue(repo, { ...base, agentId: QA_TASK[k].agentId, kind: QA_TASK[k].kind, title: `Re-run ${QA_TASK[k].label}: ${p.code}${o.assetIds?.length ? ` (${o.assetIds.length} asset(s))` : ""}` }));
+  const fin = await enqueue(repo, { ...base, agentId: "PRODUCTION_MANAGER", kind: "production.finalize", title: `Finalize after QA re-run: ${p.code}`, dependsOn: tasks.map((t) => t.id) });
+  const ids = [...tasks.map((t) => t.id), fin.id];
+  if (o.run !== false) await processQueue(repo, { onlyIds: ids, trigger: "operator", deps: o.deps, router: o.router });
+  return { taskIds: ids, tasks: await Promise.all(ids.map(async (id) => (await repo.get("agentTasks", id))!)) };
+}
+
 export async function delegate(repo: Repo, agentId: AgentCode, talent: TalentCode | null, count: number, o: { createdBy?: string; run?: boolean; input?: Record<string, unknown> } = {}) {
   const kind = ASSIGNABLE[agentId];
   if (!kind) throw new Error(`${agentId} has no standalone assignment type.`);

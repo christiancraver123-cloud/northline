@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getRepo } from "@/lib/db";
 import { REFERENCE_TYPES } from "@/lib/domain/types";
-import { promoteAssetAction } from "../../actions";
+import { deliveryAction, promoteAssetAction, rerunQaAction } from "../../actions";
 import { AssetTile, Btn, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, QaPill, StatusPill } from "@/components/ui";
 
 export default async function AssetDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; promoted?: string }> }) {
@@ -16,6 +16,8 @@ export default async function AssetDetail({ params, searchParams }: { params: Pr
     a.attemptId ? repo.get("generationAttempts", a.attemptId) : null, a.generationJobId ? repo.get("providerJobs", a.generationJobId) : null,
     repo.list("qaResults", { productionId: a.productionId }), Promise.all(a.referenceIds.map((r) => repo.get("referenceAssets", r))), repo.list("approvals", { productionId: a.productionId }), repo.list("providerJobs", { assetId: a.id }),
   ]);
+  // tolerate a database that has not had migration 0006 applied yet (the table does not exist there)
+  const derivs = (await repo.list("assetDerivatives", { sourceAssetId: a.id }).catch(() => [])).sort((x, y) => x.createdAt.localeCompare(y.createdAt));
   const myQa = qa.filter((q) => q.assetId === a.id || (q.assetId === null && q.attemptId === a.attemptId));
   const myApproval = approvals.find((x) => x.selectedAssetIds.includes(a.id));
   const row = (k: string, v: React.ReactNode) => <><dt className="text-muted">{k}</dt><dd className="min-w-0 break-words">{v}</dd></>;
@@ -46,14 +48,33 @@ export default async function AssetDetail({ params, searchParams }: { params: Pr
           </Card>
           <Card>
             <h2 className="mb-2 font-bold">QA results</h2>
-            {myQa.length === 0 ? <Empty>No QA results yet.</Empty> : myQa.map((q) => (
-              <div key={q.id} className="border-t border-edge py-2 text-[12.5px] first:border-0">
-                <div className="flex flex-wrap items-center gap-2"><b>{q.kind}</b><span className="font-mono text-[11px] text-faint">{q.method}</span><QaPill status={q.status} />{q.inspectedImage ? <Pill tone="ok">image inspected{q.provider ? ` · ${q.provider}/${q.model}` : ""}</Pill> : <Pill>image not inspected</Pill>}</div>
+            {myQa.length === 0 ? <Empty>No QA results yet.</Empty> : [...myQa].sort((x, y) => x.createdAt.localeCompare(y.createdAt)).map((q) => (
+              <div key={q.id} className={`border-t border-edge py-2 text-[12.5px] first:border-0 ${q.supersededById ? "opacity-60" : ""}`}>
+                <div className="flex flex-wrap items-center gap-2"><b>{q.kind}</b><span className="font-mono text-[11px] text-faint">{q.method}</span><QaPill status={q.status} />{q.inspectedImage ? <Pill tone="ok">image inspected{q.provider ? ` · ${q.provider}/${q.model}` : ""}</Pill> : <Pill>image not inspected</Pill>}
+                  {(q.qaAttempt ?? 1) > 1 && <Pill>evaluation #{q.qaAttempt}</Pill>}{q.supersededById ? <Pill>superseded · kept for audit</Pill> : <Pill tone="info">active</Pill>}</div>
                 <p className="mt-1 text-muted">{q.summary}</p>
+                {q.retry && <p className={q.retry.exhausted ? "text-warn" : "text-faint"}>Retry: {q.retry.attempts}/{q.retry.maxAttempts} attempt(s){q.retry.note ? ` · ${q.retry.note}` : ""}{q.retry.errors.length ? ` · ${q.retry.errors.join("; ")}` : ""}</p>}
                 {q.findings.map((f, i) => <p key={i} className={f.severity === "HARD_FAIL" ? "text-bad" : "text-warn"}>• {f.severity}: {f.message}</p>)}
                 {q.recommendation && <p className="text-faint">Recommendation: {q.recommendation}</p>}
               </div>
             ))}
+            {a.storagePath && (
+              <form action={rerunQaAction} className="mt-3 flex flex-wrap items-center gap-2 border-t border-edge pt-3"><input type="hidden" name="productionId" value={a.productionId} /><input type="hidden" name="assetId" value={a.id} /><input type="hidden" name="back" value={`/assets/${a.id}`} />
+                <label className="text-[12px] text-muted"><input type="checkbox" name="kind" value="IDENTITY" defaultChecked className="mr-1" />Identity</label>
+                <label className="text-[12px] text-muted"><input type="checkbox" name="kind" value="TECHNICAL" defaultChecked className="mr-1" />Technical</label>
+                <Btn>Re-run QA (no regeneration)</Btn></form>
+            )}
+          </Card>
+          <Card>
+            <h2 className="mb-2 font-bold">4:5 delivery copy</h2>
+            <p className="mb-2 text-[12px] text-faint">The RAW original above is never modified. A delivery copy is a separate cropped file (never stretched) linked back to this asset.</p>
+            {derivs.map((d) => (
+              <div key={d.id} className="mb-2 flex items-start gap-3 border-t border-edge pt-2 text-[12.5px] first:border-0">
+                <a href={`/api/derivatives/${d.id}/file`} target="_blank" rel="noreferrer"><img src={`/api/derivatives/${d.id}/file`} alt={d.filename} className="h-28 w-auto rounded-md border border-edge" /></a>
+                <div className="min-w-0"><b className="font-mono text-[12px]">{d.filename}</b><br /><span className="text-muted">{d.width}×{d.height} · {d.bytes} bytes · derived from RAW sha256 {d.sourceSha256?.slice(0, 12)}…</span><br /><span className="text-faint">crop box {JSON.stringify((d.derivation as { cropBox?: unknown }).cropBox)}</span></div>
+              </div>
+            ))}
+            {a.storagePath && !derivs.length && <form action={deliveryAction}><input type="hidden" name="productionId" value={a.productionId} /><input type="hidden" name="assetId" value={a.id} /><input type="hidden" name="back" value={`/assets/${a.id}`} /><Btn>Create 4:5 delivery copy</Btn></form>}
           </Card>
           {prompt && <Card><h2 className="mb-2 font-bold">Prompt (v{prompt.version})</h2><p className="text-[12.5px] text-[#c6cdf0]">{prompt.positive}</p><p className="mt-2 text-[12px] text-faint">{prompt.negative}</p></Card>}
           {jobs.length > 1 && <Card><h2 className="mb-2 font-bold">Job history</h2>{jobs.map((j) => <div key={j.id} className="flex justify-between border-t border-edge py-1 text-[12px] first:border-0"><span className="font-mono">retry {j.retryCount}{j.failureCategory ? ` · ${j.failureCategory}` : ""}{j.error ? ` · ${j.error}` : ""}</span><StatusPill status={j.state} /></div>)}</Card>}

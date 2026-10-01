@@ -217,3 +217,20 @@ export async function deliveryAction(formData: FormData) {
   revalidatePath("/", "layout");
   redirect(`${back}${err ? `?error=${encodeURIComponent(err)}` : ""}`);
 }
+
+// ---- Command Center: emergency pause + unblock ------------------------------------------------
+import { RepoGovernorStore } from "@/lib/governor/repo-store";
+import { governorEnabled } from "@/lib/governor/service";
+import { unblockTask } from "@/lib/agents/ops/service";
+export async function setPauseAction(formData: FormData) {
+  await requireOperator();
+  if (!governorEnabled()) redirect("/?error=" + encodeURIComponent("Budget governor is OFF (NORTHLINE_GOVERNOR); the pause switch is unavailable. NORTHLINE_PAUSE=true still pauses generation."));
+  const enabled = String(formData.get("enabled")) === "true", reason = String(formData.get("reason") ?? "").trim().slice(0, 200) || null;
+  await new RepoGovernorStore(await getRepo()).setPause({ enabled, reason, setBy: "operator", setAt: new Date().toISOString() });
+  revalidatePath("/"); redirect("/");
+}
+export async function unblockTaskAction(formData: FormData) {
+  await requireOperator();
+  await unblockTask(await getRepo(), String(formData.get("id") ?? ""));
+  revalidatePath("/"); redirect("/");
+}

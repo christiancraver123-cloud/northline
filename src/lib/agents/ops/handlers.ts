@@ -18,6 +18,7 @@ import { creativeDirector } from "@/lib/agents/agents";
 import { buildCreatorsReport, buildStatusReport, countBy, explainQa, type ReportDraft } from "./reports";
 import { ensureApprovalWait, logEvent } from "./service";
 import type { LlmErrorKind, LlmRequest } from "@/lib/llm/types";
+import { SYSTEM_HANDLERS } from "@/lib/jobs/system-handlers";
 
 export interface LlmOutcome { text: string | null; provider: string | null; model: string | null; error: string | null; errorKind?: LlmErrorKind | null; retryAfterSec?: number | null; usedFallback: boolean; attempted: boolean }
 export interface HandlerCtx {
@@ -306,6 +307,7 @@ export const HANDLERS: Record<string, Handler> = {
   "strategist.concepts": strategistConcepts, "director.concepts": directorConcepts, "growth.recommendations": growthRecommendations,
   "performance.report": performanceReport, "identity_qa.review": identityReview, "content_qa.review": contentReview, "content_qa.audit": contentAudit,
   "production.create": productionCreate, "identity_qa.attempt": identityQaAttempt, "continuity_qa.attempt": continuityQaAttempt, "technical_qa.attempt": technicalQaAttempt, "content_qa.production": contentQaProduction, "production.finalize": productionFinalize, "production.regenerate": productionRegenerate, "production.digest": productionDigest, "orchestrator.report": orchestratorReport, "orchestrator.consolidate": consolidate,
+  ...SYSTEM_HANDLERS,
 };
 /** Kinds whose dependencies may be FAILED/CANCELLED (they consolidate whatever completed). */
 export const PARTIAL_DEPS_OK = new Set(["orchestrator.consolidate"]);

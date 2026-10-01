@@ -4,6 +4,7 @@ import { authorized } from "@/lib/auth";
 import { readOnlyResponse } from "@/lib/runtime/mode";
 import { getRepo } from "@/lib/db";
 import { CreateRequestSchema } from "@/lib/orchestrator/contracts";
+import { autonomousGenerationEnabled } from "@/lib/governor/service";
 import { submitCreate } from "@/lib/agents/ops/commands";
 
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ export async function POST(req: Request) {
   if (!authorized(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
   const ro = readOnlyResponse();
   if (ro) return NextResponse.json(ro, { status: 403 });
+  // Machine-triggered generation is OFF by default (spends image budget with no operator present). Enable only with NORTHLINE_AUTONOMOUS_GENERATION=on.
+  if (!autonomousGenerationEnabled()) return NextResponse.json({ ok: false, error: "autonomous generation is disabled", hint: "Operators start generation from the Northline UI. Set NORTHLINE_AUTONOMOUS_GENERATION=on to allow machine-triggered generation." }, { status: 403 });
   let body: unknown;
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "invalid JSON" }, { status: 400 }); }
   const hdrKey = req.headers.get("idempotency-key");

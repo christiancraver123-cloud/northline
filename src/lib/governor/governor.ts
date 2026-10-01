@@ -48,7 +48,7 @@ export async function reserveImage(store: GovernorStore, req: ImageRequest, env:
   const pause = await checkPause(store, env);
   if (!pause.allowed) return { decision: pause, reservation: null };
   let limits: BudgetLimit[];
-  try { limits = applicableImageLimits(await store.listLimits(), req); } catch { return { decision: { allowed: false, code: "GOVERNOR_UNAVAILABLE", reason: "Budget limits could not be read; refusing to generate (fail closed)." }, reservation: null }; }
+  try { limits = applicableImageLimits(await store.listLimits(), req); if (!limits.some((l) => l.scope === "global")) throw new Error("no global daily image limit"); } catch { return { decision: { allowed: false, code: "GOVERNOR_UNAVAILABLE", reason: "Budget limits could not be read; refusing to generate (fail closed)." }, reservation: null }; }
   const taken: CounterRef[] = [];
   for (const l of limits) {
     const ref = refFor(l, now);

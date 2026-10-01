@@ -66,3 +66,13 @@ SIE Sienna Veyra · ALE Alessia Varenne · MIL Mila Calloway · VES Vesper Laure
 - Route model calls only through `lib/llm/router.ts`. Identity-critical kinds never fall back silently. Cost = null unless real usage + operator pricing exist.
 - Every run records the ACTUAL provider/model (`rules` when no model ran).
 - Tests run the migrations against embedded Postgres (PGlite) — keep migrations and `records.ts` in sync (`src/lib/db/migrations.test.ts`).
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

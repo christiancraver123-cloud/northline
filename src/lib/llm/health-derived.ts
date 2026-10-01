@@ -32,7 +32,7 @@ const jobFailure = (j: ProviderJob): { state: HealthState; reason: string } | nu
     case "auth": return { state: "AUTH_ERROR", reason: "credentials rejected" };
     case "rate_limited": return { state: "RATE_LIMITED", reason: "rate limited" };
     case "provider_unavailable": case "timeout": return { state: "UNAVAILABLE", reason: j.failureCategory };
-    case "content_policy": case "invalid_request": return "ignore"; // the request was the problem, not the provider
+    case "content_policy": case "invalid_request": case "budget_blocked": return "ignore"; // the request was the problem, not the provider
     default: return { state: "DEGRADED", reason: j.failureCategory ?? "failed" };
   }
 };

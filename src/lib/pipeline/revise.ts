@@ -12,6 +12,7 @@ import { contentHistory } from "./content";
 import type { CreativeInput } from "@/lib/orchestrator/contracts";
 import { saveBrief } from "./brief";
 import { createShotAsset, runImageJob } from "./generate";
+import { guardAttempts } from "@/lib/governor/service";
 
 /** Plain-language feedback from a production's latest QA results + operator notes. Lock ids are kept so the prompt builder can restate the positive rule. */
 export async function collectFeedback(repo: Repo, productionId: string, attemptId: string | null, operatorNotes = ""): Promise<{ feedback: string[]; failedShots: number[] }> {
@@ -40,6 +41,12 @@ export async function regenerateProduction(repo: Repo, deps: Deps, productionId:
   const last = attempts.at(-1);
   const prevBrief = last ? await repo.get("generationBriefs", last.briefId) : null;
   if (!last || !prevBrief) throw new Error("No previous attempt/brief to revise.");
+  // BUDGET GUARD (lifetime attempt caps): checked BEFORE anything is created, so a blocked request leaves no attempt/brief/approval change behind.
+  const assetRows = await repo.list("assets", { productionId });
+  const perShot = (n: number) => assetRows.filter((a) => a.seq === n).length;
+  const wanted = o.shots?.length ? o.shots : [...new Set(assetRows.map((a) => a.seq))];
+  const cap = await guardAttempts(repo, { creator: p.talent[0], provider: deps.image.name, productionId, attemptsForProduction: attempts.length, attemptsForAsset: Math.max(0, ...wanted.map(perShot)) });
+  if (!cap.allowed) throw new Error(`Budget limit: ${cap.reason}`);
   // Supersede any pending approval: the operator asked for another round.
   for (const ap of (await repo.list("approvals", { productionId })).filter((x) => x.state === "PENDING")) await repo.update("approvals", ap.id, { state: "REVISION_REQUESTED", decidedBy: "system", decidedAt: new Date().toISOString(), notes: "Superseded by regeneration" });
   const fb = await collectFeedback(repo, productionId, last.id, o.notes);

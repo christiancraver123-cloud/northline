@@ -6,6 +6,7 @@ import { selectReferences } from "@/lib/references/service";
 import { ProviderError, type FailureCategory, type ImageReference } from "@/lib/providers/types";
 import type { Deps } from "./deps";
 import { traceOf } from "./deps";
+import { guardImage, settleImage } from "@/lib/governor/service";
 
 export const filenameFor = (code: string, kind: string, seq: number, status: string, ext: string, attemptNo = 1) =>
   `${code}_${kind}-${String(seq).padStart(2, "0")}${attemptNo > 1 ? `_A${String(attemptNo).padStart(2, "0")}` : ""}_${status}.${ext}`;
@@ -37,6 +38,16 @@ export async function runImageJob(repo: Repo, deps: Deps, j: ShotJob, runId: str
     retryCount: j.retryOf ? j.retryOf.retryCount + 1 : 0, retryOfJobId: j.retryOf?.id ?? null, startedAt: null, finishedAt: null, failureCategory: null, metadata: {}, origin: deps.origin,
   });
   await repo.update("assets", j.asset.id, { status: "PENDING", generationJobId: job.id, referenceIds: used.map((r) => r.id) });
+  // BUDGET GUARD: reserve immediately before the provider call. A refusal makes NO provider call and is recorded on the job (category budget_blocked).
+  const gctx = { creator: j.production.talent[0], provider: deps.image.name, productionId: j.production.id, jobId: job.id };
+  const guard = await guardImage(repo, gctx);
+  if (!guard.allowed) {
+    const msg = guard.decision.allowed ? "blocked" : guard.decision.reason;
+    job = await setJob(repo, job.id, { state: "FAILED", finishedAt: new Date().toISOString(), error: msg, failureCategory: "budget_blocked", metadata: { blockedCode: guard.decision.allowed ? null : guard.decision.code } });
+    await repo.update("assets", j.asset.id, { status: "FAILED" });
+    await tr("PRODUCTION_MANAGER", "BUDGET_BLOCKED", `${j.production.code} shot ${j.asset.seq}: ${msg}`, { level: "warn" });
+    return { ok: false, error: msg, job };
+  }
   job = await setJob(repo, job.id, { state: "SUBMITTED", startedAt: new Date().toISOString() });
   job = await setJob(repo, job.id, { state: "PROCESSING" });
   try {
@@ -52,6 +63,7 @@ export async function runImageJob(repo: Repo, deps: Deps, j: ShotJob, runId: str
     job = await setJob(repo, job.id, { state: "SUCCEEDED", finishedAt: new Date().toISOString(), model: r.model, costUsd: r.costUsd, credits: r.credits, externalId: r.externalId, metadata: r.metadata ?? {} });
     await repo.update("assets", j.asset.id, { status: "RAW", provider: r.provider, model: r.model, storagePath, ...meta });
     if (r.costUsd) await repo.update("productions", j.production.id, { costUsd: j.production.costUsd + r.costUsd });
+    await settleImage(repo, guard, { kind: "success" }, gctx);
     return { ok: true, error: null, job };
   } catch (e) {
     const pe = e instanceof ProviderError ? e : null;
@@ -59,6 +71,7 @@ export async function runImageJob(repo: Repo, deps: Deps, j: ShotJob, runId: str
     const category: FailureCategory = pe?.category ?? "unknown";
     job = await setJob(repo, job.id, { state: "FAILED", finishedAt: new Date().toISOString(), error: msg, failureCategory: category });
     await repo.update("assets", j.asset.id, { status: "FAILED" });
+    await settleImage(repo, guard, { kind: "failure", category }, gctx);
     return { ok: false, error: msg, job };
   }
 }

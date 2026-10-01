@@ -186,7 +186,7 @@ export type AgentCode =
   | "ORCHESTRATOR" | "CONTENT_STRATEGIST" | "CREATIVE_DIRECTOR" | "PROMPT_ENGINEER" | "CAPTION_WRITER"
   | "IDENTITY_QA" | "CONTENT_QA" | "PRODUCTION_MANAGER" | "PERFORMANCE_AGENT" | "GROWTH_STRATEGIST";
 export type AgentStatus = "WORKING" | "QUEUED" | "WAITING" | "SCHEDULED" | "IDLE" | "FAILED" | "PAUSED";
-export type TaskStatus = "QUEUED" | "RUNNING" | "WAITING" | "COMPLETE" | "FAILED" | "CANCELLED";
+export type TaskStatus = "QUEUED" | "RUNNING" | "WAITING" | "COMPLETE" | "FAILED" | "CANCELLED" | "BLOCKED";
 
 /** Persistent agent identity + operator-editable config. Status is DERIVED from tasks/schedules, never stored. */
 export interface Agent extends Base {
@@ -204,6 +204,18 @@ export interface AgentTask extends Base {
   /** Optional dedupe key: enqueue with an existing key returns the existing task (idempotent retries from n8n). */
   idempotencyKey: string | null;
   waitingOn: string | null; runAfter: string | null; startedAt: string | null; finishedAt: string | null; error: string | null;
+  /** Columns from migrations 0007/0008. OPTIONAL in TS and never written until those migrations are applied (the durable-job flag guards every write). */
+  blockedReason?: string | null; maxAttempts?: number; failureClass?: string | null; heartbeatAt?: string | null;
+}
+/** Migration 0007. Operator flags; row key 'emergency_pause' is the global kill switch. */
+export interface SystemFlag extends Base { key: string; enabled: boolean; reason: string | null; setBy: string | null; setAt: string | null }
+export interface BudgetLimitRow extends Base { scope: "global" | "creator" | "provider"; scopeKey: string; metric: "images_per_day" | "attempts_per_asset" | "attempts_per_production"; limitValue: number; enabled: boolean; note: string | null }
+export interface BudgetCounter extends Base { metric: string; scope: string; scopeKey: string; windowKey: string; used: number }
+/** Append-only audit of every budget decision. */
+export interface BudgetDecision extends Base {
+  decision: "ALLOWED" | "BLOCKED" | "RELEASED" | "SETTLED_BILLABLE" | "SETTLED_UNKNOWN"; metric: string; scope: string; scopeKey: string;
+  limitValue: number | null; usedBefore: number | null; requested: number; usedAfter: number | null; blockedReason: string | null;
+  creator: string | null; provider: string | null; productionId: string | null; jobId: string | null; note: string | null;
 }
 export interface AgentRun extends Base {
   agentId: AgentCode; taskId: string | null; trigger: "queue" | "schedule" | "event" | "operator" | "n8n";
@@ -240,6 +252,7 @@ export interface Tables {
   canonicalIdentities: CanonicalIdentityRecord; generationBriefs: GenerationBrief; generationAttempts: GenerationAttempt; qaResults: QaResult; assetDerivatives: AssetDerivative;
   agents: Agent; agentTasks: AgentTask; agentRuns: AgentRun; agentEvents: AgentEvent; agentMessages: AgentMessage;
   agentReports: AgentReport; agentSchedules: AgentSchedule; llmCalls: LlmCall;
+  systemFlags: SystemFlag; budgetLimits: BudgetLimitRow; budgetCounters: BudgetCounter; budgetDecisions: BudgetDecision;
   campaigns: Campaign; productions: Production; assets: Asset; referenceAssets: ReferenceAsset; prompts: Prompt;
   captions: Caption; approvals: Approval; workflowRuns: WorkflowRun; providerJobs: ProviderJob;
   calendarEntries: CalendarEntry; storylines: Storyline; launchStates: LaunchState; analytics: AnalyticsRecord;
@@ -250,4 +263,5 @@ export const TABLE_NAMES: TableName[] = [
   "providerJobs", "calendarEntries", "storylines", "launchStates", "analytics",
   "agents", "agentTasks", "agentRuns", "agentEvents", "agentMessages", "agentReports", "agentSchedules", "llmCalls",
   "canonicalIdentities", "generationBriefs", "generationAttempts", "qaResults", "assetDerivatives",
+  "systemFlags", "budgetLimits", "budgetCounters", "budgetDecisions",
 ];

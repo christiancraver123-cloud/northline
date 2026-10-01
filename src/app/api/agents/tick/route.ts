@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     const repo = await getRepo();
     await ensureAgents(repo);
     const due = await materializeDueSchedules(repo);
-    const res = await processQueue(repo, { max: 25, trigger: "queue" });
+    const res = await processQueue(repo, { max: 25, trigger: "queue", background: true });
     return NextResponse.json({ ok: true, scheduledTasksCreated: due.length, tasksRun: res.ran.length, results: res.ran, remainingQueued: res.remainingQueued });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "internal error" }, { status: 500 });

@@ -5,6 +5,9 @@ import { ROSTER } from "@/lib/talent/roster";
 import { snapshots } from "@/lib/agents/ops/service";
 import { deriveProviderHealth, HEALTH_TONE } from "@/lib/llm/health-derived";
 import { summarizeUsage } from "@/lib/usage";
+import { loadCommandCenter } from "@/lib/ops/load";
+import { CommandCenterPanel } from "@/components/command-center";
+import { isReadOnly } from "@/lib/runtime/mode";
 import { AgentStatusPill, Avatar, Card, ProviderPill, ago, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips } from "@/components/ui";
 
 export default async function Dashboard() {
@@ -13,6 +16,7 @@ export default async function Dashboard() {
   const [prods, approvals, jobs, runs, cal, launch] = await Promise.all([
     repo.list("productions").then(newestFirst), repo.list("approvals", { state: "PENDING" }), repo.list("providerJobs"), repo.list("workflowRuns").then(newestFirst), repo.list("calendarEntries"), repo.list("launchStates"),
   ]);
+  const cc = await loadCommandCenter(repo);
   const failedJobs = jobs.filter((j) => j.state === "FAILED");
   const health = deriveProviderHealth({ llmCalls, jobs });
   const usage7 = summarizeUsage({ jobs, llmCalls, tasks, since: new Date(Date.now() - 7 * 86_400_000) });
@@ -40,6 +44,7 @@ export default async function Dashboard() {
   return (
     <>
       <PageHeader title="Dashboard" sub="What needs you right now." actions={<Link href="/create" className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold">+ Create</Link>} />
+      <CommandCenterPanel cc={cc} readOnly={isReadOnly()} />
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {kpis.map(([l, n, href, tone]) => <Link key={l} href={href}><Card><div className="text-xs text-muted">{l}</div><div className={`font-mono text-3xl font-semibold ${tone}`}>{n}</div></Card></Link>)}
       </div>

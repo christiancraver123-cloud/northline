@@ -57,6 +57,7 @@ export async function enqueue(repo: Repo, t: EnqueueInput): Promise<AgentTask> {
   return task;
 }
 
+import { durableEnabled } from "@/lib/jobs/durable";
 const TERMINAL: TaskStatus[] = ["COMPLETE", "FAILED", "CANCELLED"];
 
 export interface AgentSnapshot {
@@ -136,6 +137,13 @@ export async function reprioritize(repo: Repo, taskId: string, priority: number)
   await repo.update("agentTasks", taskId, { priority: Math.min(5, Math.max(1, priority)) });
   await logEvent(repo, t.agentId, "REPRIORITISED", `Priority of "${t.title}" set to ${priority}`, { taskId });
 }
+/** Durable mode: release a BLOCKED task (quota refreshed, key fixed, pause lifted...). Operator action; the task keeps its attempt history. */
+export async function unblockTask(repo: Repo, taskId: string) {
+  const t = await repo.get("agentTasks", taskId);
+  if (!t || t.status !== "BLOCKED") throw new Error("Only blocked tasks can be unblocked.");
+  await repo.update("agentTasks", taskId, { status: "QUEUED", blockedReason: null, runAfter: null, error: null });
+  await logEvent(repo, t.agentId, "TASK_UNBLOCKED", `Unblocked: ${t.title}`, { taskId });
+}
 export async function cancelTask(repo: Repo, taskId: string) {
   const t = await repo.get("agentTasks", taskId);
   if (!t || TERMINAL.includes(t.status) || t.status === "RUNNING") throw new Error("Only queued or waiting tasks can be cancelled.");
@@ -145,7 +153,8 @@ export async function cancelTask(repo: Repo, taskId: string) {
 export async function retryTask(repo: Repo, taskId: string) {
   const t = await repo.get("agentTasks", taskId);
   if (!t || t.status !== "FAILED") throw new Error("Only failed tasks can be retried.");
-  await repo.update("agentTasks", taskId, { status: "QUEUED", error: null, finishedAt: null, startedAt: null });
+  // Durable mode: an explicit operator retry grants a fresh attempt allowance (every earlier attempt stays in agent_runs).
+  await repo.update("agentTasks", taskId, { status: "QUEUED", error: null, finishedAt: null, startedAt: null, ...(durableEnabled() ? { attempts: 0, failureClass: null, blockedReason: null, runAfter: null } : {}) });
   await logEvent(repo, t.agentId, "TASK_RETRY", `Retrying: ${t.title}`, { taskId });
 }
 

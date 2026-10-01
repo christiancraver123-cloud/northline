@@ -399,3 +399,20 @@ describe("OpenAI provider behaviour", () => {
     delete process.env.OPENAI_API_KEY;
   });
 });
+
+describe("operator-supplied creative direction", () => {
+  it("replaces the rule-based Creative Director and reaches the persisted brief and prompts", async () => {
+    const r = fresh();
+    const creative = {
+      hook: "Sienna documents her morning", location: "Miami neighborhood", outfit: "white ribbed tank and sage-green leggings", lighting: "soft morning daylight", storyBeat: "one continuous morning",
+      shots: [{ n: 1, kind: "IMG" as const, description: "post-class mirror selfie in the studio" }, { n: 2, kind: "IMG" as const, description: "leaving the studio" }],
+    };
+    const out = await executeCreate(r, { talent: ["SIE"], format: "CAROUSEL", concept: "Pilates to coffee", asset_count: 2, creative }, mkDeps());
+    const prod = (await r.get("productions", out.productions[0].id))!;
+    expect(prod.brief?.outfit).toBe(creative.outfit);
+    const prompts = await r.list("prompts", { productionId: prod.id });
+    expect(prompts).toHaveLength(2);
+    expect(prompts[0].positive).toContain("post-class mirror selfie in the studio");
+    expect(prompts[0].positive).toContain(creative.outfit);
+  });
+});

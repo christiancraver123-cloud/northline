@@ -8,6 +8,8 @@ export interface PlannedProduction {
   concept: string;
   assetCount?: number;
   role: "solo" | "creator-perspective" | "shared";
+  /** Operator-supplied creative direction; replaces the rule-based Creative Director for this production. */
+  creative?: CreateRequest["creative"];
 }
 export interface Task { id: string; agent: string; dependsOn: string[]; summary: string }
 export interface TaskPlan {
@@ -33,7 +35,7 @@ export function planRequest(req: CreateRequest): TaskPlan {
     if (req.talent.length > 1) productions.push({ talent: [...req.talent], contentType: "REEL", concept, role: "shared" });
   } else {
     for (const t of req.talent) for (let i = 0; i < req.quantity; i++) {
-      productions.push({ talent: [t], contentType: req.format, concept, assetCount: req.asset_count, role: "solo" });
+      productions.push({ talent: [t], contentType: req.format, concept, assetCount: req.asset_count, role: "solo", creative: req.creative });
     }
   }
 

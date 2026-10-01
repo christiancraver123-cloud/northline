@@ -82,8 +82,8 @@ async function produce(repo: Repo, pp: PlannedProduction, platform: "instagram" 
   // 2. strategy + creative direction
   const strat = strategist(primary, pp.contentType, pp.concept, ctx);
   await tr("CONTENT_STRATEGIST", "CONCEPT_CHOSEN", `Concept "${strat.concept}" — ${strat.angle}`);
-  const cd: CreativeBrief = creativeDirector(primary, pp.contentType, strat.concept, strat.angle, ctx, pp.assetCount);
-  await tr("CREATIVE_DIRECTOR", "BRIEF_CREATED", `Creative direction for ${code}: ${cd.location}, ${cd.lighting}, ${cd.shots.length} shot(s)`);
+  const cd: CreativeBrief = pp.creative ? { ...pp.creative, shots: pp.creative.shots.map((s) => ({ ...s, kind: s.kind ?? "IMG" })) } : creativeDirector(primary, pp.contentType, strat.concept, strat.angle, ctx, pp.assetCount);
+  await tr("CREATIVE_DIRECTOR", "BRIEF_CREATED", `${pp.creative ? "Operator-supplied c" : "C"}reative direction for ${code}: ${cd.location}, ${cd.lighting}, ${cd.shots.length} shot(s)`);
   const scope = pp.talent.length === 1 ? "SOLO" : pp.talent.length === 2 ? "DUO" : pp.talent.length >= 6 ? "ALL_SIX" : "GROUP";
 
   let production: Production = await repo.insert("productions", {

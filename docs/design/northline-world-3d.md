@@ -1,4 +1,5 @@
-# Northline World — true 3D explorable coastal town (DESIGN, Phase 0)
+# Northline World — true 3D explorable coastal town (DESIGN; POC slice built — see northline-world-poc-report.md)
+> **POC STATUS:** the simulated vertical slice is playable at `/world-dev` (development / explicit local play only; 404 in the deployed read-only build). Results and how to play: `docs/design/northline-world-poc-report.md`. Phase 2+ (real state, the town) has NOT started and awaits the owner's feel judgement.
 **Status: design only.** No world code, no migration, no provider call, no production data touched. Sequenced **after** the governor + durable-job live validation (migrations 0007/0008 applied and Stage 1 proven). This supersedes any earlier "lightweight SVG/isometric V1" assumption: the product direction is a real-time 3D town in the browser; the SVG map survives only as the accessibility/low-power fallback (§14).
 
 **The rule that shapes everything:** the world is a *spatial interface over real operations*. Supabase + the Northline backend + the durable job system are the only authority. The 3D client renders a *derived* state, never decides, never gates work, and closing it stops nothing.

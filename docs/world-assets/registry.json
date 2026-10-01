@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "asset_id": "NL-PROC-TERRAIN-001", "name": "Coastal terrain, beach, road, boardwalk (procedural)", "kind": "internal-procedural",
+      "source": "internal-procedural", "vendor_creator": "Northline (generated in code, src/lib/world/layout.ts + src/world-dev/scene)", "license": "Northline-owned (no third-party content)",
+      "commercial_use": "yes", "modification_rights": "unrestricted (owned)", "redistribution_restrictions": "none",
+      "repo_redistribution_permitted": true, "attribution_required": false, "attribution_text": "",
+      "original_format": "TypeScript (procedural geometry)", "optimized_format": "runtime BufferGeometry / InstancedMesh", "triangles": null, "texture_resolution": "none (vertex colours)", "lod_available": true,
+      "northline_usage": "POC world terrain, shoreline, road, boardwalk", "date_acquired": "2026-10-01", "license_evidence": null, "files": []
+    },
+    {
+      "asset_id": "NL-PROC-BUILDING-001", "name": "Northline Studio building + pergola workstation (procedural)", "kind": "internal-procedural",
+      "source": "internal-procedural", "vendor_creator": "Northline (generated in code)", "license": "Northline-owned (no third-party content)",
+      "commercial_use": "yes", "modification_rights": "unrestricted (owned)", "redistribution_restrictions": "none",
+      "repo_redistribution_permitted": true, "attribution_required": false, "attribution_text": "",
+      "original_format": "TypeScript (procedural geometry)", "optimized_format": "runtime meshes, shared materials", "triangles": null, "texture_resolution": "256px canvas textures (generated)", "lod_available": false,
+      "northline_usage": "POC hero building placeholder (a custom hero asset may replace it later)", "date_acquired": "2026-10-01", "license_evidence": null, "files": []
+    },
+    {
+      "asset_id": "NL-PROC-VEGETATION-001", "name": "Palms, tufts, rocks (procedural, instanced)", "kind": "internal-procedural",
+      "source": "internal-procedural", "vendor_creator": "Northline (generated in code)", "license": "Northline-owned (no third-party content)",
+      "commercial_use": "yes", "modification_rights": "unrestricted (owned)", "redistribution_restrictions": "none",
+      "repo_redistribution_permitted": true, "attribution_required": false, "attribution_text": "",
+      "original_format": "TypeScript (procedural geometry)", "optimized_format": "InstancedMesh with wind-sway shader patch", "triangles": null, "texture_resolution": "none", "lod_available": true,
+      "northline_usage": "POC coastal vegetation", "date_acquired": "2026-10-01", "license_evidence": null, "files": []
+    },
+    {
+      "asset_id": "NL-PROC-PROPS-001", "name": "Umbrellas, loungers, benches, lamps, planters, lifeguard tower (procedural)", "kind": "internal-procedural",
+      "source": "internal-procedural", "vendor_creator": "Northline (generated in code)", "license": "Northline-owned (no third-party content)",
+      "commercial_use": "yes", "modification_rights": "unrestricted (owned)", "redistribution_restrictions": "none",
+      "repo_redistribution_permitted": true, "attribution_required": false, "attribution_text": "",
+      "original_format": "TypeScript (procedural geometry)", "optimized_format": "InstancedMesh", "triangles": null, "texture_resolution": "none", "lod_available": false,
+      "northline_usage": "POC environmental props", "date_acquired": "2026-10-01", "license_evidence": null, "files": []
+    },
+    {
+      "asset_id": "NL-PROC-AVATARS-001", "name": "Operator + role-coded agent avatars (procedural humanoid rig)", "kind": "internal-procedural",
+      "source": "internal-procedural", "vendor_creator": "Northline (generated in code)", "license": "Northline-owned (no third-party content)",
+      "commercial_use": "yes", "modification_rights": "unrestricted (owned)", "redistribution_restrictions": "none",
+      "repo_redistribution_permitted": true, "attribution_required": false, "attribution_text": "",
+      "original_format": "TypeScript (procedural geometry + procedural animation)", "optimized_format": "shared geometries/materials", "triangles": null, "texture_resolution": "none", "lod_available": false,
+      "northline_usage": "POC operator avatar and one operational agent (NOT a creator avatar; creator avatars are deferred by design and never derived from canonical references)", "date_acquired": "2026-10-01", "license_evidence": null, "files": []
+    },
+    {
+      "asset_id": "NL-PROC-SKY-WATER-001", "name": "Sky dome, clouds, animated ocean shader (procedural)", "kind": "internal-procedural",
+      "source": "internal-procedural", "vendor_creator": "Northline (generated in code)", "license": "Northline-owned (no third-party content)",
+      "commercial_use": "yes", "modification_rights": "unrestricted (owned)", "redistribution_restrictions": "none",
+      "repo_redistribution_permitted": true, "attribution_required": false, "attribution_text": "",
+      "original_format": "GLSL shaders (own code)", "optimized_format": "ShaderMaterial", "triangles": null, "texture_resolution": "none", "lod_available": true,
+      "northline_usage": "POC sky and ocean", "date_acquired": "2026-10-01", "license_evidence": null, "files": []
+    }
+  ]
+}

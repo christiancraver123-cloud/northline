@@ -1,0 +1,30 @@
+import { chromium } from "playwright-core";
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome", args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
+const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, hasTouch: true, isMobile: true, userAgent: "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1" });
+const pg = await ctx.newPage(); const errs = []; pg.on("pageerror", (e) => errs.push(e.message.slice(0, 300))); pg.on("console", (m) => { if (m.type() === "error" && !/ERR_CERT|404/.test(m.text())) errs.push(m.text().slice(0, 200)); });
+let pass = 0, fail = 0; const ok = (n, c, d = "") => { c ? pass++ : fail++; console.log(`${c ? "PASS" : "FAIL"}  ${n}${d ? "  — " + d : ""}`); };
+await pg.goto(""+(process.env.WORLD_BASE||"http://localhost:3200")+"/world-dev?perf=1", { waitUntil: "domcontentloaded", timeout: 120000 });
+await pg.waitForSelector("[data-testid=world-root] canvas", { timeout: 120000 }); await pg.waitForTimeout(3000);
+const tierTxt = await pg.locator("[data-testid=perf]").innerText().catch(() => ""); ok("phone auto-selects LOW tier", /tier\s+LOW/.test(tierTxt), (tierTxt.match(/tier\s+\S+/) || [""])[0]);
+await pg.screenshot({ path: process.argv[2] + "/m_start.png" });
+await pg.getByText("Tap to start").click().catch(() => pg.mouse.click(200, 400)); await pg.waitForTimeout(1500);
+ok("virtual joystick, FLY, MAP, FOLLOW and TALK controls are present", (await pg.locator("[aria-label='Movement joystick']").count()) === 1 && (await pg.getByText("FLY", { exact: true }).count()) === 1 && (await pg.getByText("MAP", { exact: true }).count()) === 1 && (await pg.getByText("TALK", { exact: true }).count()) === 1);
+const st = () => pg.evaluate(() => window.__worldDev.state());
+const s0 = await st();
+// drag the joystick up (forward) with synthetic pointer events
+await pg.evaluate(async () => { const el = document.querySelector("[aria-label='Movement joystick']"), r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, fire = (t, y) => el.dispatchEvent(new PointerEvent(t, { pointerId: 7, clientX: cx, clientY: y, bubbles: true, pointerType: "touch" })); fire("pointerdown", cy); fire("pointermove", cy - 50); await new Promise((r) => setTimeout(r, 3500)); fire("pointerup", cy - 50); });
+const s1 = await st(); ok("joystick moves the player", Math.hypot(s1.player.x - s0.player.x, s1.player.z - s0.player.z) > 0.8, `moved ${Math.hypot(s1.player.x - s0.player.x, s1.player.z - s0.player.z).toFixed(1)} m`);
+// right-side drag rotates the camera
+const yaw0 = await pg.evaluate(() => 0); await pg.evaluate(async () => { const el = document.elementFromPoint(300, 300); const fire = (t, x) => el.dispatchEvent(new PointerEvent(t, { pointerId: 9, clientX: x, clientY: 300, bubbles: true, pointerType: "touch" })); fire("pointerdown", 300); for (let i = 1; i <= 8; i++) { fire("pointermove", 300 - i * 12); await new Promise((r) => setTimeout(r, 50)); } fire("pointerup", 200); });
+await pg.waitForTimeout(800);
+// fly toggle, map, follow, talk buttons
+await pg.getByText("FLY", { exact: true }).click(); await pg.waitForTimeout(4000); ok("FLY button takes off", (await st()).player.locomotion === "AIR");
+ok("▲ ▼ buttons appear while flying", (await pg.getByLabel("Ascend").count()) === 1 && (await pg.getByLabel("Descend").count()) === 1);
+await pg.getByText("WALK", { exact: true }).click(); await pg.waitForTimeout(600);
+await pg.getByText("MAP", { exact: true }).click(); await pg.waitForTimeout(3500); ok("MAP button → overview", (await st()).mode.view === "OVERVIEW"); await pg.screenshot({ path: process.argv[2] + "/m_overview.png" });
+await pg.getByText("BACK", { exact: true }).click(); await pg.waitForTimeout(3500);
+await pg.evaluate(() => { window.__worldDev.setAgent(2, 17.5); window.__worldDev.teleportPlayer(2, 14.7); window.__worldDev.setLook(0, 0.2); window.__worldDev.setPlayer({ locomotion: "GROUND", y: 0.78 }); }); await pg.waitForTimeout(2000);
+await pg.getByText("TALK", { exact: true }).click(); await pg.waitForTimeout(1500); ok("TALK opens the status sheet", (await pg.locator("[role=dialog]").count()) === 1); await pg.screenshot({ path: process.argv[2] + "/m_panel.png" });
+const box = await pg.locator("[role=dialog]").boundingBox(); ok("panel fits the phone (no horizontal overflow)", box.x >= 0 && box.x + box.width <= 390.5, `x=${box.x.toFixed(0)} w=${box.width.toFixed(0)}`);
+ok("no page scroll width overflow", await pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
+console.log(`errors: ${errs.length}`); errs.slice(0, 5).forEach((e) => console.log("  ", e)); console.log(`${pass} passed, ${fail} failed`); await b.close(); process.exit(fail || errs.length ? 1 : 0);

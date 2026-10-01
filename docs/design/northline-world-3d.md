@@ -3,6 +3,15 @@
 
 **The rule that shapes everything:** the world is a *spatial interface over real operations*. Supabase + the Northline backend + the durable job system are the only authority. The 3D client renders a *derived* state, never decides, never gates work, and closing it stops nothing.
 
+## LOCKED PRODUCT DECISIONS (operator, supersede anything below that conflicts)
+1. **Art style: STYLIZED REALISM** — a premium modern 3D management/simulation look with beautiful coastal architecture and high-quality water, vegetation and lighting, built from *simplified* geometry and materials. Not low-poly, not photorealistic, not cartoonish. **Performance outranks graphical excess.** Practical meaning: clean architectural forms with bevels and believable material response (PBR-lite, a small shared material set, baked-looking ambient occlusion in textures/vertex colours), soft stylised lighting with a single shadowed sun, rich but cheap water (shader-based) and instanced, silhouette-driven vegetation. "Expensive" comes from composition, colour grading, lighting and polish, not from polygon count. Any asset that exceeds the §2 budgets is simplified, not the budget raised.
+2. **Performance targets:** desktop / capable Mac **60 FPS**; mobile **stable 30 FPS minimum**. Three quality tiers **LOW / MEDIUM / HIGH**; the initial tier is chosen automatically from device capability, with manual override added later (not a POC requirement). **LOW** reduces: shadows, vegetation density, reflections, draw distance, LOD distances, ambient NPCs, particles and water complexity — and **never removes core gameplay or interactions** (movement, camera modes, agents, interaction panels, fast travel, HUD all work identically on every tier).
+3. **Avatars:** the POC requires exactly two kinds — the **user/operator avatar** and **operational-agent avatars**. Agents must be **visually distinguishable by role** (role colour/outfit accent + a role glyph/badge + silhouette prop such as tablet, clipboard, headset, loupe; never colour alone, for accessibility). **Creator avatars are NOT in the POC.** Creator 3D appearance is **never derived automatically from canonical image references**; it needs a separate future design and approval process (identity-sensitive).
+4. **Agent conversations (Phase 6) are approved as a direction, with conditions.** They may eventually call a text LLM, but: a **separate conversation budget/cap**; **governor integration** (reserve/audit/pause, same fail-closed rules); answers built only from **real Northline operational state** (no fabricated current work — "nothing recorded" is a valid answer); **no hidden chain-of-thought** exposed; **no permission bypass**; **a conversation can never directly trigger generation or publishing** — any action it proposes goes through the normal Northline authorization, approval and budget systems like any other operator action. Target questions: "What are you working on?", "Why is this production blocked?", "What needs my approval?", "What happened with Sienna?", "What did you finish today?" — all answerable from recorded state (tasks, runs, events, QA results, approvals, `blocked_reason`). **No LLM conversation calls are approved during the POC** (the POC's panel is a static status panel from fixture state).
+5. **Audio is deferred.** The POC and the initial operational world must work perfectly with no audio; audio is never an architectural dependency (no code path may require an AudioContext, user-gesture unlock or audio asset). Future direction: ocean/waves, wind/palms, footsteps, doors, town and building ambience, vehicles, marina, spatial audio; voice conversations are a later phase.
+6. **POC priority: prove the EXPERIENCE before building the town.** Gate: governor + durable-job reliability phases complete first. The POC builds only one coastal section and answers one question — *"Does moving around Northline and interacting with an agent feel smooth, premium and genuinely fun?"* The full town is **not** started until that is answered (§POC).
+7. **Long-term experience to preserve:** fly over Northline → see an agent walking below → descend beside them → walk up → interact → ask what they're working on → inspect their *actual* task → follow them to their next destination. Operational information always comes from real Northline state; the physical world only makes it explorable. Every architectural choice (continuous camera-mode transitions, agent entities with real task bindings, FOLLOW mode, interaction panels built from the snapshot, grounded conversation packets) exists to keep this loop possible.
+
 ---
 ## 1. Rendering-stack recommendation
 | Choice | Recommendation | Why / what we rejected |
@@ -13,7 +22,7 @@
 | Post-processing | Minimal: tone mapping + optional bloom/vignette on high tier only | Every full-screen pass costs fill-rate on phones. |
 | State (client) | `zustand` (tiny) for world UI state; **entities live in refs/typed arrays, not React state** | Per-frame data must never trigger React re-renders. |
 | Pathfinding | Own A* on a small **waypoint/portal graph** (~300–600 nodes) | A navmesh library is overkill for a dense small town and adds weight; revisit `three-pathfinding` if interiors need free-form navigation. |
-| Assets | glTF 2.0, **meshopt/Draco** geometry, **KTX2/Basis** textures, shared atlases; procedural low-poly generated in code for the POC | No licensed/AI-generated art decisions are made here (art direction is a human call, §19). |
+| Assets | glTF 2.0, **meshopt/Draco** geometry, **KTX2/Basis** textures, shared atlases; procedural low-poly generated in code for the POC | Stylised-realism target (see Locked Decisions). Licensing/provenance of any external asset is still recorded per asset; no licensed/AI-generated art is committed without review. |
 | Loading | `next/dynamic(..., { ssr: false })` for `/world`; world code is its **own chunk** | The dashboard bundle must not grow by one byte. |
 
 New dependencies (POC only, isolated to the world chunk): `three`, `@react-three/fiber`, `@react-three/drei`, `zustand`. Confirm versions and size at install; record the gzipped chunk size in the POC report.
@@ -21,7 +30,7 @@ New dependencies (POC only, isolated to the world chunk): `three`, `@react-three
 ## 2. Performance strategy (budgets are product requirements)
 | Budget | Desktop (capable) | Mobile / low tier |
 |---|---|---|
-| Frame rate | 60 FPS target, 1% low ≥ 45 | 30–60 FPS, never <24 |
+| Frame rate | **60 FPS** target, 1% low ≥ 45 | **stable 30 FPS minimum** (never < 24) |
 | Draw calls | ≤ 300 | ≤ 120 |
 | Triangles in view | ≤ 500 k | ≤ 150 k |
 | Textures (GPU) | ≤ 128 MB, atlases ≤ 2048² | ≤ 48 MB, ≤ 1024² |
@@ -109,9 +118,9 @@ interface AgentAvatar {                  // client-only presentation
 - **Supported actions only:** *View task*, *View production*, *View creator*, *View recent work*, *View decision record*, *Open in Command Center* (all deep links to existing pages). Disabled/hidden until real: assign task, pause agent, change priority, request report (Phase 6, routed through the existing server actions, `requireOperator`, read-only mode and the budget governor — the world adds **no new authority**).
 - **"Reasoning":** only operator-intended records — recorded agent events, task output summaries, QA findings, decision notes (`agent_events`, `agent_runs.summary`, `qa_results`). Never hidden chain-of-thought; if no rationale was recorded the panel says "no recorded rationale".
 
-## 10. Agent conversations (Phase 6+, after the controls are safe)
+## 10. Agent conversations (Phase 6+, APPROVED as direction — no LLM calls in the POC)
 - Conversation goes through the **existing agent chat/LLM router**, grounded by a server-built context packet for *that agent* (current task, production, recent events, governor/pause state). The model is instructed to answer only from the packet and to say "I don't know / nothing recorded" otherwise. Answers are labelled with provider/model like the rest of the app.
-- Cost control: chat calls are LLM (text) calls through the router, never image generation; they are rate-limited and visible in usage. In read-only mode chat is disabled. The sample answer in the brief is only valid if those facts are actually in the packet.
+- Cost control (locked): conversation has its **own budget/cap** (separate metric in `budget_limits`, e.g. `chat_messages_per_day`, added by a future approved migration — not now) enforced by the **governor** (reserve → audit → release/settle, emergency pause and `NORTHLINE_PAUSE` apply, fail closed). Chat calls are text-LLM calls through the router, never image generation, rate-limited and visible in usage. In read-only mode chat is disabled. A conversation message can never enqueue generation/publishing by itself: proposed actions are presented as normal operator actions requiring the usual authorization/approval, and every action is attributed to the operator, not the model. The sample answer in the brief is only valid if those facts are actually in the packet.
 
 ## 11. Jobs, creators, agent-to-agent
 - **Production tokens:** one floating card/tablet per *in-flight, awaiting-approval or failed-needing-attention* production (bounded, ≤ 30; the rest are summarised at their building). Position = the building of its current stage; failure/blocked = red beacon at the owning building; awaiting approval = tokens stack in Approval Villa.
@@ -129,12 +138,12 @@ interface AgentAvatar {                  // client-only presentation
 
 ## 14. Accessibility and fallback
 - **No-WebGL / low-power / `?mode=list`**: automatic fallback to a 2D "World Map" (SVG schematic of the same snapshot) and, below that, the existing Command Center list. Both read the *same* snapshot.
-- **Keyboard-only**: full navigation with keys + Tab to fast-travel menu and interact prompts; **screen reader**: an `aria-live` log of significant changes ("Creative Director started task …", "approval waiting") and a text alternative of the HUD; **`prefers-reduced-motion`**: no camera easing longer than 200 ms, no ambient crowd, no handoff animation; **colour-blind-safe** status colours + shape/icon redundancy; adjustable motion/sensitivity; audio off by default.
+- **Keyboard-only**: full navigation with keys + Tab to fast-travel menu and interact prompts; **screen reader**: an `aria-live` log of significant changes ("Creative Director started task …", "approval waiting") and a text alternative of the HUD; **`prefers-reduced-motion`**: no camera easing longer than 200 ms, no ambient crowd, no handoff animation; **colour-blind-safe** status colours + shape/icon redundancy; adjustable motion/sensitivity; audio is **not part of V1** (see Locked Decision 5): nothing depends on it, and any future audio is opt-in with a mute default.
 - The world is **never the only way** to reach any operational function.
 
 ## 15. Mobile controls and quality tiers
 - Left virtual joystick (move), right-side drag (look), context **Interact** button, **Walk/Fly** toggle, object tap, fast-travel sheet, 44 px minimum targets (matches the existing touch-target CSS). Pointer-lock only on desktop; `touch-action: none` on the canvas; safe-area insets honoured.
-- **Quality tiers** (auto, user-overridable): *High* (desktop dGPU: shadows 2048, DPR ≤ 2, bloom, 40 ambient), *Medium*, *Low* (phone: DPR 1–1.25, no shadows, no post, 12 ambient, simplified water). Initial tier from `renderer.capabilities`, `navigator.hardwareConcurrency`/`deviceMemory` heuristics, then the runtime `PerformanceMonitor` steps up/down with hysteresis.
+- **Quality tiers LOW / MEDIUM / HIGH** (initial tier automatic; manual override later): *HIGH* (desktop/Mac: shadows 2048, DPR ≤ 2, bloom, 40 ambient, full water + vegetation); *MEDIUM* (shadows 1024, DPR ≤ 1.5, reduced ambient/vegetation, no bloom); *LOW* (phone: DPR 1–1.25, no or minimal shadows, ~40% vegetation density, no reflections, shorter draw distance and LOD ranges, ≤ 12 ambient, minimal particles, simplified water shader). Every tier keeps all core interactions. Initial tier from `renderer.capabilities`, `navigator.hardwareConcurrency`/`deviceMemory` heuristics, then the runtime `PerformanceMonitor` steps up/down with hysteresis.
 
 ## 16. Realtime synchronization and reconnect
 - Client keeps `lastSeq`; each poll/stream message carries the *full* snapshot (small, a few KB) so there is **no replay protocol to get wrong**. Missing messages are harmless.
@@ -156,34 +165,40 @@ Auth gate on `/world` and `/api/world/*`; service-role key stays server-side; re
 | Safety | tests that the fixture route is absent/inert in production builds; that the world makes zero provider/LLM calls; that no mutating endpoint is reachable from the world in read-only mode |
 
 ## 19. Development phases
-0. **Design** — this document. 1. **Prototype** (below). 2. **Real state**: adapter + `/api/world/state`, bind HUD/agents/jobs/budget/approvals/provider health. 3. **Town**: districts, boardwalk, creator homes, nav graph. 4. **Life**: pathfinding for all agents, idle behaviour, handoffs, ambient crowd. 5. **Interiors**: priority interiors lazily loaded. 6. **Operations**: safe controls + grounded conversations via existing server actions. 7. **Polish**: day/night, weather, ocean, vehicles, boats, audio.
+0. **Design** — this document. 1. **Prototype** (below). 2. **Real state**: adapter + `/api/world/state`, bind HUD/agents/jobs/budget/approvals/provider health. 3. **Town**: districts, boardwalk, creator homes, nav graph. 4. **Life**: pathfinding for all agents, idle behaviour, handoffs, ambient crowd. 5. **Interiors**: priority interiors lazily loaded. 6. **Operations**: safe controls + grounded conversations via existing server actions. 7. **Polish**: day/night, weather, ocean, vehicles, boats; **audio (deferred, optional, non-architectural)**; creator avatars only after their own design/approval process.
 **Dev fixture isolation (Phase 1 rule):** simulated agents/jobs live only in `src/world-dev/fixtures/*` and are reachable only at `/world-dev` (a route that 404s when `NODE_ENV === "production"`), carry a permanent **SIMULATED — NOT REAL STATE** banner, and the production `/world` can neither import them nor fall back to them.
 
 ---
-# Technical proof-of-concept plan (Phase 1)
-**Goal:** prove smooth movement and rendering on the real stack with a *tiny* town and fixture state — answer "is the browser-native 3D approach fast and good enough?" before committing to the full build. **Cost: engineering time only; no provider credits, no DB writes, no migrations.**
+# Technical proof-of-concept plan (Phase 1) — updated with locked decisions
+**Gate:** starts only after the governor + durable-job reliability phases are complete (0007/0008 applied, flags verified live, Stage 1 proven). **Goal:** prove the *experience* before building the town — answer: *"Does moving around Northline and interacting with an agent feel smooth, premium and genuinely fun?"* **Cost: engineering time only; no provider credits, no LLM calls, no DB writes, no migrations.**
 
-**Scope (greybox, procedural, no external art):** ~120 × 120 m island: ocean plane + beach + one boardwalk + 6–8 palms (instanced) + **one building** (Creative Studio exterior with a door) + one lightweight interior stub + **one agent** (capsule/low-poly humanoid with idle/walk clips) + path graph (~15 nodes) + the **player** (WALK, FLY, OVERVIEW, FOCUS/FOLLOW agent) + interact prompt + minimal HUD + `?perf=1` overlay + mobile joystick scaffold.
-**Fixture:** a scripted scenario (agent "starts task" → walks to the building → "works" → returns to idle/ambient) clearly labelled SIMULATED.
+**Scope — one beautiful coastal section, nothing more:** ocean + beach (stylised-realism water shader, foam, sand, a short boardwalk), a handful of instanced palms/coastal plants, **one Northline building** (exterior with a real entrance; interior only a stub), **one operational agent** (role-distinguishable avatar: role colour + glyph + prop), **the operator avatar**, and:
+- movement: **walk, run, fly**; **overview** mode; **smooth eased camera transitions** between modes/targets (never an abrupt cut unless "teleport" is chosen); FOLLOW the agent;
+- the agent: **pathfinding** on a small waypoint graph, **idle movement** (cosmetic, labelled), a scripted SIMULATED task cycle (idle → walk to building → work → back);
+- **walk-up interaction** ([ INTERACT ]) opening a static **agent status panel** built from a fixture snapshot with the real `WorldSnapshot` shape (name, role, `opState`, task, production, time active, attempt, provider, budget status, next step, recent activity);
+- **mobile**: left virtual joystick, right camera drag, interact button, walk/fly toggle, object tap;
+- **quality tiers LOW / MEDIUM / HIGH** with automatic initial selection and runtime adaptation (manual override not required yet), and **performance instrumentation** (`?perf=1`: fps, 1% low, frame-time graph, draw calls, triangles, texture/geometry memory, tier, DPR);
+- **fixture state** only under `/world-dev` (404 in production), permanent **SIMULATED — NOT REAL STATE** banner, never mixed with real state.
+**Explicitly out of the POC:** the town, interiors, creator avatars, audio, any LLM/chat call, real operational state, any write/control, vehicles/boats/weather/day-night.
 
 **Work breakdown (≈ 5–7 focused days):**
-1. Scaffold `/world-dev` (client-only, dynamic import, prod-404), install `three`/`@react-three/fiber`/`drei`/`zustand`, record chunk size.
-2. Layout JSON + procedural greybox + instanced props; ocean shader.
-3. Player controller (walk/run/fly, damping, collision) + camera modes + eased focus/follow.
-4. Nav graph + A* + agent steering + animation state machine (idle/walk/work) + handoff stub.
-5. Interact system + operator panel built from a fixture *snapshot object that has the real `WorldSnapshot` shape* (so Phase 2 only swaps the source).
-6. Quality tiers + `PerformanceMonitor`, perf overlay, mobile controls, reduced-motion + no-WebGL fallback stub.
-7. Tests (controller dt-independence, A* reachability, camera state machine, label rule), Playwright smoke, measurements, POC report.
+1. Scaffold `/world-dev` (client-only, dynamic import, prod-404); install `three`/`@react-three/fiber`/`drei`/`zustand`; record chunk size.
+2. Coastal-section layout JSON + procedural stylised-realism greybox → art pass (materials, lighting, colour grade, water, instanced vegetation) tuned against the §2 budgets.
+3. Player controller (walk/run/fly, damping, collision) + camera modes + eased transitions/FOLLOW.
+4. Nav graph + A* + agent steering + animation state machine (idle/walk/work) + role-distinguishable avatar.
+5. Interaction system + status panel from the fixture snapshot.
+6. Quality tiers + `PerformanceMonitor`, perf overlay, mobile controls, reduced-motion and no-WebGL fallback stub.
+7. Tests, Playwright smoke, real-device measurements, POC report.
 
 **Acceptance criteria (go/no-go):**
-- Desktop (owner's Mac): sustained ≥ 55 FPS walking/flying across the island on High tier; ≤ 300 draw calls; first frame ≤ 4 s warm.
-- Phone: ≥ 30 FPS on Low tier with joystick controls; auto-tier drop works.
-- Movement feels smooth (damped accel/decel, no jitter at 30/60/144 Hz in tests); camera never snaps unless "teleport" is chosen.
-- Agent walks a valid route, never crosses the building/water; label correctly shows ambient vs working.
-- `/world-dev` returns 404 in production build; dashboard bundle size unchanged (world is a separate chunk); no network calls other than static assets.
-- **No-go triggers → re-evaluate the stack** (not default to Unity/Unreal): misses on the FPS budgets after the §2 optimisations, or unacceptable load time on phone. The POC report records the numbers either way.
+- *Feel (the primary criterion, judged by the owner):* movement, camera transitions and the walk-up interaction feel smooth, premium and fun; the look reads as "stylised realism", expensive but not heavy.
+- Mac/desktop: sustained **≈ 60 FPS** on HIGH (≥ 55 sustained, 1% low ≥ 45) across the section; ≤ 300 draw calls; first frame ≤ 4 s warm.
+- Phone: **stable 30 FPS** on the auto-selected tier (LOW/MEDIUM); the runtime tier-drop works; all interactions still work on LOW.
+- Agent walks only valid routes; avatars are distinguishable by role without relying on colour alone; ambient vs WORKING label rule holds.
+- `/world-dev` 404 in production; dashboard bundle unchanged (separate chunk); no network calls beyond static assets; works with no audio and no audio code path.
+- **No-go triggers → re-evaluate the stack** (not default to Unity/Unreal): missing the FPS budgets after the §2 optimisations, or a poor feel that tuning cannot fix. The report records numbers either way.
 
-**Deliverables:** POC code under `src/world-dev` + `src/lib/world` (pure logic + tests), a short report (`docs/design/northline-world-poc-report.md`) with measurements, screenshots/video, chunk sizes, and a recommended go/no-go + revised estimate for Phases 2–3.
+**Deliverables:** POC under `src/world-dev` + pure logic and tests in `src/lib/world`; `docs/design/northline-world-poc-report.md` (measurements on the owner's Mac and a phone, screenshots/video, chunk sizes, go/no-go, revised estimate). **Phase 2+ (real state, the town) only starts after the owner answers the feel question.**
 
-## Open decisions for the human (none taken)
-1. Art direction (stylised low-poly vs. semi-realistic) and asset sourcing/licences. 2. Mobile floor (which phones must hit 30 FPS). 3. Whether user avatar and creator avatars need any customisation/representation (creator appearance must never be derived from or substituted for canonical references). 4. Whether conversations (Phase 6) may call the text LLM and under what monthly cap. 5. Audio.
+## Remaining open decisions for the human
+1. Which specific phone models define the "stable 30 FPS" floor. 2. Asset sourcing/licensing for stylised-realism buildings and vegetation (procedural vs. licensed packs vs. commissioned). 3. The future creator-avatar design/approval process (not started, not needed for the POC). 4. The conversation budget/cap values (decided at Phase 6, with the governor metric added by an approved migration).

@@ -5,8 +5,9 @@ import { Card, Empty, PageHeader, Pill } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-interface Result { condition: string; label: string; storagePath: string; width: number; height: number; bytes: number; provider: string; model: string | null; size: string; latencyMs: number; referenceConfiguration: string[]; referenceOrder: string[]; inputFidelity: string; promptAddendum: string; usage: { input_tokens?: number; output_tokens?: number; total_tokens?: number; input_tokens_details?: { image_tokens?: number; text_tokens?: number } } | null; estimatedCostUsd: number | null; costNote: string; sha256: string }
-interface Manifest { experiment: string; status: string; assembledAt: string; scene: string; changedOnly: string; constant: string; results: Record<string, Result>; crops: Record<string, { sourceReferenceId: string; box: object; authority: string }> }
+interface Result { condition: string; label: string; storagePath: string; width: number; height: number; bytes: number; provider: string; model: string | null; size: string; latencyMs: number; referenceConfiguration: string[]; referenceOrder?: string[]; inputFidelity: string; promptAddendum: string; usage: { input_tokens?: number; output_tokens?: number; total_tokens?: number; input_tokens_details?: { image_tokens?: number; text_tokens?: number } } | null; estimatedCostUsd: number | null; costNote: string; sha256: string }
+interface Manifest { experiment: string; status: string; assembledAt: string; scene: string; changedOnly: string; constant: string; sheets?: { file: string; title: string }[]; results: Record<string, Result>; crops: Record<string, { sourceReferenceId: string; box: object; authority: string }> }
+const PROBE_SHEETS = [{ file: "PROBE_faces_equal_scale.png", title: "Face crops at equal scale (left to right: canonical MASTER_FACE · canonical FACE_3Q_RIGHT · A · B · C)" }, { file: "PROBE_side_by_side.png", title: "Side by side" }];
 
 export default async function ExperimentPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -25,16 +26,15 @@ export default async function ExperimentPage({ params }: { params: Promise<{ id:
         <p className="mt-1 text-faint">No winner has been selected. The production prompt system is unchanged until a human chooses.</p>
       </Card>
       <div className="mb-4 grid gap-4">
-        <Card><h2 className="mb-2 font-bold">Face crops at equal scale</h2><p className="mb-2 text-[12px] text-faint">Left to right: canonical MASTER_FACE · canonical FACE_3Q_RIGHT · A · B · C</p><a href={file("PROBE_faces_equal_scale.png")} target="_blank" rel="noreferrer"><img src={file("PROBE_faces_equal_scale.png")} alt="Equal-scale face crops" className="w-full rounded-lg border border-edge" /></a></Card>
-        <Card><h2 className="mb-2 font-bold">Side by side</h2><a href={file("PROBE_side_by_side.png")} target="_blank" rel="noreferrer"><img src={file("PROBE_side_by_side.png")} alt="Probe results A, B, C" className="w-full rounded-lg border border-edge" /></a></Card>
+        {(m.sheets ?? PROBE_SHEETS).map((sh) => <Card key={sh.file}><h2 className="mb-2 font-bold">{sh.title}</h2><a href={file(sh.file)} target="_blank" rel="noreferrer"><img src={file(sh.file)} alt={sh.title} className="w-full rounded-lg border border-edge" /></a></Card>)}
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        {(["A", "B", "C"] as const).map((c) => { const r = m.results[c]; if (!r) return <Card key={c}><Empty>Condition {c} has no result.</Empty></Card>; return (
+        {Object.keys(m.results).sort().map((c) => { const r = m.results[c]; if (!r) return <Card key={c}><Empty>Condition {c} has no result.</Empty></Card>; return (
           <Card key={c}>
-            <h2 className="mb-2 font-bold">Probe {c} <span className="font-mono text-[11px] font-normal text-faint">{r.label}</span></h2>
-            <a href={file(`${r.label}.png`)} target="_blank" rel="noreferrer"><img src={file(`${r.label}.png`)} alt={`Probe ${c}`} className="mb-2 w-full rounded-lg border border-edge" /></a>
+            <h2 className="mb-2 font-bold">Result {c} <span className="font-mono text-[11px] font-normal text-faint">{r.label}</span></h2>
+            <a href={file(`${r.label}.png`)} target="_blank" rel="noreferrer"><img src={file(`${r.label}.png`)} alt={`Result ${c}`} className="mb-2 w-full rounded-lg border border-edge" /></a>
             <dl className="grid grid-cols-[110px_1fr] gap-x-2 gap-y-1 text-[12.5px]">
-              <dt className="text-muted">References</dt><dd className="font-mono text-[11.5px]">{r.referenceOrder.join(" → ")}</dd>
+              <dt className="text-muted">References</dt><dd className="font-mono text-[11.5px]">{(r.referenceOrder ?? r.referenceConfiguration ?? []).join(" → ")}</dd>
               <dt className="text-muted">Input fidelity</dt><dd>{r.inputFidelity}</dd>
               <dt className="text-muted">Provider / model</dt><dd className="font-mono text-[11.5px]">{r.provider} / {r.model}</dd>
               <dt className="text-muted">Output</dt><dd>{r.width}×{r.height} · {r.bytes} bytes</dd>
@@ -44,7 +44,7 @@ export default async function ExperimentPage({ params }: { params: Promise<{ id:
             </dl>
           </Card>); })}
       </div>
-      <Card className="mt-4 text-[12px] text-faint"><b>Derived crops</b> (lineage only, zero canonical authority): {Object.entries(m.crops).map(([k, v]) => `${k} ← reference ${v.sourceReferenceId.slice(0, 8)} ${JSON.stringify(v.box)}`).join(" · ")}</Card>
+      <Card className="mt-4 text-[12px] text-faint"><b>Derived crops</b> (lineage only, zero canonical authority): {Object.keys(m.crops ?? {}).length === 0 ? "none (no derived references used)" : Object.entries(m.crops).map(([k, v]) => `${k} ← reference ${v.sourceReferenceId.slice(0, 8)} ${JSON.stringify(v.box)}`).join(" · ")}</Card>
     </>
   );
 }

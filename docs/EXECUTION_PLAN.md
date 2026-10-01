@@ -3,6 +3,8 @@ _Last verified: started from HEAD `b0dc940` (= remote), clean tree. This session
 Statuses: DONE · IN PROGRESS · READY · BLOCKED — HUMAN · BLOCKED — EXTERNAL · FUTURE. Describes what EXISTS; anything not marked DONE is not implemented.
 
 ## DONE (verified)
+- **Provider health** (HEALTHY/DEGRADED/RATE_LIMITED/QUOTA_EXHAUSTED/AUTH_ERROR/UNAVAILABLE/UNKNOWN) derived from persisted calls, with stale-blocker decay, on the dashboard together with a "Needs attention" card.
+- **Tap targets**: links/summaries/checkboxes get ≥32px hit areas on phones; 10 key pages fit 390px.
 - **P1 Sienna identity probe**: exactly 3 images (A control / B master high-fidelity / C cropped identity set high-fidelity), manifest + comparison sheets in storage `experiments/sie-identity-probe-v1/`, read-only page `/experiments/sie-identity-probe-v1`, inbox report. **AWAITING HUMAN IDENTITY SELECTION** (no winner chosen).
 - **P7 slice**: daily-quota 429s (Gemini, OpenAI credit) are `quota_exhausted`: never retried, long provider cooldown, shown in provider status.
 - **P9 slice**: structured rejection reasons (14 codes) on the approvals page, stored as a parseable prefix on `approvals.notes` (no schema change); parser + tests.
@@ -16,18 +18,17 @@ Statuses: DONE · IN PROGRESS · READY · BLOCKED — HUMAN · BLOCKED — EXTER
 - Live-only bugs found and given regression tests (agent-run-id FK, `superseded_by` column mapping).
 
 ## IN PROGRESS
-- _(none running)_ — waiting on the human decision below.
+- **Identity validation** (1 image, MASTER_FACE only + high fidelity, 3/4 pose): generated; **AWAITING HUMAN VISUAL APPROVAL**. The 3/4 pose was NOT achieved (frontal again), so the pose-change question is still open.
 
 ## READY (safe, no external dependency)
-- P7: remaining provider-health states (HEALTHY/DEGRADED/AUTH_ERROR/UNKNOWN) persisted per provider + dashboard surface.
-- P37: raise small tap targets (<28px) on Dashboard/Production/Approvals.
 - P3: Production detail — surface usage/cost-unknown honestly, reference set used, probe/experiment records.
 - P9: feed reason codes into regeneration feedback / learning memory (needs the P10 design; a proper table needs an approved migration).
 - P8: dashboard = real system state (QA failures, blocked/failed tasks, provider health, awaiting approval).
-- Docs: architecture / job system / budgets / failure recovery (design docs marked as DESIGN, not implemented).
+- Design docs written (DESIGN ONLY, no migrations): `docs/design/durable-jobs.md`, `budget-governor.md`, `learning-memory.md`.
+- Remaining docs: architecture / failure recovery / operator workflow.
 
 ## BLOCKED — HUMAN
-- Sienna identity: choose the winning reference strategy from the probe (P4 depends on it). Nothing else changes in the production prompt system until then.
+- Sienna identity: strategy **B (MASTER_FACE only, high input fidelity, explicit authority label) SELECTED by the operator** for the next controlled test; it is a reference *strategy*, not an asset — Probe B is not promoted and is not used as a reference. Next: human visual approval of the validation image; production prompt system stays unchanged until then.
 - Approve migrations before any DB-dependent feature goes live (planned: 0007 human feedback / structured reasons, later job-system, budget, learning-memory tables). Each will be inspected read-only first; never re-run blindly.
 - Gemini: free-tier daily quota (20 requests/day/model) is exhausted → enable billing or wait for the daily reset to get real Identity/Continuity QA.
 - Next Sienna carousel (attempt 4) — only after the identity selection; spend approval.

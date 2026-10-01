@@ -35,3 +35,11 @@ textarea, input, select { background: #060a1c; border: 1px solid var(--color-edg
   /* Safety net: never let the page itself scroll sideways on a phone (individual wide tables/code scroll inside their own boxes). */
   main { overflow-x: clip; }
 }
+
+/* Touch targets: on phones/tablets, links, disclosure summaries and checkboxes get a comfortable hit area (>= ~32px) without changing the desktop layout. */
+@media (max-width: 1023px) {
+  main a:not(:has(div, section, article, img, svg)) { display: inline-flex; align-items: center; min-height: 32px; }
+  main summary { padding-block: 8px; }
+  main input[type="checkbox"], main input[type="radio"] { width: 22px !important; height: 22px !important; }
+  main label:has(> input[type="checkbox"]) { min-height: 32px; align-items: center; }
+}

@@ -91,6 +91,12 @@ export function routeTo(from: NavPoint, toId: string, g: NavGraph = getGraph()):
   const pts: NavPoint[] = [{ ...from }, ...ids.map((id) => { const n = g.nodes.get(id)!; return { x: n.x, z: n.z, y: n.y, seat: n.seat }; })];
   return smoothPath(pts);
 }
+/** Route to an arbitrary standing point (e.g. a formation slot): to the nearest clear nav node, then the last short hop if it is directly walkable. */
+export function routeToPoint(from: NavPoint, to: NavPoint, g: NavGraph = getGraph()): NavPoint[] | null {
+  const end = nearestNode(to, g), r = routeTo(from, end.id, g); if (!r) return null;
+  if (dist2(end, to) > 0.3 && clearEdge({ x: end.x, z: end.z, y: end.y }, to)) r.push({ x: to.x, z: to.z, y: to.y });
+  return r;
+}
 export const pathLength = (pts: V2[]) => pts.reduce((s, p, i) => (i ? s + dist2(pts[i - 1], p) : 0), 0);
 export const nodeOf = (id: string) => { const n = getGraph().nodes.get(id); if (!n) throw new Error(`unknown nav node ${id}`); return n; };
 export { clamp, COLLIDERS };

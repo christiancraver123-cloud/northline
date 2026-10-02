@@ -9,7 +9,7 @@ export { HQ } from "./hq";
 
 export const TOWN: TownPlan = buildTown();
 const K = TOWN.kit;
-export const SURFACES: Surface[] = K.surfaces, ZONES: Zone[] = K.zones, PADS = K.pads, SPOTS = K.spots, LANDMARKS = K.landmarks, SIGNS = K.signs;
+export const SURFACES: Surface[] = K.surfaces, ZONES: Zone[] = K.zones, PADS = K.pads, SPOTS = K.spots, LANDMARKS = K.landmarks, SIGNS = K.signs, CONSOLES = K.consoles, DISPLAYS = K.displays;
 export type Collider = Collider3;
 export const STEP = 0.45;
 

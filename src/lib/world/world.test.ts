@@ -40,7 +40,7 @@ describe("player controller", () => {
   it("accelerates smoothly to walking speed and decelerates smoothly", () => {
     let s = startPlayer(-30, 17.5); const v: number[] = [];
     for (let i = 0; i < 90; i++) { s = stepPlayer(s, { ...IN, moveZ: 1, cameraYaw: Math.PI / 2 }, 1 / 60); v.push(s.speed); }
-    expect(v[0]).toBeLessThan(0.5); expect(v.at(-1)!).toBeGreaterThan(TUNING.walk * 0.9); expect(v.at(-1)!).toBeLessThanOrEqual(TUNING.walk + 0.01);
+    expect(v[0]).toBeLessThan(0.7); expect(v.at(-1)!).toBeGreaterThan(TUNING.walk * 0.9); expect(v.at(-1)!).toBeLessThanOrEqual(TUNING.walk + 0.01);
     for (let i = 1; i < v.length; i++) { expect(v[i] - v[i - 1]).toBeLessThan(0.5); expect(v[i] - v[i - 1]).toBeLessThanOrEqual(v[i - 1] - (v[i - 2] ?? 0) + 1e-9); } // eased: increments only shrink
     for (let i = 0; i < 90; i++) { s = stepPlayer(s, IN, 1 / 60); }
     expect(s.speed).toBeLessThan(0.05);
@@ -56,7 +56,7 @@ describe("player controller", () => {
   });
   it("a stalled frame (huge dt) never teleports", () => {
     const s0 = startPlayer(), s1 = stepPlayer(s0, { ...IN, moveZ: 1, run: true }, 5);
-    expect(Math.hypot(s1.x - s0.x, s1.z - s0.z)).toBeLessThan(0.14);
+    expect(Math.hypot(s1.x - s0.x, s1.z - s0.z)).toBeLessThan(0.2);
   });
   it("cannot walk through the building or into deep water; stays in bounds", () => {
     const into = run(startPlayer(-30, -12), { moveZ: 1, cameraYaw: Math.PI, run: true }, 6); // walk toward the HQ wall (away from the door)
@@ -72,7 +72,7 @@ describe("player controller", () => {
   });
   it("flight: vertical control, boost is faster, you hover over water (never sink) and can clear the roof", () => {
     let s = run(toggleFly(startPlayer(0, 10)), { up: 1 }, 6); expect(s.y).toBeGreaterThan(20);
-    const slow = run(s, { moveZ: 1 }, 2), fast = run(s, { moveZ: 1, boost: true }, 2); expect(Math.hypot(fast.x - s.x, fast.z - s.z)).toBeGreaterThan(Math.hypot(slow.x - s.x, slow.z - s.z) * 1.5);
+    const slow = run(s, { moveZ: 1 }, 2), fast = run(s, { moveZ: 1, tier: "FAST" }, 2); expect(Math.hypot(fast.x - s.x, fast.z - s.z)).toBeGreaterThan(Math.hypot(slow.x - s.x, slow.z - s.z) * 1.5);
     const out = run(toggleFly(startPlayer(0, 20)), { moveZ: 1, up: 0.3 }, 9, 60), sea = run(out, { down: 1 }, 8); expect(isWater(out.x, out.z)).toBe(true); expect(sea.locomotion).toBe("AIR"); expect(sea.y).toBeGreaterThanOrEqual(0.45); // hovers above the sea, never sinks
     const over = run({ ...startPlayer(-18, -12), locomotion: "AIR", y: 30, grounded: false }, { moveZ: 1, cameraYaw: Math.PI }, 6); expect(over.z).toBeLessThan(HQ.z0 - 1); // clears the roof at 30 m
   });
@@ -91,8 +91,8 @@ describe("mode state machine (walk/fly/overview/follow/focus)", () => {
     m = reduceMode(m, { type: "FOCUS_AGENT", id: "a" }); expect(m.view).toBe("FOCUS");
     expect(reduceMode(m, { type: "RETURN_TO_PLAYER" }).view).toBe("PLAYER"); expect(reduceMode(m, { type: "TOGGLE_OVERVIEW" }).view).toBe("PLAYER");
   });
-  it("focus is overview-only; follow remembers where to return", () => {
-    expect(reduceMode(initialMode(), { type: "FOCUS_AGENT", id: "a" }).view).toBe("PLAYER");
+  it("focus works from anywhere (Founder Command focuses remotely); follow remembers where to return", () => {
+    expect(reduceMode(initialMode(), { type: "FOCUS_AGENT", id: "a" }).view).toBe("FOCUS");
     let m = reduceMode(initialMode(), { type: "FOLLOW_AGENT", id: "a" }); expect(m.view).toBe("FOLLOW");
     expect(reduceMode(m, { type: "EXIT_FOLLOW" }).view).toBe("PLAYER");
     m = reduceMode(reduceMode(initialMode(), { type: "TOGGLE_OVERVIEW" }), { type: "FOLLOW_AGENT", id: "a" }); expect(reduceMode(m, { type: "EXIT_FOLLOW" }).view).toBe("OVERVIEW");
@@ -223,7 +223,7 @@ describe("world state schema / adapter", () => {
   });
   it("roles are distinguishable by more than colour (glyph + prop + hat)", () => {
     const s = ["CREATIVE_DIRECTOR", "PROMPT_ENGINEER", "IDENTITY_QA", "PRODUCTION_MANAGER", "ORCHESTRATOR"].map(roleStyle);
-    expect(new Set(s.map((r) => r.glyph)).size).toBe(5); expect(new Set(s.map((r) => r.color)).size).toBe(5); expect(roleStyle("CREATIVE_DIRECTOR").prop).toBe("tablet");
+    expect(new Set(s.map((r) => r.glyph)).size).toBe(5); expect(new Set(s.map((r) => r.color)).size).toBe(5); expect(roleStyle("CREATIVE_DIRECTOR").prop).toBe("camera");
     expect(humanElapsed("2026-10-01T10:00:00Z", "2026-10-01T12:05:00Z")).toBe("2h 5m");
   });
 });

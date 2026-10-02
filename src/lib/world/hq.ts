@@ -78,7 +78,16 @@ export function buildHQ(k: Kit) {
 
     // ---- COMMAND CENTER (+ analytics area) ----
     rug(k, -6, -26, GF + 0.12, 10.4, 10, "#59616e");
-    for (const z of [-28.5, -25.5, -22.5]) { desk(k, -8.2, z, GF + 0.12, Math.PI / 2, { w: 1.6, d: 0.8, screens: 2, wood: "#d9d2c4" }); chair(k, -9.4, z, GF + 0.12, Math.PI / 2, "#31577a"); desk(k, -4.6, z, GF + 0.12, Math.PI / 2, { w: 1.6, d: 0.8, screens: 2, wood: "#d9d2c4" }); chair(k, -5.8, z, GF + 0.12, Math.PI / 2, "#31577a"); }
+    for (const z of [-28.5, -25.5, -22.5]) { desk(k, -8.2, z, GF + 0.12, Math.PI / 2, { w: 1.6, d: 0.8, screens: 2, wood: "#d9d2c4" }); chair(k, -9.4, z, GF + 0.12, Math.PI / 2, "#31577a"); }
+    // the central COMMAND TABLE: a standing-height architectural table with a recessed display (the renderer paints a live town/agent/status map on it). Premium studio, not spaceship.
+    { const tx = -4.3, tz = -26, ty = GF + 0.12;
+      table(k, tx, tz, ty, 3.4, 2.0, 0, { h: 0.96, top: "#e9e3d6" });
+      k.box(tx - 1.5, tx + 1.5, ty + 0.96, ty + 0.985, tz - 0.88, tz + 0.88, "#1d2733", { solid: false }); // recessed dark inlay under the live display
+      k.box(tx - 1.62, tx + 1.62, ty + 0.9, ty + 0.94, tz - 1.04, tz + 1.04, "#cdbf9f", { solid: false }); // oak edge band
+      k.box(tx - 1.66, tx + 1.66, ty + 0.8, ty + 0.88, tz - 1.08, tz + 1.08, "#7fe0d0", { mat: "glow", solid: false }); // soft glow band just under the tabletop edge
+      k.display({ id: "command-table", kind: "table", x: tx, y: ty + 0.99, z: tz, w: 3.0, h: 1.7, rotY: 0 });
+      k.console({ id: "command-table", name: "Command table", x: tx, y: ty, z: tz, action: "founder-command", range: 3.5, prompt: "Use the command table" }); }
+    k.display({ id: "cc-wall", kind: "wall", x: -0.53, y: 2.6, z: -26, w: 8.4, h: 2.3, rotY: -Math.PI / 2 });
     screenWall(k, -0.5, -0.38, 1.3, 3.9, -30.5, -21.5, "#4aa3ff");
     k.sign({ text: "OPERATIONS", sub: "SIMULATED DISPLAYS", x: -0.62, y: 4.15, z: -26, w: 4.6, h: 0.5, rotY: -Math.PI / 2, style: "teal" });
     plant(k, -11.2, -31.2, GF + 0.12, 1.1); plant(k, -0.9, -20.8, GF + 0.12, 1.1);
@@ -116,6 +125,10 @@ export function buildHQ(k: Kit) {
     sofa(k, -1.3, -24.0, F1, -Math.PI / 2, { w: 1.8, color: "#bfc9d1" }); floorLamp(k, -1.2, -21.2, F1); floorLamp(k, -11.2, -26.5, F1);
     artPanel(k, -7.5, -2.1, F1 + 1.5, F1 + 3.0, -31.78, -31.7, ["#e0c3a8", "#c9a27d", "#a9c4d2", "#e0c3a8"]);
     k.box(-11.8, -11.0, F1, F1 + 2.6, -22.4, -21.6, "#e9e1d3", { solid: false }); k.box(-0.9, -0.2, F1, F1 + 2.6, -22.4, -21.6, "#e9e1d3", { solid: false }); // curtains
+    // founder control panel: a small pedestal console by the desk (opens the Founder Control Panel; the bedroom stays a bedroom)
+    k.box(-9.65, -9.15, F1, F1 + 1.0, -23.65, -23.15, "#2a313a", { solid: true }); k.box(-9.7, -9.1, F1 + 1.0, F1 + 1.04, -23.7, -23.1, "#cdbf9f", { solid: false });
+    k.display({ id: "suite-panel", kind: "suite", x: -9.4, y: F1 + 1.06, z: -23.4, w: 0.5, h: 0.32, rotY: 0 });
+    k.console({ id: "suite-panel", name: "Founder control panel", x: -9.4, y: F1, z: -23.4, action: "founder-panel", range: 2.6, prompt: "Use the founder control panel" });
     // ---- UPPER: bathroom + closet ----
     bathtub(k, -11.4, -37.5, F1, Math.PI / 2); vanity(k, -8, -39.55, F1, Math.PI, 1.6); toilet(k, -5.7, -36.8, F1, -Math.PI / 2);
     k.box(-6.9, -5.2, F1, F1 + 2.2, -35.6, -35.5, "#bfe6f2", { mat: "glass", solid: true }); k.box(-5.3, -5.2, F1, F1 + 2.2, -35.6, -32.6, "#bfe6f2", { mat: "glass", solid: true });
@@ -137,7 +150,11 @@ export function buildHQ(k: Kit) {
 
   // ---- agent spots inside HQ ----
   k.spot("hq-command-a", -9.4, -28.5, Math.PI / 2, "work-sit", "at the Command Center", { y: GF + 0.12 }); k.spot("hq-command-b", -9.4, -25.5, Math.PI / 2, "work-sit", "at the Command Center", { y: GF + 0.12 }); k.spot("hq-command-c", -9.4, -22.5, Math.PI / 2, "work-sit", "at the Command Center", { y: GF + 0.12 });
-  k.spot("hq-command-d", -5.8, -28.5, Math.PI / 2, "sit", "at the Command Center", { y: GF + 0.12 }); k.spot("hq-command-e", -5.8, -25.5, Math.PI / 2, "sit", "at the Command Center", { y: GF + 0.12 });
+  // meeting positions: six seats around the table + four standing places (designated slots for CALL MEETING; see MEETING_SLOTS in command.ts)
+  { const Y = { y: GF + 0.12 }; k.spot("hq-meet-2", -22.5, -37.4, 0, "sit", "in the meeting", { ...Y, weight: 0.01 }); k.spot("hq-meet-3", -23.6, -34.6, Math.PI, "sit", "in the meeting", { ...Y, weight: 0.01 }); k.spot("hq-meet-4", -21.4, -34.6, Math.PI, "sit", "in the meeting", { ...Y, weight: 0.01 });
+    k.spot("hq-meet-5", -23.6, -37.4, 0, "sit", "in the meeting", { ...Y, weight: 0.01 }); k.spot("hq-meet-6", -21.4, -37.4, 0, "sit", "in the meeting", { ...Y, weight: 0.01 });
+    k.spot("hq-meet-7", -25.0, -35.2, Math.PI / 2 * -1, "stand", "standing in the meeting", { ...Y, weight: 0.01 }); k.spot("hq-meet-8", -25.0, -37.0, -Math.PI / 2, "stand", "standing in the meeting", { ...Y, weight: 0.01 });
+    k.spot("hq-meet-9", -20.4, -38.6, Math.PI / 2, "stand", "standing in the meeting", { ...Y, weight: 0.01 }); k.spot("hq-meet-10", -20.4, -33.4, Math.PI / 2, "stand", "standing in the meeting", { ...Y, weight: 0.01 }); }
   k.spot("hq-production-desk", -15.5, -35.9, Math.PI, "work-sit", "in the production room", { y: GF + 0.12 }); k.spot("hq-analytics-desk", -6, -35.9, Math.PI, "work-sit", "at the analytics wall", { y: GF + 0.12 });
   k.spot("hq-meeting-table", -22.5, -34.6, Math.PI, "sit", "in the meeting room", { y: GF + 0.12, weight: 1.5 }); k.spot("hq-lobby-reception", -17.5, -28.5, 0, "stand", "chatting at reception", { y: GF + 0.12, weight: 1.5 });
   k.spot("hq-lobby-sofa", -24.4, -23.6, Math.PI / 2, "sit", "relaxing in the lobby", { y: GF + 0.12 }); k.spot("hq-lounge-sofa", -31, -28.4, 0, "sit", "relaxing in the upstairs lounge", { y: F1 });

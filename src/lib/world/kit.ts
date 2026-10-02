@@ -12,6 +12,10 @@ export interface Zone { id: string; name: string; building: string; district: st
 export interface Pad { minX: number; maxX: number; minZ: number; maxZ: number; h: number; soft: number }
 export interface Spot { id: string; x: number; z: number; y: number; yaw: number; kind: "stand" | "sit" | "work-stand" | "work-sit"; label: string; weight: number }
 export interface SignPiece { text: string; sub?: string; x: number; y: number; z: number; w: number; h: number; rotY: number; style: "dark" | "light" | "teal" | "wood" }
+/** An interactable fixture (not an agent): pressing E near it opens a Founder UI. */
+export interface Console { id: string; name: string; x: number; y: number; z: number; action: "founder-command" | "founder-panel"; range: number; prompt: string }
+/** A live display surface the renderer paints with a canvas (HQ command table map, Command Center wall, founder-suite panel). `rotY` yaws a wall display; table/suite are laid flat / tilted by the renderer. */
+export interface Display { id: string; kind: "table" | "wall" | "suite"; x: number; y: number; z: number; w: number; h: number; rotY: number }
 export interface Landmark { id: string; name: string; district: string; x: number; z: number; y: number; radius: number }
 
 export const chunkKey = (x: number, z: number) => `${Math.floor(x / 60)}:${Math.floor(z / 60)}`;
@@ -29,7 +33,7 @@ export interface Opening { a0: number; a1: number; /** door: no sill; window: si
 export interface BoxOpts { mat?: Mat; solid?: boolean; roof?: boolean; tag?: string; group?: string; rotY?: number }
 
 export class Kit {
-  pieces: Piece[] = []; colliders: Collider3[] = []; surfaces: Surface[] = []; zones: Zone[] = []; pads: Pad[] = []; spots: Spot[] = []; signs: SignPiece[] = []; landmarks: Landmark[] = [];
+  pieces: Piece[] = []; colliders: Collider3[] = []; surfaces: Surface[] = []; zones: Zone[] = []; pads: Pad[] = []; spots: Spot[] = []; signs: SignPiece[] = []; landmarks: Landmark[] = []; consoles: Console[] = []; displays: Display[] = [];
   extraNodes: { id: string; x: number; z: number; y: number }[] = [];
   private grp: string | null = null;
   /** All pieces declared inside `fn` go to render group `g` (e.g. "hq-int" so interiors can be culled/hidden as one unit). */
@@ -98,4 +102,6 @@ export class Kit {
   node(id: string, x: number, z: number, y = NaN) { this.extraNodes.push({ id, x, z, y }); }
   sign(s: SignPiece) { this.signs.push(s); }
   landmark(l: Landmark) { this.landmarks.push(l); }
+  console(c: Console) { this.consoles.push(c); }
+  display(d: Display) { this.displays.push(d); }
 }

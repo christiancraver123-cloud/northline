@@ -48,7 +48,7 @@ export class SimulatedScenario {
           workspace: r.workplaceLabel, lastEvent: active ? b.event : "Finished the previous simulated task", dataSource: "SIMULATED FIXTURE — not real Northline state",
         };
       }),
-      budget: { imagesToday: "UNKNOWN", limitsRemaining: "NOT CONFIGURED" }, approvals: { waiting: "UNKNOWN" }, alerts: [],
+      budget: { imagesToday: 4, limitsRemaining: 6 }, approvals: { waiting: 2 }, alerts: [],
     };
   }
 }

@@ -2,7 +2,7 @@
 // visual-only conversations, yielding. Pure + seeded. Cosmetic ambient behaviour runs ONLY while the backend/fixture opState is IDLE;
 // a WORKING agent goes to its workspace and works there. Real status always overrides the cosmetic layer.
 import { angleDelta, clamp, damp, dist2, forward, rng, wrapAngle, yawTo, type Rng, type V2 } from "./math";
-import { routeTo, type NavPoint } from "./nav";
+import { nearestNode, routeTo, routeToPoint, type NavPoint } from "./nav";
 import { SPOTS, resolveCollisions, supportHeight } from "./layout";
 
 export type AgentAnim = "idle" | "walk" | "work" | "look" | "sit" | "sit-work" | "talk";
@@ -11,12 +11,15 @@ export interface AgentBrain {
   id: string; x: number; y: number; z: number; yaw: number; speed: number; turnRate: number; mode: AgentMode; anim: AgentAnim; timer: number;
   path: NavPoint[]; pathIdx: number; destId: string | null; destLabel: string | null; faceAtDest: number | null;
   /** cosmetic: what the idle behaviour is doing (null when WORKING) */ ambient: string | null; lastSpot: string | null; yield: number; lookPhase: number; seated: boolean; talkWith: string | null; stuck: number;
+  /** Founder directive bookkeeping: last applied version, arrival flag, hurrying, target point, replan back-off and forced-recovery count */
+  dirVersion: number; dirArrived: boolean; rush: boolean; dirTarget: { x: number; y: number; z: number } | null; dirRetry: number; recovered: number;
 }
+export interface AgentDirective { kind: "SUMMON" | "MEETING" | "WORKSPACE"; version: number; target: { x: number; y: number; z: number } | null; spotId: string | null; label: string; face: { x: number; z: number } | null }
 export interface AgentProfile { id: string; workspace: string; idleSpots: string[]; startSpot: string }
 export type OpState = "IDLE" | "WORKING" | "WAITING" | "BLOCKED" | "FAILED" | "PAUSED";
-export interface AgentCtx { opState: OpState; player: V2 & { y: number }; hold: boolean; rand: Rng; others: { id: string; x: number; z: number; y: number }[] }
+export interface AgentCtx { opState: OpState; player: V2 & { y: number }; hold: boolean; rand: Rng; others: { id: string; x: number; z: number; y: number; speed?: number }[]; directive?: AgentDirective | null }
 
-export const AGENT = { walk: 1.3, accel: 3.2, turnLambda: 5.5, radius: 0.4, arriveDist: 1.6, waypointReach: 0.4, maxStep: 2.2, maxTurn: 3.2 } as const;
+export const AGENT = { walk: 1.3, accel: 3.2, turnLambda: 5.5, radius: 0.4, arriveDist: 1.6, waypointReach: 0.4, maxStep: 5.2, maxTurn: 3.2, rush: 4.4, rushArrive: 3.4 } as const;
 const spotById = new Map(SPOTS.map((s) => [s.id, s]));
 export const spotOf = (id: string) => { const s = spotById.get(id); if (!s) throw new Error(`unknown spot ${id}`); return s; };
 const turnToward = (yaw: number, want: number, lambda: number, dt: number, maxRate: number = AGENT.maxTurn) => { const d = angleDelta(yaw, want), step = clamp(d * (1 - Math.exp(-lambda * dt)), -maxRate * dt, maxRate * dt); return wrapAngle(yaw + step); };
@@ -25,7 +28,7 @@ const SEATS = SPOTS.filter((q) => isSeat(q.kind)).map((q) => ({ x: q.x, z: q.z, 
 
 export function startAgent(p: AgentProfile, opState: OpState = "IDLE"): AgentBrain {
   const s = spotOf(p.startSpot), y = Number.isNaN(s.y) ? supportHeight(s.x, s.z, 1.2) : s.y, seated = isSeat(s.kind), working = opState === "WORKING" && p.startSpot === p.workspace;
-  return { id: p.id, x: s.x, y, z: s.z, yaw: s.yaw, speed: 0, turnRate: 0, mode: seated ? (working ? "WORK" : "SIT") : "STAND", anim: seated ? (working ? "sit-work" : "sit") : "idle", timer: 6 + (p.id.length % 7), path: [], pathIdx: 0, destId: null, destLabel: null, faceAtDest: null, ambient: s.label, lastSpot: p.startSpot, yield: 0, lookPhase: p.id.length * 1.7, seated, talkWith: null, stuck: 0 };
+  return { id: p.id, x: s.x, y, z: s.z, yaw: s.yaw, speed: 0, turnRate: 0, mode: seated ? (working ? "WORK" : "SIT") : "STAND", anim: seated ? (working ? "sit-work" : "sit") : "idle", timer: 6 + (p.id.length % 7), path: [], pathIdx: 0, destId: null, destLabel: null, faceAtDest: null, ambient: s.label, lastSpot: p.startSpot, yield: 0, lookPhase: p.id.length * 1.7, seated, talkWith: null, stuck: 0, dirVersion: -1, dirArrived: false, rush: false, dirTarget: null, dirRetry: 0, recovered: 0 };
 }
 
 function pickSpot(b: AgentBrain, profile: AgentProfile, r: Rng) {
@@ -40,8 +43,18 @@ const startWalk = (b: AgentBrain, spotId: string, label: string): AgentBrain | n
 export function stepAgent(b0: AgentBrain, dt0: number, ctx: AgentCtx, profile: AgentProfile): AgentBrain {
   const dt = Math.min(dt0, 0.05); if (dt <= 0) return b0;
   let b: AgentBrain = { ...b0, lookPhase: b0.lookPhase + dt };
-  const working = ctx.opState === "WORKING", ws = spotOf(profile.workspace), atWork = dist2(b, ws) < 0.5 && Math.abs(b.y - (Number.isNaN(ws.y) ? b.y : ws.y)) < 1.2;
+  const dr = ctx.directive ?? null, working = (ctx.opState === "WORKING" && !dr) || dr?.kind === "WORKSPACE", ws = spotOf(profile.workspace), atWork = dist2(b, ws) < 0.5 && Math.abs(b.y - (Number.isNaN(ws.y) ? b.y : ws.y)) < 1.2;
 
+  // 0) Founder directive (simulated command): plan a route once per version; never teleports — recovery re-plans, and only snaps as a last resort
+  if (dr && b.dirVersion !== dr.version) {
+    if (b.dirRetry > 0) b = { ...b, dirRetry: b.dirRetry - dt };
+    else {
+      let planned: AgentBrain | null = null;
+      if (dr.spotId) planned = startWalk({ ...b, seated: false }, dr.spotId, dr.label);
+      else if (dr.target) { const route = routeToPoint({ x: b.x, z: b.z, y: b.y }, dr.target); if (route) planned = { ...b, mode: "TURN", path: route, pathIdx: 1, destId: null, destLabel: dr.label, faceAtDest: null, anim: "idle", timer: 0, ambient: dr.label, stuck: 0, seated: false }; }
+      b = planned ? { ...planned, dirVersion: dr.version, dirArrived: false, rush: true, dirTarget: dr.target, recovered: 0 } : { ...b, dirRetry: 1.5 };
+    }
+  }
   // 1) interruptions: the operator opened this agent's panel → stop and wait; real work status overrides idling
   if (b.mode === "HOLD") { if (!ctx.hold) b = { ...b, mode: b.path.length ? "WALK" : "STAND", timer: 1 + ctx.rand.next() * 2 }; }
   else if (ctx.hold && (b.mode === "WALK" || b.mode === "TURN")) b = { ...b, mode: "HOLD" };
@@ -55,10 +68,10 @@ export function stepAgent(b0: AgentBrain, dt0: number, ctx: AgentCtx, profile: A
     case "STAND": {
       const timer = b.timer - dt, near = ctx.others.find((o) => o.id !== b.id && Math.abs(o.y - b.y) < 1.5 && Math.hypot(o.x - b.x, o.z - b.z) < 3.0 && Math.hypot(o.x - b.x, o.z - b.z) > 0.7);
       const look = Math.sin(b.lookPhase * 0.7) > 0.93;
-      b = { ...b, timer, speed: damp(b.speed, 0, 8, dt), turnRate: 0, anim: near && !working ? "talk" : look ? "look" : "idle", talkWith: near && !working ? near.id : null, seated: false };
-      if (near && !working) b = { ...b, yaw: turnToward(b.yaw, yawTo(b, near), 3, dt) }; // face the other agent (visual-only conversation)
+      b = { ...b, timer, speed: damp(b.speed, 0, 8, dt), turnRate: 0, anim: near && !working && !dr ? "talk" : look ? "look" : "idle", talkWith: near && !working && !dr ? near.id : null, seated: false };
+      if (near && !working && !dr) b = { ...b, yaw: turnToward(b.yaw, yawTo(b, near), 3, dt) }; // face the other agent (visual-only conversation)
       if (working && atWork) { const kind = ws.kind; b = { ...b, mode: "WORK", anim: kind === "work-sit" ? "sit-work" : "work", ambient: null, seated: kind === "work-sit" }; break; }
-      if (!working && timer <= 0 && !ctx.hold) {
+      if (!working && timer <= 0 && !ctx.hold && !dr) {
         const spot = pickSpot(b, profile, ctx.rand), w = startWalk(b, spot.id, `walking to ${spot.label}`);
         b = w ? { ...w, lastSpot: spot.id } : { ...b, timer: 4 };
       }
@@ -74,12 +87,16 @@ export function stepAgent(b0: AgentBrain, dt0: number, ctx: AgentCtx, profile: A
     case "WORK": { const k = ws.kind; b = { ...b, anim: k === "work-sit" ? "sit-work" : "work", seated: k === "work-sit", speed: damp(b.speed, 0, 8, dt), turnRate: 0, yaw: turnToward(b.yaw, ws.yaw, 4, dt) }; break; }
     case "SIT": {
       const timer = b.timer - dt; b = { ...b, timer, anim: "sit", seated: true, speed: damp(b.speed, 0, 8, dt), turnRate: 0, yaw: turnToward(b.yaw, b.faceAtDest ?? b.yaw, 3, dt) };
-      if (working || (timer <= 0 && !ctx.hold)) b = { ...b, mode: "STAND", anim: "idle", timer: 1.2, seated: false }; // stands up before doing anything else
+      if (working || (timer <= 0 && !ctx.hold && !dr)) b = { ...b, mode: "STAND", anim: "idle", timer: 1.2, seated: false }; // stands up before doing anything else
       break;
     }
     case "HOLD": b = { ...b, speed: damp(b.speed, 0, 7, dt), turnRate: 0, anim: b.seated ? "sit" : "idle" }; break;
   }
 
+  if (dr && b.dirVersion === dr.version && b.path.length === 0 && (b.mode === "STAND" || b.mode === "SIT" || b.mode === "WORK")) {
+    if (!b.dirArrived) b = { ...b, dirArrived: true, rush: false };
+    if (dr.face && !b.seated && b.mode === "STAND") b = { ...b, yaw: turnToward(b.yaw, Math.atan2(dr.face.x - b.x, dr.face.z - b.z), 3.5, dt), anim: "idle", ambient: dr.label, timer: Math.max(b.timer, 2) };
+  }
   // 3) integrate (position changes only through speed along the heading → no teleporting) + collisions + floor height
   const f = forward(b.yaw), step = Math.min(b.speed * dt, AGENT.maxStep * dt);
   let x = b.x + f.x * step, z = b.z + f.z * step;
@@ -102,13 +119,20 @@ function walk(b: AgentBrain, dt: number, ctx: AgentCtx, profile: AgentProfile): 
   const target = b.path[idx], remain = b.path.slice(idx).reduce((s, p, i, a) => (i ? s + dist2(a[i - 1], p) : dist2(b, p)), 0);
   const want = Math.atan2(target.x - b.x, target.z - b.z), err = angleDelta(b.yaw, want);
   // yield to the operator or another agent walking right in front of us (no shoving, no constant collisions)
-  const ahead = (p: V2, y: number) => Math.abs(y - b.y) < 1.5 && dist2(b, p) < 1.7 && Math.abs(angleDelta(b.yaw, Math.atan2(p.x - b.x, p.z - b.z))) < 0.9;
-  const blocker = ahead(ctx.player, ctx.player.y) || ctx.others.some((o) => o.id !== b.id && ahead(o, o.y) && (o.id < b.id)); // the lower id yields: no deadlock between two agents
-  const arrive = Math.min(1, remain / AGENT.arriveDist), turnSlow = Math.max(0.15, 1 - Math.abs(err) / 1.1);
-  const tv = blocker ? 0 : AGENT.walk * Math.max(0.25, arrive) * turnSlow, yaw = turnToward(b.yaw, want, AGENT.turnLambda, dt);
+  const ahead = (p: V2, y: number) => Math.abs(y - b.y) < 1.5 && dist2(b, p) < 2.2 && Math.abs(angleDelta(b.yaw, Math.atan2(p.x - b.x, p.z - b.z))) < 0.9;
+  const obstacle: V2 | null = ahead(ctx.player, ctx.player.y) ? ctx.player : ctx.others.find((o) => o.id !== b.id && (o.speed ?? 1) > 0.15 && ahead(o, o.y) && o.id < b.id) ?? null; // the lower id yields: no deadlock between two agents
+  const blocker = !!obstacle, sideSign = obstacle ? (angleDelta(want, Math.atan2(obstacle.x - b.x, obstacle.z - b.z)) > 0 ? -1 : 1) : 0; // someone in the way: slow down and step around them (never walk through, never freeze forever)
+  const arrive = Math.min(1, remain / (b.rush ? AGENT.rushArrive : AGENT.arriveDist)), turnSlow = Math.max(0.15, 1 - Math.abs(err) / 1.1), top = b.rush ? AGENT.rush : AGENT.walk;
+  const tv = blocker ? top * 0.4 : top * Math.max(0.25, arrive) * turnSlow, yaw = turnToward(b.yaw, blocker ? wrapAngle(want + sideSign * 1.2) : want, AGENT.turnLambda, dt);
   // if we have been unable to move for a long time (blocked by something dynamic), re-plan from here
   const stuck = b.speed < 0.08 && !blocker ? b.stuck + dt : 0;
+  if (stuck > 4 && !b.destId && b.dirTarget) { // a point destination (formation slot): re-plan, and after two failures snap to the nearest clear nav node as a last resort
+    if (b.recovered >= 2) { const nn = nearestNode(b.dirTarget); return { ...b, x: nn.x, z: nn.z, y: nn.y, path: [], pathIdx: 0, mode: "STAND", stuck: 0, speed: 0, recovered: b.recovered + 1 }; }
+    const route = routeToPoint({ x: b.x, z: b.z, y: b.y }, b.dirTarget); if (route) return { ...b, path: route, pathIdx: 1, stuck: 0, recovered: b.recovered + 1 }; return { ...b, mode: "STAND", path: [], stuck: 0, recovered: b.recovered + 1 };
+  }
   if (stuck > 4 && b.destId) { const w = startWalk(b, b.destId, b.ambient ?? ""); if (w) return { ...w, stuck: 0 }; return { ...b, mode: "STAND", path: [], destId: null, timer: 3, stuck: 0 }; }
   return { ...b, pathIdx: idx, yaw, turnRate: wrapAngle(yaw - b.yaw) / dt, speed: damp(b.speed, tv, AGENT.accel, dt), anim: b.speed > 0.15 ? "walk" : "idle", yield: blocker ? b.yield + dt : 0, stuck };
 }
+/** The agent's directive ended (DISMISS / RETURN TO WORK): resume normal behaviour at once — go to the workspace if working, otherwise pick an idle spot — by walking, not teleporting. */
+export function releaseAgent(b: AgentBrain): AgentBrain { return { ...b, dirVersion: -1, dirArrived: false, rush: false, dirTarget: null, dirRetry: 0, recovered: 0, mode: "STAND", path: [], pathIdx: 0, timer: 0, destId: null, ambient: null, seated: false }; }
 export { rng };

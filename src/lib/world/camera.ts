@@ -20,13 +20,13 @@ export function springArm(target: V3, dir: V3, dist: number, colliders: Collider
   return { x, y: clamp(yy, supportHeight(x, z, yy, 0.25) + 0.3, Math.max(ceilingAt(x, z, target.y) - 0.25, target.y)), z };
 }
 
-export interface CameraInputs { indoor?: number; lookYaw: number; lookPitch: number; overview: { yaw: number; pitch: number; dist: number; cx: number; cz: number }; followYaw: number; followPitch: number }
+export interface CameraInputs { indoor?: number; lookYaw: number; lookPitch: number; overview: { yaw: number; pitch: number; dist: number; cx: number; cz: number }; followYaw: number; followPitch: number; /** player speed (m/s): tightens the chase camera */ speed?: number }
 export interface Targets { player: PlayerState; agent: { x: number; y: number; z: number; heading: number } | null }
 
 export const POSES = {
   /** `indoor` (0..1) pulls the camera in for rooms, stairs and doorways. */
   player(p: PlayerState, yaw: number, pitch: number, indoor = 0): Pose {
-    const air = p.locomotion === "AIR", look = { x: p.x, y: p.y + (air ? 0.4 : 1.45), z: p.z }, dist = air ? 6.2 + Math.min(2, p.speed * 0.12) : lerp(4.1, 2.5, indoor);
+    const air = p.locomotion === "AIR", look = { x: p.x, y: p.y + (air ? 0.4 : 1.45), z: p.z }, dist = air ? 6.2 + Math.min(5, p.speed * 0.065) : lerp(4.1, 2.5, indoor) + Math.min(0.5, Math.max(0, p.speed - 4) * 0.1);
     return { pos: springArm(look, lookDir(yaw, pitch), dist), look: { x: look.x, y: look.y + 0.15, z: look.z } };
   },
   overview(c: { yaw: number; pitch: number; dist: number; cx: number; cz: number }): Pose {
@@ -61,7 +61,7 @@ export class CameraRig {
       this.pose = lerpPose(this.from, desired, easeInOutCubic(this.t));
       return this.pose;
     }
-    const lam = view === "PLAYER" ? 9 : view === "FOLLOW" ? 5 : 6;
+    const lam = view === "PLAYER" ? 9 + Math.min(30, (inp.speed ?? 0) * 0.3) : view === "FOLLOW" ? 5 : 6; // the faster you fly the tighter the chase, so turbo never leaves the player far from frame
     this.pose = { pos: { x: damp(this.pose.pos.x, desired.pos.x, lam, d), y: damp(this.pose.pos.y, desired.pos.y, lam, d), z: damp(this.pose.pos.z, desired.pos.z, lam, d) }, look: { x: damp(this.pose.look.x, desired.look.x, lam * 1.4, d), y: damp(this.pose.look.y, desired.look.y, lam * 1.4, d), z: damp(this.pose.look.z, desired.look.z, lam * 1.4, d) } };
     return this.pose;
   }

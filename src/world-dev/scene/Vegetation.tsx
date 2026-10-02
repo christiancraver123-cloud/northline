@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { SCENERY, groundHeight } from "@/lib/world/layout";
+import { SCENERY, supportHeight } from "@/lib/world/layout";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { noise2, rng } from "@/lib/world/math";
 import { useQuality } from "./context";
@@ -61,17 +61,16 @@ export function Vegetation({ shadows }: { shadows: boolean }) {
   const m4 = useMemo(() => {
     const trunks: THREE.Matrix4[] = [], fronds: THREE.Matrix4[] = [], r = rng(99), o = new THREE.Object3D(), e = new THREE.Euler(), q2 = new THREE.Quaternion();
     for (const p of SCENERY.palms) {
-      const sy = p.h / 8, s = p.s; o.position.set(p.x, groundHeight(p.x, p.z) - 0.1, p.z); o.rotation.set(0, p.yaw, 0); o.scale.set(s, sy, s); o.updateMatrix(); trunks.push(o.matrix.clone());
-      const base = new THREE.Matrix4().makeRotationY(p.yaw), top = new THREE.Vector3(1.15 * s, p.h, 0).applyMatrix4(base).add(new THREE.Vector3(p.x, groundHeight(p.x, p.z) - 0.1, p.z));
+      const sy = p.h / 8, s = p.s; o.position.set(p.x, supportHeight(p.x, p.z, 1.2) - 0.1, p.z); o.rotation.set(0, p.yaw, 0); o.scale.set(s, sy, s); o.updateMatrix(); trunks.push(o.matrix.clone());
+      const base = new THREE.Matrix4().makeRotationY(p.yaw), top = new THREE.Vector3(1.15 * s, p.h, 0).applyMatrix4(base).add(new THREE.Vector3(p.x, supportHeight(p.x, p.z, 1.2) - 0.1, p.z));
       for (let i = 0; i < FR; i++) {
         const a = (i / FR) * Math.PI * 2 + r.range(-0.2, 0.2), droop = r.range(0.55, 1.05); e.set(-droop, a, 0, "YXZ"); q2.setFromEuler(e);
         o.position.copy(top); o.quaternion.copy(q2); const sc = s * r.range(0.85, 1.15); o.scale.set(sc, sc, sc); o.updateMatrix(); fronds.push(o.matrix.clone());
       }
     }
-    const tufts = SCENERY.tufts.map((t) => { o.position.set(t.x, groundHeight(t.x, t.z), t.z); o.rotation.set(0, r.range(0, 6.28), 0); o.scale.set(t.s * 1.0, t.s * 0.95, t.s * 1.0); o.updateMatrix(); return o.matrix.clone(); });
-    const rocks = SCENERY.rocks.map((t) => { o.position.set(t.x, groundHeight(t.x, t.z) + t.s * 0.2, t.z); o.rotation.set(r.range(0, 3), r.range(0, 3), 0); o.scale.set(t.s * 1.4, t.s * 0.8, t.s); o.updateMatrix(); return o.matrix.clone(); });
-    const bushSpots: [number, number, number][] = []; for (let i = 0; i < 70; i++) { const x = r.range(-60, 60), z = r.range(-3.5, 14); if (Math.abs(z - 6) < 20) bushSpots.push([x, z, r.range(0.45, 0.95)]); }
-    const bushes = bushSpots.filter(([x, z]) => !SCENERY.palms.some((p) => Math.hypot(p.x - x, p.z - z) < 1.4) && ![-46, -38, -30, -22, -14, -6, 2, 10, 18, 26, 34, 42].some((nx) => Math.abs(nx - x) < 1.4) && ![-0.8, 8].some((nz) => Math.abs(nz - z) < 1.3)).map(([x, z, s]) => { o.position.set(x, groundHeight(x, z) + s * 0.4, z); o.rotation.set(0, 0, 0); o.scale.set(s * 1.2, s * 0.8, s); o.updateMatrix(); return o.matrix.clone(); });
+    const tufts = SCENERY.tufts.map((t) => { o.position.set(t.x, supportHeight(t.x, t.z, 1.2), t.z); o.rotation.set(0, r.range(0, 6.28), 0); o.scale.set(t.s * 1.0, t.s * 0.95, t.s * 1.0); o.updateMatrix(); return o.matrix.clone(); });
+    const rocks = SCENERY.rocks.map((t) => { o.position.set(t.x, supportHeight(t.x, t.z, 1.2) + t.s * 0.2, t.z); o.rotation.set(r.range(0, 3), r.range(0, 3), 0); o.scale.set(t.s * 1.4, t.s * 0.8, t.s); o.updateMatrix(); return o.matrix.clone(); });
+    const bushes = SCENERY.bushes.map((t) => { o.position.set(t.x, supportHeight(t.x, t.z, 1.2) + t.s * 0.4, t.z); o.rotation.set(0, 0, 0); o.scale.set(t.s * 1.2, t.s * 0.8, t.s); o.updateMatrix(); return o.matrix.clone(); });
     return { trunks, fronds, tufts, rocks, bushes };
   }, []);
   useEffect(() => {
@@ -79,7 +78,7 @@ export function Vegetation({ shadows }: { shadows: boolean }) {
     set(trunkRef, m4.trunks); set(frondRef, m4.fronds); set(tuftRef, m4.tufts); set(rockRef, m4.rocks); set(bushRef, m4.bushes);
   }, [m4]);
   useEffect(() => { // bounded vegetation by tier: show only a stable prefix of the instances
-    const n = SCENERY.palms.length; if (trunkRef.current) trunkRef.current.count = Math.ceil(n * q.palmDensity); if (frondRef.current) frondRef.current.count = Math.ceil(n * q.palmDensity) * FR; if (tuftRef.current) tuftRef.current.count = Math.ceil(m4.tufts.length * q.tuftDensity);
+    const n = SCENERY.palms.length; if (bushRef.current) bushRef.current.count = Math.ceil(m4.bushes.length * Math.max(0.4, q.tuftDensity)); if (trunkRef.current) trunkRef.current.count = Math.ceil(n * q.palmDensity); if (frondRef.current) frondRef.current.count = Math.ceil(n * q.palmDensity) * FR; if (tuftRef.current) tuftRef.current.count = Math.ceil(m4.tufts.length * q.tuftDensity);
   }, [q.palmDensity, q.tuftDensity, m4]);
   useFrame((s) => { time.current.value = q.foliageSway ? s.clock.elapsedTime : 0; });
   return (

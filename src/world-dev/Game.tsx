@@ -1,165 +1,230 @@
 "use client";
-// The game loop + 3D scene. All rules live in src/lib/world (pure, tested); this file only reads input, advances those pure functions, and copies
-// the results onto three.js objects. It owns NO Northline business logic and makes no network calls.
+// The game loop + 3D scene. All rules live in src/lib/world (pure, tested); this file reads input, advances those pure functions for the player and EVERY roster
+// agent, and copies the results onto three.js objects + DOM labels. It owns NO Northline business logic and makes no network calls.
 import { useEffect, useMemo, useRef, type MutableRefObject } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { CameraRig, POSES, type CameraInputs } from "@/lib/world/camera";
-import { canInteract, promptFor, type Eligibility } from "@/lib/world/interaction";
-import { AGENT, startAgent, stepAgent, type AgentBrain } from "@/lib/world/agent-ai";
-import { clamp, dampAngle, rng, yawTo } from "@/lib/world/math";
-import { initialMode, modeLabel, reduceMode, startPlayer, stepPlayer, toggleFly, type ModeAction, type ModeState, type PlayerState } from "@/lib/world/player";
+import { canInteract, nearestEligible, promptFor, type Eligibility } from "@/lib/world/interaction";
+import { startAgent, stepAgent, type AgentBrain, type AgentProfile, type OpState } from "@/lib/world/agent-ai";
+import { routeTo } from "@/lib/world/nav";
+import { clamp, dampAngle, lerp, rng, yawTo } from "@/lib/world/math";
+import { PLAYER_START, initialMode, modeLabel, reduceMode, startPlayer, stepPlayer, toggleFly, type ModeAction, type ModeState, type PlayerState } from "@/lib/world/player";
 import { AdaptiveQuality, type TierConfig, type Tier } from "@/lib/world/quality";
 import { FrameStats } from "@/lib/world/perf";
 import type { WorldSnapshot } from "@/lib/world/schema";
-import { groundHeight, BUILDING } from "@/lib/world/layout";
+import { LANDMARKS, TOWN, isIndoors, locationLabel, supportHeight, zoneAt } from "@/lib/world/layout";
+import { WORLD_ROSTER, roleStyle } from "@/lib/world/roster";
 import type { Input } from "./input";
 import { Avatar, type AvatarHandle } from "./scene/Avatars";
 import { Terrain } from "./scene/Terrain";
 import { Ocean } from "./scene/Ocean";
 import { Sky } from "./scene/Sky";
-import { Building } from "./scene/Building";
+import { TownMesh, type GroupMeshes } from "./scene/TownMesh";
 import { Vegetation } from "./scene/Vegetation";
 import { Props } from "./scene/Props";
 import { Backdrop } from "./scene/Backdrop";
+import { Ambient } from "./scene/Ambient";
 import { PALETTE, SUN_DIR } from "./scene/context";
 
 export interface HudState {
-  modeLabel: string; view: ModeState["view"]; speed: number; altitude: number; prompt: string | null; canInteract: boolean; panelOpen: boolean; selectedAgent: string | null;
-  following: boolean; ambient: string | null; agentMode: string; agentDist: number; locomotion: "GROUND" | "AIR"; landing: boolean;
+  modeLabel: string; view: ModeState["view"]; speed: number; altitude: number; prompt: string | null; canInteract: boolean; panelOpen: boolean; selectedAgent: string | null; targetAgent: string | null;
+  following: boolean; ambient: string | null; locomotion: "GROUND" | "AIR"; landing: boolean; location: string; indoor: boolean;
+  agents: { id: string; where: string; anim: string; indoor: boolean; dist: number }[];
 }
 export interface PerfState { fps: number; ms: number; low1: number; calls: number; tris: number; geometries: number; textures: number; dpr: number; tier: Tier; auto: boolean }
+export interface Overlay { labels: Map<string, HTMLElement>; landmarks: Map<string, HTMLElement> }
 export interface GameProps {
   input: Input; snapshotRef: MutableRefObject<WorldSnapshot>; q: TierConfig; adaptive: MutableRefObject<AdaptiveQuality>; onTier: (t: Tier) => void;
-  onHud: (h: HudState) => void; onPerf: (p: PerfState) => void; agentId: string; reducedMotion: boolean;
+  onHud: (h: HudState) => void; onPerf: (p: PerfState) => void; onTravel: () => void; reducedMotion: boolean; overlay: MutableRefObject<Overlay>;
 }
-const SENS_PITCH_MIN = -0.55, SENS_PITCH_MAX = 1.25;
+const PROFILES: AgentProfile[] = WORLD_ROSTER.map((r) => ({ id: r.code, workspace: r.workspace, idleSpots: r.idleSpots, startSpot: r.startSpot }));
+const PITCH_MIN = -0.55, PITCH_MAX = 1.25, up = new THREE.Vector3(), v3 = new THREE.Vector3(), o3 = new THREE.Object3D(), col = new THREE.Color();
+const atWorkplaceStates = new Set<OpState>(["WORKING", "WAITING", "BLOCKED"]);
 
 export function Game(p: GameProps) {
   const { camera, gl, scene } = useThree(), cam = camera as THREE.PerspectiveCamera;
-  const player = useRef<PlayerState>(startPlayer()), brain = useRef<AgentBrain>(startAgent("rail-mid")), mode = useRef<ModeState>(initialMode()), eligibility = useRef<Eligibility>({ ok: false, reason: "too_far", distance: 99 });
-  const look = useRef({ yaw: 0, pitch: 0.26, followYaw: 0, followPitch: 0.3, ov: { yaw: 0.5, pitch: 0.92, dist: 82, cx: -4, cz: 0 } });
-  const rig = useRef<CameraRig>(new CameraRig(POSES.player(player.current, 0, 0.26))), rand = useMemo(() => rng(4242), []);
-  const stats = useRef(new FrameStats(90)), acc = useRef({ hud: 0, perf: 0, t: 0, warm: 0 }), fov = useRef(62);
-  const playerAv = useRef<AvatarHandle>(null), agentAv = useRef<AvatarHandle>(null), sun = useRef<THREE.DirectionalLight>(null), prevShadow = useRef<{ map: number; on: boolean }>({ map: 0, on: false });
-  const ids = useMemo(() => ({ agent: p.agentId }), [p.agentId]);
+  const player = useRef<PlayerState>(startPlayer()), mode = useRef<ModeState>(initialMode()), eligibility = useRef<Eligibility>({ ok: false, reason: "too_far", distance: 99 });
+  const agents = useRef<Map<string, AgentBrain>>(new Map(PROFILES.map((pr) => [pr.id, startAgent(pr, p.snapshotRef.current.agents.find((a) => a.agentId === pr.id)?.opState as OpState | undefined)])));
+  const look = useRef({ yaw: PLAYER_START.yaw, pitch: 0.26, followYaw: 0, followPitch: 0.3, ov: { yaw: 0.5, pitch: 0.95, dist: 120, cx: -10, cz: 0 } });
+  const rig = useRef<CameraRig>(new CameraRig(POSES.player(player.current, PLAYER_START.yaw, 0.26))), rand = useMemo(() => rng(4242), []);
+  const stats = useRef(new FrameStats(90)), acc = useRef({ hud: 0, perf: 0, warm: 0, seq: -1 }), fov = useRef(62), indoorK = useRef(0), groups = useRef<GroupMeshes>(new Map());
+  const avRefs = useRef<Record<string, AvatarHandle | null>>({}), playerAv = useRef<AvatarHandle>(null), sun = useRef<THREE.DirectionalLight>(null), hemi = useRef<THREE.HemisphereLight>(null), proxyBody = useRef<THREE.InstancedMesh>(null), proxyHead = useRef<THREE.InstancedMesh>(null), blobs = useRef<THREE.InstancedMesh>(null), ring = useRef<THREE.Mesh>(null);
+  const prevShadow = useRef<{ map: number; on: boolean }>({ map: 0, on: false }), lastView = useRef<string>("PLAYER");
   const shadows = p.q.shadows !== "off";
+  const blobTex = useMemo(() => { const c = document.createElement("canvas"); c.width = c.height = 64; const x = c.getContext("2d")!, g = x.createRadialGradient(32, 32, 2, 32, 32, 30); g.addColorStop(0, "rgba(0,0,0,.5)"); g.addColorStop(1, "rgba(0,0,0,0)"); x.fillStyle = g; x.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c); }, []);
 
   useEffect(() => { rig.current.reducedMotion = p.reducedMotion; }, [p.reducedMotion]);
-  useEffect(() => { // shadows on/off + map size follow the tier
+  useEffect(() => {
     const l = sun.current; gl.shadowMap.enabled = shadows; gl.shadowMap.type = THREE.PCFSoftShadowMap;
-    if (l) { l.castShadow = shadows; if (prevShadow.current.map !== p.q.shadowMap) { l.shadow.mapSize.set(p.q.shadowMap, p.q.shadowMap); l.shadow.map?.dispose(); l.shadow.map = null; } const r = Math.max(8, p.q.shadowRadius); Object.assign(l.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 1, far: 160 }); l.shadow.camera.updateProjectionMatrix(); l.shadow.bias = -0.0005; l.shadow.normalBias = 0.05; }
+    if (l) { l.castShadow = shadows; if (prevShadow.current.map !== p.q.shadowMap) { l.shadow.mapSize.set(p.q.shadowMap, p.q.shadowMap); l.shadow.map?.dispose(); l.shadow.map = null; } const r = Math.max(8, p.q.shadowRadius); Object.assign(l.shadow.camera, { left: -r, right: r, top: r, bottom: -r, near: 1, far: 200 }); l.shadow.camera.updateProjectionMatrix(); l.shadow.bias = -0.0005; l.shadow.normalBias = 0.05; }
     if (prevShadow.current.on !== shadows) scene.traverse((o) => { const m = (o as THREE.Mesh).material; if (m) (Array.isArray(m) ? m : [m]).forEach((x) => (x.needsUpdate = true)); });
     prevShadow.current = { map: p.q.shadowMap, on: shadows };
-    scene.fog = new THREE.Fog(PALETTE.fog, 110, p.q.farFog); cam.far = p.q.far; cam.updateProjectionMatrix();
+    scene.fog = new THREE.Fog(PALETTE.fog, 140, p.q.farFog); cam.far = p.q.far; cam.updateProjectionMatrix();
   }, [p.q, shadows, gl, scene, cam]);
 
-  // dev/test hook (this route only exists in development / explicit local play-testing)
-  useEffect(() => {
-    const w = window as unknown as { __worldDev?: unknown };
-    w.__worldDev = { state: () => ({ player: { ...player.current }, agent: { ...brain.current, path: undefined }, mode: { ...mode.current }, cam: { x: cam.position.x, y: cam.position.y, z: cam.position.z }, fov: cam.fov, eligibility: eligibility.current }), teleportPlayer: (x: number, z: number) => { player.current = startPlayer(x, z); }, setPlayer: (patch: Partial<PlayerState>) => { player.current = { ...player.current, ...patch }; }, setLook: (yaw: number, pitch: number) => { look.current.yaw = yaw; look.current.pitch = pitch; }, setMode: (a: ModeAction) => { mode.current = reduceMode(mode.current, a); }, setAgent: (x: number, z: number) => { brain.current = { ...brain.current, x, z, y: groundHeight(x, z), path: [], mode: "STAND", timer: 99 }; } };
+  useEffect(() => { // dev/test hook (this route only exists in development / explicit local play-testing)
+    const w = window as unknown as { __worldDev?: unknown }, snapA = (id: string) => { const b = agents.current.get(id)!; return { ...b, path: undefined }; };
+    w.__worldDev = {
+      state: () => ({ player: { ...player.current }, agents: Object.fromEntries([...agents.current].map(([id]) => [id, snapA(id)])), mode: { ...mode.current }, cam: { x: cam.position.x, y: cam.position.y, z: cam.position.z }, fov: cam.fov, eligibility: eligibility.current, location: locationLabel(player.current.x, player.current.z, player.current.y), indoorK: indoorK.current, roofVisible: groups.current.get("hq-roof")?.[0]?.visible ?? null }),
+      teleportPlayer: (x: number, z: number, y?: number) => { player.current = startPlayer(x, z); if (y !== undefined) player.current = { ...player.current, y }; },
+      setPlayer: (patch: Partial<PlayerState>) => { player.current = { ...player.current, ...patch }; },
+      setLook: (yaw: number, pitch: number) => { look.current.yaw = yaw; look.current.pitch = pitch; },
+      setMode: (a: ModeAction) => { mode.current = reduceMode(mode.current, a); },
+      setAgent: (id: string, x: number, z: number, y?: number) => { const b = agents.current.get(id)!; agents.current.set(id, { ...b, x, z, y: y ?? supportHeight(x, z, 1.2), path: [], mode: "STAND", timer: 99, destId: null, seated: false }); },
+      agentIds: () => PROFILES.map((x) => x.id),
+      route: (id: string) => routeTo({ x: player.current.x, z: player.current.z, y: player.current.y }, id),
+    };
     return () => { delete w.__worldDev; };
   }, [cam]);
 
+  const opOf = (id: string, snap: WorldSnapshot): OpState => (snap.agents.find((a) => a.agentId === id)?.opState ?? "IDLE") as OpState;
+  const agentTargets = () => [...agents.current.values()].map((b) => ({ id: b.id, x: b.x, y: b.y, z: b.z }));
+
   useFrame((state, rawDelta) => {
-    const dt = Math.min(rawDelta, 0.05), input = p.input, snap = p.snapshotRef.current, ag = snap.agents.find((a) => a.agentId === ids.agent), opState = ag?.opState ?? "IDLE";
-    acc.current.t += dt; acc.current.warm += dt; stats.current.push(rawDelta * 1000);
+    const dt = Math.min(rawDelta, 0.05), input = p.input, snap = p.snapshotRef.current;
+    acc.current.warm += dt; stats.current.push(rawDelta * 1000);
 
     // ---- one-shot actions → mode machine / player ----
     const act = (a: ModeAction) => { mode.current = reduceMode(mode.current, a); };
+    const nearestAgentId = (maxD = 1e9) => { let best: string | null = null, bd = maxD; for (const b of agents.current.values()) { const d = Math.hypot(b.x - player.current.x, b.z - player.current.z); if (d < bd) { bd = d; best = b.id; } } return best; };
+    for (const id of input.selectQueue.splice(0)) act({ type: "SELECT", id });
+    for (const id of input.travelQueue.splice(0)) {
+      if (id.startsWith("agent:")) { // descend next to an agent
+        const b = agents.current.get(id.slice(6)); if (!b) continue;
+        const ox = 1.4 * Math.sin(b.yaw + 0.6), oz = 1.4 * Math.cos(b.yaw + 0.6); player.current = { ...startPlayer(b.x + ox, b.z + oz), y: b.y }; look.current.yaw = Math.atan2(-ox, -oz); look.current.pitch = 0.2;
+        act({ type: "SELECT", id: b.id }); act({ type: "RETURN_TO_PLAYER" }); p.onTravel(); continue;
+      }
+      const lm = LANDMARKS.find((l) => l.id === id) ?? LANDMARKS[0]; player.current = startPlayer(lm.x, lm.z); look.current.yaw = lm.z < 0 ? 0 : Math.PI; look.current.pitch = 0.2;
+      act({ type: "RETURN_TO_PLAYER" }); p.onTravel();
+    }
     for (const a of input.drain()) {
-      const view = mode.current.view;
-      if (a === "overview") act({ type: "TOGGLE_OVERVIEW" });
+      const view = mode.current.view, sel = mode.current.selectedAgent;
+      if (a === "overview") { act({ type: "TOGGLE_OVERVIEW" }); input.releasePointer(); }
       else if (a === "escape") { act({ type: "ESCAPE" }); input.releasePointer(); }
-      else if (a === "follow") { if (view === "FOLLOW") act({ type: "EXIT_FOLLOW" }); else act({ type: "FOLLOW_AGENT", id: ids.agent }); }
-      else if (a === "focus") act({ type: "FOCUS_AGENT", id: ids.agent });
+      else if (a === "follow") { if (view === "FOLLOW") act({ type: "EXIT_FOLLOW" }); else { const id = view === "OVERVIEW" || view === "FOCUS" || mode.current.panelOpen ? sel : nearestEligible(player.current, agentTargets(), view, false)?.id ?? nearestAgentId(16) ?? sel ?? WORLD_ROSTER[0].code; if (id) act({ type: "FOLLOW_AGENT", id }); } }
+      else if (a === "focus") { const id = sel ?? nearestAgentId(); if (id) act({ type: "FOCUS_AGENT", id }); }
       else if (a === "return") act({ type: "RETURN_TO_PLAYER" });
-      else if (a === "toggleFly" && (view === "PLAYER")) player.current = toggleFly(player.current);
-      else if (a === "interact") {
+      else if (a === "toggleFly" && view === "PLAYER") player.current = toggleFly(player.current);
+      else if (a === "interact" || a === "details") {
         if (mode.current.panelOpen) act({ type: "CLOSE_PANEL" });
-        else if (eligibility.current.ok) { act({ type: "OPEN_PANEL", id: ids.agent }); input.releasePointer(); }
+        else if (view === "PLAYER") { const t = nearestEligible(player.current, agentTargets(), view, false); if (t) { act({ type: "OPEN_PANEL", id: t.id }); input.releasePointer(); } }
+        else if (sel) act({ type: "OPEN_PANEL", id: sel }); // overview / focus / follow: details of the selected agent
       }
     }
 
     // ---- look input ----
     const { dx, dy, wheel } = input.consumeLook(), v = mode.current.view, L = look.current;
-    if (v === "PLAYER") { L.yaw -= dx; L.pitch = clamp(L.pitch + dy, SENS_PITCH_MIN, SENS_PITCH_MAX); }
-    else if (v === "OVERVIEW" || v === "FOCUS") { L.ov.yaw -= dx * 1.3; L.ov.pitch = clamp(L.ov.pitch + dy * 1.1, 0.35, 1.45); L.ov.dist = clamp(L.ov.dist * Math.exp(wheel * 0.0012), 16, 150); }
+    if (v === "PLAYER") { L.yaw -= dx; L.pitch = clamp(L.pitch + dy, PITCH_MIN, PITCH_MAX); }
+    else if (v === "OVERVIEW" || v === "FOCUS") { L.ov.yaw -= dx * 1.3; L.ov.pitch = clamp(L.ov.pitch + dy * 1.1, 0.35, 1.45); L.ov.dist = clamp(L.ov.dist * Math.exp(wheel * 0.0012), 20, 220); }
     else if (v === "FOLLOW") { L.followYaw -= dx; L.followPitch = clamp(L.followPitch + dy, 0.05, 1.0); }
 
     // ---- player ----
     const ctrl = v === "PLAYER";
-    if (v === "OVERVIEW") { // WASD pans the management view
-      const sp = L.ov.dist * 0.6 * dt, f = { x: Math.sin(L.ov.yaw), z: Math.cos(L.ov.yaw) }; L.ov.cx = clamp(L.ov.cx + (f.x * input.moveZ - f.z * input.moveX) * sp, -70, 70); L.ov.cz = clamp(L.ov.cz + (f.z * input.moveZ + f.x * input.moveX) * sp, -50, 50);
-    }
+    if (v === "OVERVIEW") { const sp = L.ov.dist * 0.6 * dt, f = { x: Math.sin(L.ov.yaw), z: Math.cos(L.ov.yaw) }; L.ov.cx = clamp(L.ov.cx + (f.x * input.moveZ - f.z * input.moveX) * sp, -110, 110); L.ov.cz = clamp(L.ov.cz + (f.z * input.moveZ + f.x * input.moveX) * sp, -60, 60); }
     let pl = stepPlayer(player.current, { moveX: ctrl ? input.moveX : 0, moveZ: ctrl ? input.moveZ : 0, cameraYaw: L.yaw, run: ctrl && input.run, up: ctrl ? input.up : 0, down: ctrl ? input.downAxis : 0, boost: ctrl && input.run }, dt);
-    if (pl.locomotion === "AIR" && ctrl && input.downAxis > 0 && pl.takeoff <= 0) pl = { ...pl, landing: pl.landing }; // down alone just descends; landing completes on touchdown
-    // agent is solid for the player (never walk through them), but only when roughly at their height
-    const b0 = brain.current; if (pl.y - b0.y < 2.2) { const dxp = pl.x - b0.x, dzp = pl.z - b0.z, d = Math.hypot(dxp, dzp), min = 0.38 + AGENT.radius; if (d < min && d > 1e-4) pl = { ...pl, x: b0.x + (dxp / d) * min, z: b0.z + (dzp / d) * min }; }
+    for (const b0 of agents.current.values()) if (Math.abs(pl.y - b0.y) < 2.2) { const dxp = pl.x - b0.x, dzp = pl.z - b0.z, d = Math.hypot(dxp, dzp), min = 0.38 + 0.4; if (d < min && d > 1e-4 && !b0.seated) pl = { ...pl, x: b0.x + (dxp / d) * min, z: b0.z + (dzp / d) * min }; }
     player.current = pl;
 
-    // ---- agent ----
-    const holdAgent = mode.current.panelOpen && mode.current.selectedAgent === ids.agent;
-    let b = stepAgent(brain.current, dt, { opState, player: { x: pl.x, z: pl.z, y: pl.y }, hold: holdAgent, rand });
-    if (b.mode === "HOLD" || (holdAgent && b.speed < 0.2)) b = { ...b, yaw: dampAngle(b.yaw, yawTo(b, pl), 3, dt) }; // politely turns to face the operator
-    brain.current = b;
+    // ---- agents (every real registry agent) ----
+    const selected = mode.current.selectedAgent, holdId = mode.current.panelOpen ? selected : null;
+    const others = [...agents.current.values()].map((b) => ({ id: b.id, x: b.x, z: b.z, y: b.y }));
+    for (const pr of PROFILES) {
+      const b0 = agents.current.get(pr.id)!, op = opOf(pr.id, snap), working = atWorkplaceStates.has(op);
+      let b = stepAgent(b0, dt, { opState: (working ? "WORKING" : "IDLE") as OpState, player: { x: pl.x, z: pl.z, y: pl.y }, hold: holdId === pr.id, rand, others }, pr);
+      if ((b.mode === "HOLD" || (holdId === pr.id && b.speed < 0.2)) && !b.seated) b = { ...b, yaw: dampAngle(b.yaw, yawTo(b, pl), 3, dt) }; // politely turns to face the operator
+      agents.current.set(pr.id, b);
+    }
 
     // ---- interaction eligibility ----
-    eligibility.current = canInteract(pl, { id: ids.agent, x: b.x, y: b.y, z: b.z }, mode.current.view, mode.current.panelOpen);
+    const near = nearestEligible(pl, agentTargets(), mode.current.view, mode.current.panelOpen), nearestAny = nearestAgentId(9);
+    const tgtId = near?.id ?? nearestAny ?? null, tgtB = tgtId ? agents.current.get(tgtId)! : null;
+    eligibility.current = tgtB ? canInteract(pl, { id: tgtB.id, x: tgtB.x, y: tgtB.y, z: tgtB.z }, mode.current.view, mode.current.panelOpen) : { ok: false, reason: "too_far", distance: 99 };
 
     // ---- camera ----
-    const inp: CameraInputs = { lookYaw: L.yaw, lookPitch: L.pitch, overview: L.ov, followYaw: L.followYaw, followPitch: L.followPitch };
+    const focusAgent = mode.current.selectedAgent ? agents.current.get(mode.current.selectedAgent) ?? null : null;
+    const focusPos = v === "FOLLOW" && focusAgent ? { x: focusAgent.x, y: focusAgent.y, z: focusAgent.z } : { x: pl.x, y: pl.y, z: pl.z };
+    const indoorNow = v === "OVERVIEW" || v === "FOCUS" ? 0 : isIndoors(focusPos.x, focusPos.z, focusPos.y + 0.5) ? 1 : 0; indoorK.current += (indoorNow - indoorK.current) * (1 - Math.exp(-5 * dt));
+    const inp: CameraInputs = { indoor: indoorK.current, lookYaw: L.yaw, lookPitch: L.pitch, overview: L.ov, followYaw: L.followYaw, followPitch: L.followPitch };
     rig.current.onViewChange(mode.current.seq, mode.current.view);
-    const pose = rig.current.update(dt, mode.current.view, { player: pl, agent: { x: b.x, y: b.y, z: b.z, heading: b.yaw } }, inp);
+    const pose = rig.current.update(dt, mode.current.view, { player: pl, agent: focusAgent ? { x: focusAgent.x, y: focusAgent.y, z: focusAgent.z, heading: focusAgent.yaw } : null }, inp);
     cam.position.set(pose.pos.x, pose.pos.y, pose.pos.z); cam.lookAt(pose.look.x, pose.look.y, pose.look.z);
-    const tf = v === "OVERVIEW" || v === "FOCUS" ? 48 : 60 + clamp(pl.speed * (pl.locomotion === "AIR" ? 0.55 : 0.9), 0, 14); fov.current += (tf - fov.current) * (1 - Math.exp(-4 * dt)); if (Math.abs(cam.fov - fov.current) > 0.05) { cam.fov = fov.current; cam.updateProjectionMatrix(); }
+    const tf = v === "OVERVIEW" || v === "FOCUS" ? 48 : 60 + clamp(pl.speed * (pl.locomotion === "AIR" ? 0.55 : 0.9), 0, 14) * (1 - indoorK.current * 0.6); fov.current += (tf - fov.current) * (1 - Math.exp(-4 * dt)); if (Math.abs(cam.fov - fov.current) > 0.05) { cam.fov = fov.current; cam.updateProjectionMatrix(); }
+    if (v !== lastView.current) { lastView.current = v; if (v === "OVERVIEW" || v === "FOCUS") input.releasePointer(); }
 
-    // ---- visuals ----
-    const pa = playerAv.current, aa = agentAv.current;
-    if (pa) {
-      pa.group.position.set(pl.x, pl.y, pl.z); pa.group.rotation.y = pl.heading;
-      const air = pl.locomotion === "AIR", sp = pl.speed;
-      pa.setPose({ walk: air ? 0 : clamp(sp / 2.4, 0, 1), run: !air && pl.running ? 1 : 0, fly: air ? 1 : 0, bank: pl.bank, moving: sp }, dt);
-      pa.setBlob(air ? pl.y - groundHeight(pl.x, pl.z) : 0); pa.group.visible = v !== "FOLLOW" || true;
-      const ov = v === "OVERVIEW" || v === "FOCUS"; (pa.marker.material as THREE.SpriteMaterial).opacity = ov ? 1 : 0; const dc = cam.position.distanceTo(pa.group.position); pa.marker.scale.setScalar(clamp(dc * 0.06, 1.2, 9)); pa.marker.position.y = 2.6 + dc * 0.015;
+    // ---- visuals: player ----
+    const pa = playerAv.current; if (pa) { pa.group.position.set(pl.x, pl.y, pl.z); pa.group.rotation.y = pl.heading; const air = pl.locomotion === "AIR"; pa.setPose({ walk: air ? 0 : clamp(pl.speed / 2.4, 0, 1), run: !air && pl.running ? 1 : 0, fly: air ? 1 : 0, bank: pl.bank, moving: pl.speed }, dt); }
+    // ---- visuals: agents (full rig when near, shared proxy when far) + blobs ----
+    const bodyI = proxyBody.current, headI = proxyHead.current, blobI = blobs.current; let blobN = 0;
+    if (blobI) { o3.position.set(pl.x, pl.y + 0.04, pl.z); o3.rotation.set(-Math.PI / 2, 0, 0); o3.scale.setScalar(pl.locomotion === "AIR" ? 1 + (pl.y - supportHeight(pl.x, pl.z, pl.y, 0.3)) * 0.05 : 1); o3.updateMatrix(); blobI.setMatrixAt(blobN++, o3.matrix); }
+    let proxyN = 0;
+    for (const pr of PROFILES) {
+      const b = agents.current.get(pr.id)!, av = avRefs.current[pr.id]; if (!av) continue;
+      const dc = Math.hypot(cam.position.x - b.x, cam.position.y - b.y, cam.position.z - b.z), special = pr.id === mode.current.selectedAgent && (v === "FOLLOW" || mode.current.panelOpen), nearRig = dc < p.q.agentRigDist || special;
+      if (av.rigVisible !== nearRig) av.setRigVisible(nearRig);
+      av.group.position.set(b.x, b.y, b.z); av.group.rotation.y = b.yaw;
+      const sit = b.anim === "sit" || b.anim === "sit-work", work = b.anim === "work" || b.anim === "sit-work";
+      av.setPose({ walk: clamp(b.speed / 1.15, 0, 1), moving: b.speed, work: work ? 1 : 0, sit: sit ? 1 : 0, look: b.anim === "look" ? 1 : 0, talk: b.anim === "talk" ? 1 : 0 }, dt);
+      if (!nearRig && bodyI && headI && proxyN < 16) { const st = roleStyle(pr.id), sh = sit ? 0.55 : 0.95; o3.position.set(b.x, b.y + sh * 0.62, b.z); o3.rotation.set(0, b.yaw, 0); o3.scale.set(1, sh / 0.95, 1); o3.updateMatrix(); bodyI.setMatrixAt(proxyN, o3.matrix); bodyI.setColorAt(proxyN, col.set(st.color)); o3.position.set(b.x, b.y + sh * 1.28, b.z); o3.scale.setScalar(1); o3.updateMatrix(); headI.setMatrixAt(proxyN, o3.matrix); headI.setColorAt(proxyN, col.set(st.skin)); proxyN++; }
+      if (blobI && blobN < 16 && !b.seated) { o3.position.set(b.x, b.y + 0.04, b.z); o3.rotation.set(-Math.PI / 2, 0, 0); o3.scale.setScalar(1); o3.updateMatrix(); blobI.setMatrixAt(blobN++, o3.matrix); }
     }
-    if (aa) {
-      aa.group.position.set(b.x, b.y, b.z); aa.group.rotation.y = b.yaw;
-      aa.setPose({ walk: clamp(b.speed / 1.15, 0, 1), moving: b.speed, work: b.anim === "work" ? 1 : 0, look: b.anim === "look" ? 1 : 0 }, dt); aa.setBlob(0);
-      const dc = cam.position.distanceTo(aa.group.position), ov = v === "OVERVIEW" || v === "FOCUS";
-      if (aa.badge) { const s = clamp(dc * 0.045, 1.0, 7); aa.badge.scale.set(2.6 * s, 0.81 * s, 1); aa.badge.position.y = 2.45 + (s - 1) * 0.28; (aa.badge.material as THREE.SpriteMaterial).opacity = ov ? 0 : clamp((dc - 1.5) / 3, 0, 1); }
-      (aa.marker.material as THREE.SpriteMaterial).opacity = ov ? 1 : 0; aa.marker.scale.setScalar(clamp(dc * 0.07, 1.4, 11)); aa.marker.position.y = 4.4 + dc * 0.02;
-      const pulse = 0.5 + 0.5 * Math.sin(state.clock.elapsedTime * 4); (aa.ring.material as THREE.MeshBasicMaterial).opacity = eligibility.current.ok ? 0.55 + pulse * 0.4 : v === "FOLLOW" ? 0.5 : 0;
+    if (bodyI && headI) { bodyI.count = headI.count = proxyN; bodyI.instanceMatrix.needsUpdate = headI.instanceMatrix.needsUpdate = true; if (bodyI.instanceColor) bodyI.instanceColor.needsUpdate = true; if (headI.instanceColor) headI.instanceColor.needsUpdate = true; }
+    if (blobI) { blobI.count = blobN; blobI.instanceMatrix.needsUpdate = true; }
+    // interaction ring under the agent you can talk to / are following
+    const rg = ring.current, rt = eligibility.current.ok ? tgtB : v === "FOLLOW" ? focusAgent : null;
+    if (rg) { rg.visible = !!rt; if (rt) { rg.position.set(rt.x, rt.y + 0.06, rt.z); const pulse = 0.5 + 0.5 * Math.sin(state.clock.elapsedTime * 4); (rg.material as THREE.MeshBasicMaterial).opacity = 0.5 + pulse * 0.4; (rg.material as THREE.MeshBasicMaterial).color.set(roleStyle(rt.id).color); } }
+
+    // ---- town groups: HQ roof cut away in the management view; distant interiors hidden ----
+    const ovView = v === "OVERVIEW" || v === "FOCUS", hqd = Math.hypot(cam.position.x + 18, cam.position.z + 30);
+    groups.current.get("hq-roof")?.forEach((m) => (m.visible = !ovView)); groups.current.get("hq-int")?.forEach((m) => (m.visible = ovView || hqd < p.q.interiorDist));
+
+    // ---- lighting: clean daylight outside, brighter ambient + softer sun inside ----
+    if (hemi.current) hemi.current.intensity = lerp(0.95, 1.5, indoorK.current); const sl = sun.current;
+    if (sl) { sl.intensity = lerp(3.0, 0.45, indoorK.current); const t = pose.look, sx = Math.round(t.x / 2) * 2, sz = Math.round(t.z / 2) * 2, sy = supportHeight(sx, sz, t.y); sl.target.position.set(sx, sy, sz); sl.position.set(sx + SUN_DIR[0] * 90, sy + SUN_DIR[1] * 90, sz + SUN_DIR[2] * 90); sl.target.updateMatrixWorld(); }
+
+    // ---- DOM labels (agent name tags / overview markers) + landmark labels, projected each frame ----
+    const W = gl.domElement.clientWidth, H = gl.domElement.clientHeight, ov = p.overlay.current;
+    const project = (x: number, y: number, z: number) => { v3.set(x, y, z).project(cam); return { sx: (v3.x * 0.5 + 0.5) * W, sy: (-v3.y * 0.5 + 0.5) * H, front: v3.z < 1 && v3.z > -1 }; };
+    const playerBld = zoneAt(pl.x, pl.z, pl.y + 0.5)?.building;
+    for (const pr of PROFILES) {
+      const el = ov.labels.get(pr.id), b = agents.current.get(pr.id)!; if (!el) continue;
+      const dc = Math.hypot(cam.position.x - b.x, cam.position.y - b.y, cam.position.z - b.z), z = zoneAt(b.x, b.z, b.y + 0.5), hidIndoors = !ovView && v !== "FOLLOW" && ((!!z?.indoor && z.building !== playerBld) || Math.abs(b.y - pl.y) > 2.6);
+      const pt = project(b.x, b.y + (b.seated ? 1.55 : 2.15), b.z), show = pt.front && !hidIndoors && (ovView || dc < p.q.labelDist) && pt.sx > -80 && pt.sx < W + 80 && pt.sy > -40 && pt.sy < H + 40;
+      el.style.display = show ? "flex" : "none"; if (show) { el.style.transform = `translate(${pt.sx.toFixed(1)}px, ${pt.sy.toFixed(1)}px) translate(-50%, -100%)`; el.style.opacity = ovView ? "1" : String(clamp(1.6 - dc / p.q.labelDist, 0.35, 1)); el.dataset.view = ovView ? "overview" : "world"; el.dataset.selected = selected === pr.id ? "1" : "0"; el.style.pointerEvents = ovView ? "auto" : "none"; el.style.zIndex = selected === pr.id ? "30" : "10"; }
     }
-    // sun follows the action; snapped to a grid so shadows don't shimmer
-    const sl = sun.current; if (sl) { const t = pose.look, sx = Math.round(t.x / 2) * 2, sz = Math.round(t.z / 2) * 2; sl.target.position.set(sx, groundHeight(sx, sz), sz); sl.position.set(sx + SUN_DIR[0] * 80, groundHeight(sx, sz) + SUN_DIR[1] * 80, sz + SUN_DIR[2] * 80); sl.target.updateMatrixWorld(); }
+    for (const lm of LANDMARKS) { const el = ov.landmarks.get(lm.id); if (!el) continue; const pt = project(lm.x, lm.y + 6, lm.z), show = ovView && pt.front && pt.sx > 0 && pt.sx < W && pt.sy > 0 && pt.sy < H; el.style.display = show ? "block" : "none"; if (show) el.style.transform = `translate(${pt.sx.toFixed(1)}px, ${pt.sy.toFixed(1)}px) translate(-50%, -50%)`; }
 
     // ---- adaptive quality + HUD/perf publishing (throttled; never per-frame React state) ----
     if (acc.current.warm > 5) { const t = p.adaptive.current.update(dt, stats.current.avgMs); if (t !== p.q.tier) p.onTier(t); }
-    if (acc.current.hud > 0.1 || mode.current.seq !== (acc.current as unknown as { seq?: number }).seq) {
-      acc.current.hud = 0; (acc.current as unknown as { seq?: number }).seq = mode.current.seq;
-      const e = eligibility.current, prompt = promptFor(e, ag?.name ?? "agent");
-      p.onHud({ modeLabel: modeLabel(pl.locomotion, pl.running, mode.current.view), view: mode.current.view, speed: pl.speed, altitude: pl.y - groundHeight(pl.x, pl.z), prompt, canInteract: e.ok, panelOpen: mode.current.panelOpen, selectedAgent: mode.current.selectedAgent, following: mode.current.view === "FOLLOW", ambient: opState === "IDLE" ? b.ambient : null, agentMode: b.mode, agentDist: e.distance, locomotion: pl.locomotion, landing: pl.landing });
-    } else acc.current.hud += dt;
+    acc.current.hud += dt;
+    if (acc.current.hud > 0.12 || mode.current.seq !== acc.current.seq) {
+      acc.current.hud = 0; acc.current.seq = mode.current.seq;
+      const e = eligibility.current, targetName = tgtId ? snap.agents.find((a) => a.agentId === tgtId)?.name ?? "agent" : "agent", prompt = tgtId ? promptFor(e, targetName) : null, sb = mode.current.selectedAgent ? agents.current.get(mode.current.selectedAgent) : null;
+      p.onHud({
+        modeLabel: modeLabel(pl.locomotion, pl.running, mode.current.view), view: mode.current.view, speed: pl.speed, altitude: pl.y - supportHeight(pl.x, pl.z, pl.y, 0.3), prompt, canInteract: e.ok, panelOpen: mode.current.panelOpen, selectedAgent: mode.current.selectedAgent, targetAgent: e.ok ? tgtId : null,
+        following: mode.current.view === "FOLLOW", ambient: sb && opOf(sb.id, snap) === "IDLE" ? sb.ambient : null, locomotion: pl.locomotion, landing: pl.landing, location: locationLabel(pl.x, pl.z, pl.y), indoor: isIndoors(pl.x, pl.z, pl.y + 0.5),
+        agents: PROFILES.map((pr) => { const b = agents.current.get(pr.id)!; return { id: pr.id, where: locationLabel(b.x, b.z, b.y), anim: b.anim, indoor: isIndoors(b.x, b.z, b.y + 0.5), dist: Math.hypot(b.x - pl.x, b.z - pl.z) }; }),
+      });
+    }
     acc.current.perf += dt;
     if (acc.current.perf > 0.5) { acc.current.perf = 0; const i = gl.info; p.onPerf({ fps: stats.current.fps, ms: stats.current.avgMs, low1: stats.current.onePercentLowFps, calls: i.render.calls, tris: i.render.triangles, geometries: i.memory.geometries, textures: i.memory.textures, dpr: gl.getPixelRatio(), tier: p.q.tier, auto: !p.adaptive.current.manual }); }
   });
 
+  const proxyBodyGeo = useMemo(() => { const g = new THREE.CapsuleGeometry(0.2, 0.55, 3, 8); return g; }, []), proxyHeadGeo = useMemo(() => new THREE.SphereGeometry(0.13, 8, 6), []);
   return (
     <>
-      <hemisphereLight args={[PALETTE.hemiSky, PALETTE.hemiGround, 0.85]} />
-      <ambientLight intensity={0.18} color="#ffe9d0" />
-      <directionalLight ref={sun} color={PALETTE.sun} intensity={2.6} position={[40, 40, 80]} castShadow={shadows}><object3D attach="target" /></directionalLight>
-      <Sky />
-      <Terrain receiveShadow={shadows} />
-      <Ocean />
-      <Backdrop />
-      <Building shadows={shadows} />
-      <Vegetation shadows={shadows} />
-      <Props shadows={shadows} />
+      <hemisphereLight ref={hemi} args={[PALETTE.hemiSky, PALETTE.hemiGround, 0.95]} />
+      <ambientLight intensity={0.12} color="#fff4e4" />
+      <directionalLight ref={sun} color={PALETTE.sun} intensity={3.0} position={[40, 80, 50]} castShadow={shadows}><object3D attach="target" /></directionalLight>
+      <Sky /><Terrain receiveShadow={shadows} /><Ocean /><Backdrop />
+      <TownMesh shadows={shadows} groups={groups} /><Vegetation shadows={shadows} /><Props shadows={shadows} /><Ambient />
       <Avatar ref={playerAv} kind="operator" />
-      <Avatar ref={agentAv} kind="agent" agentId={ids.agent} name={p.snapshotRef.current.agents.find((a) => a.agentId === ids.agent)?.name ?? "Agent"} simulated />
+      {WORLD_ROSTER.map((r) => <Avatar key={r.code} ref={(h) => { avRefs.current[r.code] = h; }} kind="agent" agentId={r.code} />)}
+      <instancedMesh ref={proxyBody} args={[proxyBodyGeo, undefined, 16]} frustumCulled={false}><meshStandardMaterial roughness={0.7} /></instancedMesh>
+      <instancedMesh ref={proxyHead} args={[proxyHeadGeo, undefined, 16]} frustumCulled={false}><meshStandardMaterial roughness={0.7} /></instancedMesh>
+      <instancedMesh ref={blobs} args={[undefined, undefined, 16]} frustumCulled={false} renderOrder={2}><planeGeometry args={[1.5, 1.5]} /><meshBasicMaterial map={blobTex} transparent depthWrite={false} /></instancedMesh>
+      <mesh ref={ring} rotation={[-Math.PI / 2, 0, 0]} visible={false} renderOrder={3}><ringGeometry args={[0.62, 0.72, 40]} /><meshBasicMaterial transparent opacity={0.6} depthWrite={false} side={THREE.DoubleSide} /></mesh>
     </>
   );
 }
-export { BUILDING };
+export { TOWN, up };

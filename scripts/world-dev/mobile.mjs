@@ -22,9 +22,18 @@ await pg.getByText("FLY", { exact: true }).click(); await pg.waitForTimeout(4000
 ok("▲ ▼ buttons appear while flying", (await pg.getByLabel("Ascend").count()) === 1 && (await pg.getByLabel("Descend").count()) === 1);
 await pg.getByText("WALK", { exact: true }).click(); await pg.waitForTimeout(600);
 await pg.getByText("MAP", { exact: true }).click(); await pg.waitForTimeout(3500); ok("MAP button → overview", (await st()).mode.view === "OVERVIEW"); await pg.screenshot({ path: process.argv[2] + "/m_overview.png" });
-await pg.getByText("BACK", { exact: true }).click(); await pg.waitForTimeout(3500);
-await pg.evaluate(() => { window.__worldDev.setAgent(2, 17.5); window.__worldDev.teleportPlayer(2, 14.7); window.__worldDev.setLook(0, 0.2); window.__worldDev.setPlayer({ locomotion: "GROUND", y: 0.78 }); }); await pg.waitForTimeout(2000);
-await pg.getByText("TALK", { exact: true }).click(); await pg.waitForTimeout(1500); ok("TALK opens the status sheet", (await pg.locator("[role=dialog]").count()) === 1); await pg.screenshot({ path: process.argv[2] + "/m_panel.png" });
+await pg.getByText("MAP", { exact: true }).count().catch(() => 0);
+// overview on a phone: the management list fits, selecting an agent and RETURN work with touch
+const ovBox = await pg.locator("[data-testid=overview]").boundingBox(); ok("overview sheet fits the phone", !!ovBox && ovBox.x >= 0 && ovBox.x + ovBox.width <= 390.5 && ovBox.y >= 0 && ovBox.y + ovBox.height <= 845, ovBox ? `x=${ovBox.x.toFixed(0)} w=${ovBox.width.toFixed(0)} y=${ovBox.y.toFixed(0)} h=${ovBox.height.toFixed(0)}` : "missing");
+await pg.locator("[data-testid=overview] [data-agent=CREATIVE_DIRECTOR]").tap(); await pg.waitForTimeout(800); ok("tap selects an agent in the overview", (await st()).mode.selectedAgent === "CREATIVE_DIRECTOR");
+await pg.getByText("RETURN to player").tap(); await pg.waitForTimeout(3500); ok("RETURN goes back to the player", (await st()).mode.view === "PLAYER");
+// interior navigation with the joystick only: walk in through the HQ front door
+await pg.evaluate(() => { const d = window.__worldDev; d.setPlayer({ locomotion: "GROUND" }); d.teleportPlayer(-18, -11); d.setLook(Math.PI, 0.2); });
+await pg.evaluate(async () => { const el = document.querySelector("[aria-label='Movement joystick']"), r = el.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2, fire = (t, y) => el.dispatchEvent(new PointerEvent(t, { pointerId: 11, clientX: cx, clientY: y, bubbles: true, pointerType: "touch" })); fire("pointerdown", cy); fire("pointermove", cy - 60); await new Promise((r) => setTimeout(r, 14000)); fire("pointerup", cy - 60); });
+const sIn = await st(); ok("joystick walks through the door into the lobby", /Lobby|HQ/.test(sIn.location) && sIn.location.includes("·"), sIn.location); await pg.screenshot({ path: process.argv[2] + "/m_interior.png" });
+await pg.evaluate(() => { const d = window.__worldDev; d.setAgent("ORCHESTRATOR", -17, -24.2, 0.62); d.teleportPlayer(-17, -22.8); d.setLook(Math.PI, 0.2); }); await pg.waitForTimeout(2000);
+await pg.getByText("TALK", { exact: true }).tap(); await pg.waitForTimeout(1500); ok("TALK opens the status sheet", (await pg.locator("[role=dialog]").count()) === 1); await pg.screenshot({ path: process.argv[2] + "/m_panel.png" });
 const box = await pg.locator("[role=dialog]").boundingBox(); ok("panel fits the phone (no horizontal overflow)", box.x >= 0 && box.x + box.width <= 390.5, `x=${box.x.toFixed(0)} w=${box.width.toFixed(0)}`);
+ok("panel exposes FOLLOW, FOCUS and OPEN RELATED COMMAND CENTER PAGE", (await pg.getByText("OPEN RELATED COMMAND CENTER PAGE").count()) === 1 && (await pg.getByText("FOLLOW  [T]").count()) === 1);
 ok("no page scroll width overflow", await pg.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1));
 console.log(`errors: ${errs.length}`); errs.slice(0, 5).forEach((e) => console.log("  ", e)); console.log(`${pass} passed, ${fail} failed`); await b.close(); process.exit(fail || errs.length ? 1 : 0);

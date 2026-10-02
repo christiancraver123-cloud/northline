@@ -8,6 +8,8 @@ export const AgentEntitySchema = z.object({
   taskId: z.string().nullable(), taskKind: z.string().nullable(), taskTitle: z.string().nullable(), productionId: z.string().nullable(), creator: z.string().nullable(),
   attempt: z.number().int().nullable(), maxAttempts: z.number().int().nullable(), startedAt: z.string().nullable(), blockedReason: z.string().nullable(), provider: z.string().nullable(),
   location: z.string(), nextAction: z.string().nullable(), lastActivityAt: z.string().nullable(), recentActivity: z.array(z.object({ at: z.string(), text: z.string() })).max(8),
+  /** derived presentation facts (the registry/backend stays authoritative) */
+  workspace: z.string(), lastEvent: z.string().nullable(), dataSource: z.string(), persona: z.string().optional(),
 });
 export const WorldSnapshotSchema = z.object({
   seq: z.number().int().nonnegative(), serverTime: z.string(),
@@ -31,16 +33,11 @@ export function parseSimulatedSnapshot(raw: unknown): WorldSnapshot {
   return r.data;
 }
 
-// ---- role identity (colour + glyph + prop + silhouette cue; never colour alone) ----------------------------------------------
-export interface RoleStyle { color: string; accent: string; glyph: string; glyphName: string; prop: "tablet" | "clipboard" | "headset" | "loupe" | "folder" | "tablet-grid" | "none"; hat: "beret" | "cap" | "none" | "visor"; short: string }
-export const ROLE_STYLES: Record<string, RoleStyle> = {
-  CREATIVE_DIRECTOR: { color: "#8b5cf6", accent: "#f0abfc", glyph: "◆", glyphName: "diamond", prop: "tablet", hat: "beret", short: "Creative Director" },
-  PROMPT_ENGINEER: { color: "#06b6d4", accent: "#a5f3fc", glyph: "▲", glyphName: "triangle", prop: "tablet-grid", hat: "cap", short: "Prompt Engineer" },
-  IDENTITY_QA: { color: "#f59e0b", accent: "#fde68a", glyph: "●", glyphName: "circle", prop: "loupe", hat: "none", short: "Identity QA" },
-  PRODUCTION_MANAGER: { color: "#10b981", accent: "#a7f3d0", glyph: "■", glyphName: "square", prop: "clipboard", hat: "visor", short: "Production Manager" },
-  ORCHESTRATOR: { color: "#3b82f6", accent: "#bfdbfe", glyph: "★", glyphName: "star", prop: "headset", hat: "none", short: "Orchestrator" },
-};
-export const roleStyle = (agentId: string): RoleStyle => ROLE_STYLES[agentId] ?? { color: "#94a3b8", accent: "#e2e8f0", glyph: "✚", glyphName: "cross", prop: "none", hat: "none", short: agentId };
+// ---- role identity (colour + glyph + prop + hat; never colour alone). The cast comes from the REAL registry via roster.ts ---------------
+import { roleStyle as rosterStyle, ROSTER_BY_CODE } from "./roster";
+export type RoleStyle = ReturnType<typeof rosterStyle> & { short: string };
+export const roleStyle = (agentId: string): RoleStyle => { const r = rosterStyle(agentId); return { ...r, short: r.registryName }; };
+export { ROSTER_BY_CODE };
 
 // ---- view-model for the panel / HUD (derived only) --------------------------------------------------------------------------
 export const humanElapsed = (fromIso: string | null, nowIso: string) => {
@@ -54,13 +51,14 @@ export function buildAgentPanel(snap: WorldSnapshot, agentId: string, ambient: s
   const a = snap.agents.find((x) => x.agentId === agentId); if (!a) return null;
   const idle = a.opState === "IDLE";
   return {
-    title: a.name, roleLine: roleStyle(a.agentId).short, statusLabel: a.opState,
+    title: a.name, roleLine: `${roleStyle(a.agentId).short} · ${roleStyle(a.agentId).role}`, statusLabel: a.opState,
     ambientNote: idle && ambient ? `Ambient (cosmetic — no work in progress): ${ambient}` : null,
     rows: [
       ["Status", idle ? "IDLE — no task" : a.opState + (a.blockedReason ? ` — ${a.blockedReason}` : "")],
       ["Current task", a.taskTitle ?? "—"], ["Production", a.productionId ?? "—"], ["Creator", a.creator ?? "—"],
       ["Elapsed", a.opState === "WORKING" ? humanElapsed(a.startedAt, snap.serverTime) : "—"],
       ["Attempt", a.attempt != null ? `${a.attempt}${a.maxAttempts ? ` / ${a.maxAttempts}` : ""}` : "—"], ["Provider", a.provider ?? "none (no model call)"], ["Next action", a.nextAction ?? "—"],
+      ["Workspace", a.workspace], ["Last recorded event", a.lastEvent ?? "—"], ["Data source", a.dataSource],
     ],
     recent: a.recentActivity, simulated: snap.simulated,
     banner: snap.simulated ? "SIMULATED DATA — not real Northline state. No task, production, creator or model call shown here is real." : "",

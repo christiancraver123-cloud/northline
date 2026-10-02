@@ -1,6 +1,6 @@
 // Operator/player locomotion — a pure, frame-rate-independent step function plus the mode state machine (WALK/RUN/FLY, OVERVIEW/FOLLOW/FOCUS views).
 // No WebGL, no DOM: the renderer only reads the resulting state.
-import { BOUNDS, WATER_BLOCK_DEPTH, groundHeight, resolveCollisions, COLLIDERS, BUILDING, type Collider } from "./layout";
+import { BOUNDS, WATER_BLOCK_DEPTH, supportHeight, resolveCollisions, COLLIDERS, type Collider } from "./layout";
 import { clamp, damp, dampAngle, forward, wrapAngle, type V2 } from "./math";
 
 export const TUNING = {
@@ -16,8 +16,8 @@ export interface PlayerState {
 }
 export interface PlayerInput { moveX: number; moveZ: number; /** −1..1; forward = +moveZ in camera space */ cameraYaw: number; run: boolean; up: number; down: number; boost: boolean }
 
-export const PLAYER_START = { x: -3.5, z: -13.6 } as const;
-export const startPlayer = (x: number = PLAYER_START.x, z: number = PLAYER_START.z): PlayerState => ({ x, y: groundHeight(x, z), z, vx: 0, vz: 0, vy: 0, heading: 0, locomotion: "GROUND", running: false, takeoff: 0, landing: false, grounded: true, speed: 0, bank: 0 });
+export const PLAYER_START = { x: -14, z: -7.2, yaw: Math.PI } as const;
+export const startPlayer = (x: number = PLAYER_START.x, z: number = PLAYER_START.z): PlayerState => ({ x, y: supportHeight(x, z, 1.2), z, vx: 0, vz: 0, vy: 0, heading: PLAYER_START.yaw, locomotion: "GROUND", running: false, takeoff: 0, landing: false, grounded: true, speed: 0, bank: 0 });
 
 /** Camera-relative desired direction (unit-length at most). */
 export function desiredDirection(i: PlayerInput): V2 {
@@ -42,15 +42,14 @@ export function stepPlayer(s: PlayerState, input: PlayerInput, rawDt: number, co
     const sp = Math.hypot(n.vx, n.vz); if (sp > 0.25) n.heading = dampAngle(s.heading, Math.atan2(n.vx, n.vz), TUNING.turnLambda, dt);
     let nx = s.x + n.vx * dt, nz = s.z + n.vz * dt;
     nx = clamp(nx, BOUNDS.minX, BOUNDS.maxX); nz = clamp(nz, BOUNDS.minZ, BOUNDS.maxZ);
-    const gh = groundHeight(nx, nz);
-    if (gh < WATER_BLOCK_DEPTH || gh - s.y > TUNING.stepUp) { nx = s.x; nz = s.z; n.vx = 0; n.vz = 0; } // water / too-steep: stop (slide handled by per-axis retry below)
+    const sup = (x: number, z: number) => supportHeight(x, z, s.y), ok = (h: number) => h >= WATER_BLOCK_DEPTH && h - s.y <= TUNING.stepUp;
+    if (!ok(sup(nx, nz))) { nx = s.x; nz = s.z; n.vx = 0; n.vz = 0; } // water / too-steep: stop (slide handled by the per-axis retry below)
     if (nx === s.x && nz === s.z) { // try sliding along one axis
       const ax = clamp(s.x + s.vx * dt, BOUNDS.minX, BOUNDS.maxX), az = clamp(s.z + s.vz * dt, BOUNDS.minZ, BOUNDS.maxZ);
-      if (groundHeight(ax, s.z) >= WATER_BLOCK_DEPTH && groundHeight(ax, s.z) - s.y <= TUNING.stepUp) { nx = ax; n.vx = s.vx; }
-      else if (groundHeight(s.x, az) >= WATER_BLOCK_DEPTH && groundHeight(s.x, az) - s.y <= TUNING.stepUp) { nz = az; n.vz = s.vz; }
+      if (ok(sup(ax, s.z))) { nx = ax; n.vx = s.vx; } else if (ok(sup(s.x, az))) { nz = az; n.vz = s.vz; }
     }
-    const r = resolveCollisions({ x: nx, z: nz }, TUNING.radius, s.y, colliders);
-    n.x = r.x; n.z = r.z; n.y = damp(s.y, groundHeight(r.x, r.z), 18, dt); n.vy = 0; n.grounded = true; n.speed = Math.hypot(n.vx, n.vz); n.bank = damp(s.bank, 0, 8, dt);
+    const r = resolveCollisions({ x: nx, z: nz }, TUNING.radius, s.y, 1.7, colliders);
+    n.x = r.x; n.z = r.z; n.y = damp(s.y, supportHeight(r.x, r.z, s.y), 18, dt); n.vy = 0; n.grounded = true; n.speed = Math.hypot(n.vx, n.vz); n.bank = damp(s.bank, 0, 8, dt);
     n.takeoff = 0; n.landing = false;
     return n;
   }
@@ -58,26 +57,25 @@ export function stepPlayer(s: PlayerState, input: PlayerInput, rawDt: number, co
   const top = (input.boost ? TUNING.flyBoost : TUNING.fly) * Math.min(1, mag);
   n.vx = damp(s.vx, mag > 0.01 ? (dir.x / mag) * top : 0, mag > 0.01 ? TUNING.flyAccel : TUNING.flyDamp, dt);
   n.vz = damp(s.vz, mag > 0.01 ? (dir.z / mag) * top : 0, mag > 0.01 ? TUNING.flyAccel : TUNING.flyDamp, dt);
-  const gh = groundHeight(s.x, s.z), alt = s.y - gh;
+  const gh = supportHeight(s.x, s.z, s.y, 0.3), alt = s.y - gh;
   let tvy = (input.up - input.down) * TUNING.flyVert;
   if (s.takeoff > 0) { tvy = Math.max(tvy, TUNING.takeoffLift * (s.takeoff / TUNING.takeoffTime) + 1.2); n.takeoff = Math.max(0, s.takeoff - dt); }
   if (s.landing && s.takeoff <= 0) tvy = -Math.min(TUNING.landSpeed, 1 + alt * 0.6);
   n.vy = damp(s.vy, tvy, 4, dt);
   let nx = s.x + n.vx * dt, nz = s.z + n.vz * dt, ny = s.y + n.vy * dt;
   const rr = Math.hypot(nx, nz); if (rr > TUNING.airRadius) { nx *= TUNING.airRadius / rr; nz *= TUNING.airRadius / rr; }
-  const r = resolveCollisions({ x: nx, z: nz }, TUNING.radius + 0.4, ny - 0.2, colliders); // collide with anything taller than we are
+  const r = resolveCollisions({ x: nx, z: nz }, TUNING.radius + 0.4, ny - 0.5, 1.0, colliders, 0.0); // collide with anything that overlaps our body
   nx = r.x; nz = r.z;
-  const gh2 = groundHeight(nx, nz), descending = (s.landing || input.down > 0) && s.takeoff <= 0;
+  const gh2 = supportHeight(nx, nz, ny, 0.3), descending = (s.landing || input.down > 0) && s.takeoff <= 0;
   const deep = gh2 < -0.15, floor = deep ? 0.5 : gh2 + (descending ? 0 : TUNING.minHover * 0.5); // over water you hover above the sea; on land a low hover unless landing
   const wantLand = descending && !deep && ny <= gh2 + 0.35;
-  if (wantLand && groundHeight(nx, nz) >= WATER_BLOCK_DEPTH) { n.locomotion = "GROUND"; n.landing = false; n.y = groundHeight(nx, nz); n.vy = 0; n.vx *= 0.4; n.vz *= 0.4; n.grounded = true; n.x = nx; n.z = nz; n.speed = Math.hypot(n.vx, n.vz); return n; }
+  if (wantLand && gh2 >= WATER_BLOCK_DEPTH) { n.locomotion = "GROUND"; n.landing = false; n.y = gh2; n.vy = 0; n.vx *= 0.4; n.vz *= 0.4; n.grounded = true; n.x = nx; n.z = nz; n.speed = Math.hypot(n.vx, n.vz); return n; }
   ny = clamp(ny, floor, TUNING.ceiling); // over water the "floor" is the sea surface; you hover, you never sink
   n.x = nx; n.y = ny; n.z = nz; n.grounded = false; n.speed = Math.hypot(n.vx, n.vz);
   if (n.speed > 0.4) n.heading = dampAngle(s.heading, Math.atan2(n.vx, n.vz), 5, dt);
   n.bank = damp(s.bank, clamp(-wrapAngle(Math.atan2(n.vx, n.vz) - s.heading) * 0.6 * Math.min(1, n.speed / 8), -0.5, 0.5), 5, dt);
   return n;
 }
-export const buildingTop = BUILDING.top;
 
 // ---- mode state machine -------------------------------------------------------------------------------------------------------
 export type View = "PLAYER" | "OVERVIEW" | "FOLLOW" | "FOCUS";

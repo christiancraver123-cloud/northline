@@ -8,7 +8,7 @@ const VERT = /* glsl */ `
 uniform float uTime; uniform float uDetail;
 varying vec3 vWorld; varying vec3 vN;
 #include <fog_pars_vertex>
-float shoreZ(float x){ return 30.5 + 2.2*sin(x*.06+.7) + 1.1*sin(x*.17); }
+float shoreZ(float x){ return 46. + 2.4*sin(x*.045+.7) + 1.2*sin(x*.13) + 1.6*sin(x*.021-1.1); }
 vec3 waves(vec2 p, float calm, out vec2 grad){
   vec2 d1 = normalize(vec2(1.,.35)), d2 = normalize(vec2(-.6,1.)), d3 = normalize(vec2(.3,-.9));
   float a1 = .20*calm, a2 = .11*calm, a3 = .05*calm;
@@ -29,7 +29,7 @@ uniform float uTime; uniform float uDetail; uniform vec3 uSun; uniform vec3 uDee
 varying vec3 vWorld; varying vec3 vN;
 #include <common>
 #include <fog_pars_fragment>
-float shoreZ(float x){ return 30.5 + 2.2*sin(x*.06+.7) + 1.1*sin(x*.17); }
+float shoreZ(float x){ return 46. + 2.4*sin(x*.045+.7) + 1.2*sin(x*.13) + 1.6*sin(x*.021-1.1); }
 float h21(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
 float vn(vec2 p){ vec2 i=floor(p), f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h21(i),h21(i+vec2(1,0)),f.x), mix(h21(i+vec2(0,1)),h21(i+vec2(1,1)),f.x), f.y); }
 void main(){
@@ -67,7 +67,7 @@ export function Ocean() {
   const geo = useMemo(() => { const g = new THREE.PlaneGeometry(1500, 900, q.waterSegments, Math.max(24, Math.round(q.waterSegments * 0.55))); g.rotateX(-Math.PI / 2); return g; }, [q.waterSegments]);
   const uniforms = useMemo(() => THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
     uTime: { value: 0 }, uDetail: { value: q.waterDetail }, uSun: { value: new THREE.Vector3(...SUN_DIR) }, uSunCol: { value: new THREE.Color(PALETTE.sun) },
-    uDeep: { value: new THREE.Color("#0b5d7a") }, uShallow: { value: new THREE.Color("#35bfc0") }, uSky: { value: new THREE.Color("#a9cfe8") },
+    uDeep: { value: new THREE.Color("#0a5f86") }, uShallow: { value: new THREE.Color("#3cc6cf") }, uSky: { value: new THREE.Color("#bcdcf2") },
   }]), []); // eslint-disable-line react-hooks/exhaustive-deps
   useFrame((s) => { const m = mat.current; if (!m) return; m.uniforms.uTime.value = s.clock.elapsedTime; m.uniforms.uDetail.value = q.waterDetail; });
   return (

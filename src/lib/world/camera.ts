@@ -1,6 +1,6 @@
 // Camera rig — pure (no three.js): computes the pose for each view, damps toward it, and blends between views with eased transitions
 // (never a hard cut). The renderer copies `pose` onto the three.js camera.
-import { COLLIDERS, groundHeight, insideSolid, type Collider } from "./layout";
+import { COLLIDERS, ceilingAt, groundHeight, insideSolid, supportHeight, type Collider } from "./layout";
 import { clamp, damp, dampAngle, easeInOutCubic, lerp, wrapAngle } from "./math";
 import type { PlayerState, View } from "./player";
 
@@ -12,21 +12,21 @@ export const lookDir = (yaw: number, pitch: number): V3 => ({ x: Math.sin(yaw) *
 
 /** Spring arm: pull the camera in so it never ends up inside geometry or under the ground. */
 export function springArm(target: V3, dir: V3, dist: number, colliders: Collider[] = COLLIDERS): V3 {
+  // The camera must never end up inside a wall, under a floor, or above the ceiling of the room the player is in.
+  const bad = (p: V3) => p.y < supportHeight(p.x, p.z, p.y, 0.25) + 0.3 || p.y > ceilingAt(p.x, p.z, target.y) - 0.25 || insideSolid({ x: p.x, z: p.z }, p.y - 0.3, 0.5, colliders);
   let d = dist;
-  for (let i = 0; i <= 12; i++) {
-    const t = (i / 12) * dist, p = { x: target.x - dir.x * t, y: target.y - dir.y * t, z: target.z - dir.z * t };
-    if (p.y < groundHeight(p.x, p.z) + 0.35 || insideSolid({ x: p.x, z: p.z }, p.y, colliders)) { d = Math.max(0.6, t - 0.5); break; }
-  }
-  const x = target.x - dir.x * d, z = target.z - dir.z * d;
-  return { x, y: Math.max(target.y - dir.y * d, groundHeight(x, z) + 0.35), z };
+  for (let i = 1; i <= 16; i++) { const t = (i / 16) * dist, p = { x: target.x - dir.x * t, y: target.y - dir.y * t, z: target.z - dir.z * t }; if (bad(p)) { d = Math.max(0.5, ((i - 1) / 16) * dist - 0.15); break; } }
+  const x = target.x - dir.x * d, z = target.z - dir.z * d, yy = target.y - dir.y * d;
+  return { x, y: clamp(yy, supportHeight(x, z, yy, 0.25) + 0.3, Math.max(ceilingAt(x, z, target.y) - 0.25, target.y)), z };
 }
 
-export interface CameraInputs { lookYaw: number; lookPitch: number; overview: { yaw: number; pitch: number; dist: number; cx: number; cz: number }; followYaw: number; followPitch: number }
+export interface CameraInputs { indoor?: number; lookYaw: number; lookPitch: number; overview: { yaw: number; pitch: number; dist: number; cx: number; cz: number }; followYaw: number; followPitch: number }
 export interface Targets { player: PlayerState; agent: { x: number; y: number; z: number; heading: number } | null }
 
 export const POSES = {
-  player(p: PlayerState, yaw: number, pitch: number): Pose {
-    const air = p.locomotion === "AIR", look = { x: p.x, y: p.y + (air ? 0.4 : 1.45), z: p.z }, dist = air ? 6.2 + Math.min(2, p.speed * 0.12) : 4.1;
+  /** `indoor` (0..1) pulls the camera in for rooms, stairs and doorways. */
+  player(p: PlayerState, yaw: number, pitch: number, indoor = 0): Pose {
+    const air = p.locomotion === "AIR", look = { x: p.x, y: p.y + (air ? 0.4 : 1.45), z: p.z }, dist = air ? 6.2 + Math.min(2, p.speed * 0.12) : lerp(4.1, 2.5, indoor);
     return { pos: springArm(look, lookDir(yaw, pitch), dist), look: { x: look.x, y: look.y + 0.15, z: look.z } };
   },
   overview(c: { yaw: number; pitch: number; dist: number; cx: number; cz: number }): Pose {
@@ -55,7 +55,7 @@ export class CameraRig {
     if (view === "OVERVIEW") desired = POSES.overview(inp.overview);
     else if (view === "FOCUS" && tg.agent) desired = POSES.overview({ ...inp.overview, cx: tg.agent.x, cz: tg.agent.z, dist: Math.min(inp.overview.dist, 34) });
     else if (view === "FOLLOW" && tg.agent) desired = POSES.follow(tg.agent, inp.followYaw, inp.followPitch);
-    else desired = POSES.player(tg.player, inp.lookYaw, inp.lookPitch);
+    else desired = POSES.player(tg.player, inp.lookYaw, inp.lookPitch, inp.indoor ?? 0);
     if (this.t < 1 && this.from) {
       this.t = Math.min(1, this.t + d / this.dur);
       this.pose = lerpPose(this.from, desired, easeInOutCubic(this.t));

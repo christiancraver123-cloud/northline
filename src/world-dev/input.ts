@@ -1,9 +1,11 @@
 // Keyboard / mouse / touch input collected into one mutable object the game loop reads each frame. No React, no three.js.
-export type Action = "interact" | "toggleFly" | "overview" | "follow" | "escape" | "focus" | "return" | "perf" | "hints" | "land";
+export type Action = "interact" | "toggleFly" | "overview" | "follow" | "escape" | "focus" | "return" | "perf" | "hints" | "land" | "details";
 
 export class Input {
   keys = new Set<string>(); lookDX = 0; lookDY = 0; wheel = 0; locked = false;
   stick = { x: 0, y: 0, active: false }; touchUp = 0; touchDown = 0; touchRun = false;
+  /** payload actions from the UI (overview markers, landmark list) */
+  selectQueue: string[] = []; travelQueue: string[] = [];
   private actions: Action[] = []; private lastSpace = 0; private dragging = false; private el: HTMLElement | null = null; private cleanup: (() => void)[] = [];
   push(a: Action) { this.actions.push(a); }
   drain(): Action[] { const a = this.actions; this.actions = []; return a; }

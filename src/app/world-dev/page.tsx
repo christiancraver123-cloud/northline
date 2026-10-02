@@ -4,7 +4,7 @@ import { worldDevAllowed } from "@/lib/world/isolation";
 import WorldDevLoader from "@/world-dev/loader";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Northline World (simulated POC)" };
+export const metadata = { title: "Northline World (simulated)" };
 export default function WorldDevPage() {
   if (!worldDevAllowed()) notFound();
   return <WorldDevLoader />;

@@ -4,11 +4,12 @@ export type Tier = "LOW" | "MEDIUM" | "HIGH";
 export interface TierConfig {
   tier: Tier; dprMax: number; shadows: "off" | "low" | "high"; shadowMap: number; shadowRadius: number; palmDensity: number; tuftDensity: number; propDensity: number;
   waterSegments: number; waterDetail: 0 | 1 | 2; farFog: number; far: number; clouds: number; particles: number; antialias: boolean; foliageSway: boolean; postFx: boolean;
+  terrainStep: number; birds: number; boats: number; carts: number; walkers: number; /** agents within this distance render a full rig, others a cheap proxy */ agentRigDist: number; labelDist: number; interiorDist: number;
 }
 export const TIERS: Record<Tier, TierConfig> = {
-  LOW:    { tier: "LOW",    dprMax: 1.25, shadows: "off", shadowMap: 512,  shadowRadius: 0,  palmDensity: 0.55, tuftDensity: 0.25, propDensity: 0.6, waterSegments: 64,  waterDetail: 0, farFog: 330, far: 420,  clouds: 4,  particles: 0,   antialias: false, foliageSway: false, postFx: false },
-  MEDIUM: { tier: "MEDIUM", dprMax: 1.6,  shadows: "low", shadowMap: 1024, shadowRadius: 26, palmDensity: 0.85, tuftDensity: 0.6,  propDensity: 0.85, waterSegments: 112, waterDetail: 1, farFog: 520, far: 700,  clouds: 8,  particles: 80,  antialias: true,  foliageSway: true,  postFx: false },
-  HIGH:   { tier: "HIGH",   dprMax: 2,    shadows: "high", shadowMap: 2048, shadowRadius: 38, palmDensity: 1,    tuftDensity: 1,    propDensity: 1,    waterSegments: 176, waterDetail: 2, farFog: 760, far: 1100, clouds: 12, particles: 240, antialias: true,  foliageSway: true,  postFx: true },
+  LOW:    { tier: "LOW",    dprMax: 1.25, shadows: "off", shadowMap: 512,  shadowRadius: 0,  palmDensity: 0.55, tuftDensity: 0.25, propDensity: 0.6, waterSegments: 64,  waterDetail: 0, farFog: 380, far: 520,  clouds: 4,  particles: 0,   antialias: false, foliageSway: false, postFx: false, terrainStep: 2.2, birds: 0, boats: 4, carts: 0, walkers: 0, agentRigDist: 26, labelDist: 40, interiorDist: 55 },
+  MEDIUM: { tier: "MEDIUM", dprMax: 1.6,  shadows: "low", shadowMap: 1024, shadowRadius: 26, palmDensity: 0.85, tuftDensity: 0.6,  propDensity: 0.85, waterSegments: 112, waterDetail: 1, farFog: 560, far: 760,  clouds: 8,  particles: 80,  antialias: true,  foliageSway: true,  postFx: false, terrainStep: 1.6, birds: 8, boats: 8, carts: 1, walkers: 4, agentRigDist: 38, labelDist: 55, interiorDist: 80 },
+  HIGH:   { tier: "HIGH",   dprMax: 2,    shadows: "high", shadowMap: 2048, shadowRadius: 38, palmDensity: 1,    tuftDensity: 1,    propDensity: 1,    waterSegments: 176, waterDetail: 2, farFog: 800, far: 1100, clouds: 12, particles: 240, antialias: true,  foliageSway: true,  postFx: true, terrainStep: 1.3, birds: 16, boats: 8, carts: 2, walkers: 8, agentRigDist: 52, labelDist: 70, interiorDist: 110 },
 };
 const ORDER: Tier[] = ["LOW", "MEDIUM", "HIGH"];
 export interface DeviceInfo { isTouch: boolean; width: number; cores: number; memoryGB: number | null; dpr: number; gpu: string; maxTexture: number }

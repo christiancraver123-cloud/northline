@@ -4,15 +4,17 @@ import { snapshots } from "@/lib/agents/ops/service";
 import { loadDashboard, type Tone } from "@/lib/ops/dashboard";
 import { CommandCenterPanel } from "@/components/command-center";
 import { isReadOnly } from "@/lib/runtime/mode";
+import { ROSTER_BY_CODE } from "@/lib/talent/roster";
 import { AgentStatusPill, ago } from "@/components/ui";
-import { CreatorPortrait } from "@/components/cc";
+import { CreatorAvatar, CreatorPortrait } from "@/components/cc";
+import { loadPortraits } from "@/lib/talent/portraits-server";
 
 const dot: Record<Tone, string> = { ok: "bg-ok", warn: "bg-warn", bad: "bg-bad", info: "bg-blue2", mute: "bg-faint" };
 const txt: Record<Tone, string> = { ok: "text-ok", warn: "text-warn", bad: "text-bad", info: "text-blue2", mute: "text-muted" };
 
 export default async function Dashboard() {
   const repo = await getRepo();
-  const [d, snaps] = await Promise.all([loadDashboard(repo), snapshots(repo)]);
+  const [d, snaps, portraits] = await Promise.all([loadDashboard(repo), snapshots(repo), loadPortraits(repo)]);
   const readOnly = isReadOnly();
   const get = (label: string) => d.status.find((s) => s.label === label)!;
   const signals = [
@@ -39,30 +41,33 @@ export default async function Dashboard() {
         {signals.map((s) => <Link key={s.label} href={s.href} title={s.title} className="flex items-center gap-2 rounded-full border border-edge bg-panel/70 px-3.5 py-1.5 text-[13px] hover:border-blue2/50"><span className={`h-2 w-2 rounded-full ${dot[s.tone]}`} /><span className="text-muted">{s.label}</span><b className={`font-mono ${txt[s.tone]}`}>{s.value}</b></Link>)}
       </nav>
 
+      <section aria-label="Creators" className="mb-8">
+        <div className="mb-3 flex items-baseline justify-between"><h2 className="text-[12px] font-bold uppercase tracking-wider text-muted">Your creators · by priority</h2><Link href="/talent" className="text-[13px] text-blue2">Talent →</Link></div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          {d.creators.map((c) => (
+            <Link key={c.code} href={`/talent/${c.code}`} className="group relative overflow-hidden rounded-2xl border border-edge bg-panel/70 transition hover:-translate-y-0.5 hover:border-blue2/60" style={{ boxShadow: `0 10px 30px -18px ${c.color}` }}>
+              <CreatorPortrait code={c.code} portrait={portraits[c.code]} className="aspect-[3/4] w-full transition duration-300 group-hover:scale-[1.03]" />
+              <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-2.5">
+                <span className="flex items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold backdrop-blur"><span className={`h-2 w-2 rounded-full ${c.active ? "bg-ok" : "bg-warn"}`} />{c.active ? "Active" : "In setup"}</span>
+                <span className="rounded-lg bg-black/60 px-2 py-0.5 font-mono text-[13px] font-bold backdrop-blur" style={{ color: c.color }} title={`Priority · ${c.priority.reasons.join(" · ")}`}>P{c.priority.score}</span>
+              </div>
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-3 pb-2.5 pt-10">
+                <b className="block truncate text-[17px] leading-tight">{c.name.split(" ")[0]}</b>
+                <div className="mt-1 flex items-center justify-between gap-2 text-[11.5px] text-ink/80">
+                  <span title="Approved and ready to publish"><b className="font-mono text-ok">{c.approvedReady}</b> ready</span>
+                  <span className="truncate" title="Last post">{c.lastContentAt ? `posted ${ago(c.lastContentAt)}` : "never posted"}</span>
+                </div>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
+
       <section aria-label="Needs attention" className="mb-8">
         <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">Needs attention</h2>
         <ul className="grid gap-1.5">{attention.map((a, i) => (
           <li key={i}><Link href={a.href} className="flex items-center gap-3 rounded-xl border border-edge bg-panel/60 px-4 py-2.5 text-[14px] hover:border-blue2/50"><span className={`h-2 w-2 flex-none rounded-full ${dot[a.tone]}`} /><span className="min-w-0 flex-1">{a.text}</span><span className="text-faint">→</span></Link></li>
         ))}</ul>
-      </section>
-
-      <section aria-label="Creators" className="mb-8">
-        <div className="mb-2 flex items-baseline justify-between"><h2 className="text-[12px] font-bold uppercase tracking-wider text-muted">Creators · by priority</h2><Link href="/talent" className="text-[13px] text-blue2">All →</Link></div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-          {d.creators.map((c) => (
-            <Link key={c.code} href={`/talent/${c.code}`} className="group overflow-hidden rounded-2xl border border-edge bg-panel/70 hover:border-blue2/50">
-              <div className="relative">
-                <CreatorPortrait code={c.code} refId={d.masters[c.code]} className="aspect-[4/5] w-full" />
-                <span className="absolute right-2 top-2 rounded-lg bg-black/65 px-2 py-0.5 font-mono text-[13px] font-bold" style={{ color: c.color }} title={c.priority.reasons.join(" · ")}>{c.priority.score}</span>
-                <span className={`absolute left-2 top-2 h-2.5 w-2.5 rounded-full ring-2 ring-black/50 ${c.active ? "bg-ok" : "bg-warn"}`} title={c.active ? "active" : "in setup"} />
-              </div>
-              <div className="p-2.5 text-[12px]">
-                <b className="block truncate text-[14px]">{c.name.split(" ")[0]}</b>
-                <div className="mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-muted"><span>Last post</span><span className="truncate text-right text-ink">{c.lastContentAt ? ago(c.lastContentAt) : "never"}</span><span>Next</span><span className="truncate text-right text-ink">{c.nextPlanned?.slice(5) ?? "—"}</span><span>Ready</span><span className="text-right text-ink">{c.approvedReady}</span></div>
-              </div>
-            </Link>
-          ))}
-        </div>
       </section>
 
       <section aria-label="Approvals" className="mb-8">
@@ -74,7 +79,7 @@ export default async function Dashboard() {
                 {a.asset?.storagePath ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${a.asset.id}/file`} alt={a.production.code} className="h-full w-full object-cover transition group-hover:scale-[1.02]" /> : <span className="grid h-full place-items-center text-[11px] text-muted">no image file</span>}
                 {a.triad && <span className={`absolute bottom-2 left-2 rounded-md bg-black/65 px-1.5 py-0.5 font-mono text-[10.5px] ${a.triad.overall === "PASS" ? "text-ok" : a.triad.overall === "FAIL" ? "text-bad" : "text-warn"}`}>QA {a.triad.overall}</span>}
               </div>
-              <div className="truncate px-2.5 py-1.5 text-[12px]"><b>{a.production.talent[0]}</b> <span className="text-muted">· {a.ageHours}h</span></div>
+              <div className="flex items-center gap-2 px-2.5 py-2 text-[12px]"><CreatorAvatar code={a.production.talent[0]} portrait={portraits[a.production.talent[0]]} size={24} /><b className="truncate">{ROSTER_BY_CODE[a.production.talent[0]].first}</b><span className="ml-auto flex-none text-muted">{a.ageHours}h</span></div>
             </Link>
           ))}</div>
         )}

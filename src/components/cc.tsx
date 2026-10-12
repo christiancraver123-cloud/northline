@@ -3,16 +3,37 @@ import type { TalentCode } from "@/lib/domain/types";
 import { ROSTER_BY_CODE } from "@/lib/talent/roster";
 import type { Triad, TriadPart } from "@/lib/pipeline/qa-triad";
 import { Pill } from "./ui";
+import { portraitUrl, type Portrait } from "@/lib/talent/portrait";
 
-/** The creator's canonical MASTER_FACE when one is uploaded; otherwise a labelled colour block (never a generated image). */
-export function CreatorPortrait({ code, refId, className = "" }: { code: TalentCode; refId?: string | null; className?: string }) {
+/** Creator portrait from the canonical library: MASTER_FACE → best active canonical reference → colour/initial fallback. Never a generated image. */
+export function CreatorPortrait({ code, refId, portrait, className = "", label = true }: { code: TalentCode; refId?: string | null; portrait?: Portrait | null; className?: string; label?: boolean }) {
   const t = ROSTER_BY_CODE[code];
+  const url = portrait ? portrait.url : refId ? portraitUrl(refId) : null;
+  const src = portrait?.source ?? (refId ? "MASTER_FACE" : "FALLBACK");
   return (
-    <div className={`relative overflow-hidden ${className}`} style={{ background: `linear-gradient(160deg, ${t.color}66, #0b1128 80%)` }}>
-      {refId ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/references/${refId}/file`} alt={`${t.name} — canonical master reference`} className="h-full w-full object-cover" />
-        : <span className="grid h-full place-items-center text-center text-[10px] leading-tight text-muted"><b className="text-2xl text-ink">{t.first[0]}</b>no master</span>}
+    <div className={`relative overflow-hidden ${className}`} style={{ background: `linear-gradient(160deg, ${t.color}66, #0b1128 80%)` }} title={src === "MASTER_FACE" ? `${t.name} · canonical master face` : src === "CANONICAL_REFERENCE" ? `${t.name} · canonical reference (no master face yet)` : `${t.name} · no canonical image yet`}>
+      {url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={url} alt={`${t.name} — canonical ${src === "MASTER_FACE" ? "master face" : "reference"}`} loading="lazy" className="h-full w-full object-cover object-top" />
+        : <span className="grid h-full place-items-center text-center leading-tight"><span><b className="block text-[2.2em] font-extrabold" style={{ color: t.color }}>{t.first[0]}</b>{label && <span className="text-[10px] text-muted">no canonical image</span>}</span></span>}
     </div>
   );
+}
+
+/** Small round creator avatar (canonical source only) with the creator colour as a ring. */
+export function CreatorAvatar({ code, portrait, size = 28, ring = true, className = "" }: { code: TalentCode; portrait?: Portrait | null; size?: number; ring?: boolean; className?: string }) {
+  const t = ROSTER_BY_CODE[code];
+  return (
+    <span className={`relative inline-grid flex-none place-items-center overflow-hidden rounded-full ${className}`} title={t.name}
+      style={{ width: size, height: size, background: `linear-gradient(160deg, ${t.color}aa, #0b1128)`, boxShadow: ring ? `0 0 0 2px ${t.color}` : undefined }}>
+      {portrait?.url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={portrait.url} alt={t.name} loading="lazy" className="h-full w-full object-cover object-[50%_30%]" />
+        : <b style={{ fontSize: size * 0.45 }} className="text-ink">{t.first[0]}</b>}
+    </span>
+  );
+}
+
+/** Avatar + first name, for rows and cards. */
+export function CreatorTag({ code, portrait, size = 22, className = "" }: { code: TalentCode; portrait?: Portrait | null; size?: number; className?: string }) {
+  const t = ROSTER_BY_CODE[code];
+  return <span className={`inline-flex min-w-0 items-center gap-1.5 ${className}`}><CreatorAvatar code={code} portrait={portrait} size={size} /><span className="truncate font-semibold">{t.first}</span></span>;
 }
 
 const TONE = { PASS: "ok", REVIEW: "warn", FAIL: "bad", "NOT RUN": "mute" } as const;

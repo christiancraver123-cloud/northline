@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui";
 import { CreateForm } from "./CreateForm";
 import { CreateStudio, type StudioCreator } from "./CreateStudio";
+import { pickPortrait } from "@/lib/talent/portrait";
 import { ImportDropzone } from "@/components/ImportDropzone";
 import { isReadOnly } from "@/lib/runtime/mode";
 import { getRepo } from "@/lib/db";
@@ -32,7 +33,7 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
   const creators: StudioCreator[] = await Promise.all(ROSTER.map(async (t) => {
     const refs = await loadReferences(repo, t.code);
     return {
-      code: t.code, name: t.name, color: t.color, active: t.launchStatus === "active", rules: t.criticalRules,
+      code: t.code, name: t.name, color: t.color, active: t.launchStatus === "active", rules: t.criticalRules, portraitUrl: pickPortrait(refs, t.code).url,
       refs: refs.map((r) => ({ id: r.id, type: r.referenceType, authority: r.authority, url: `/api/references/${r.id}/file` })),
       storyline: storylines.find((s) => s.status === "ACTIVE" && s.talent.includes(t.code))?.title ?? null,
       recent: prods.filter((p) => p.talent[0] === t.code).slice(0, 4).map((p) => ({ id: p.id, code: p.code, concept: p.concept, status: p.status })),
@@ -53,7 +54,7 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
         <section className="rounded-2xl border border-edge bg-panel/80 p-4 sm:p-5">
           <h2 className="mb-1 text-lg font-bold">Import asset</h2>
           <p className="mb-4 text-[13px] text-muted">Pick the creator, drop the images. No prompt and no AI provider needed.</p>
-          <ImportDropzone readOnly={readOnly} defaultCreator={ROSTER.find((t) => t.code === sp.creator)?.code ?? null} creators={creators.map((x) => ({ code: x.code, name: x.name, color: x.color, masterUrl: x.refs.find((r) => r.type === "MASTER_FACE")?.url ?? null }))} />
+          <ImportDropzone readOnly={readOnly} defaultCreator={ROSTER.find((t) => t.code === sp.creator)?.code ?? null} creators={creators.map((x) => ({ code: x.code, name: x.name, color: x.color, masterUrl: x.portraitUrl }))} />
         </section>
       </>
     );

@@ -10,6 +10,7 @@ import { ReferenceLibrary } from "@/components/ReferenceLibrary";
 import { AssetTile, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, ago } from "@/components/ui";
 import Link from "next/link";
 import { CreatorPortrait } from "@/components/cc";
+import { pickPortrait, PORTRAIT_TYPE_ORDER } from "@/lib/talent/portrait";
 import { ImportDropzone } from "@/components/ImportDropzone";
 import { isReadOnly } from "@/lib/runtime/mode";
 import { creatorOverviews } from "@/lib/ops/creators";
@@ -29,13 +30,14 @@ export default async function TalentDetail({ params, searchParams }: { params: P
   const ov = creatorOverviews({ productions: prods, assets, publications, analytics, calendar, jobs, launch: launchAll, storylines, tasks }, new Date(), weightsFromEnv()).find((o) => o.code === t.code)!;
   const approved = assets.filter((a) => a.talent[0] === t.code && a.current && a.kind === "IMG" && a.status === "APPROVED").slice(-12).reverse();
   const myPubs = (publications ?? []).filter((x) => x.talent === t.code && x.status === "PUBLISHED").sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
-  const master = refs.find((r) => r.referenceType === "MASTER_FACE" && r.status === "ACTIVE");
+  const portrait = pickPortrait(refs, t.code); // MASTER_FACE → best canonical reference → fallback; never generated content
+  const strip = refs.filter((r) => r.status === "ACTIVE").sort((a, b) => (a.referenceType === "MASTER_FACE" ? -1 : b.referenceType === "MASTER_FACE" ? 1 : PORTRAIT_TYPE_ORDER.indexOf(a.referenceType) - PORTRAIT_TYPE_ORDER.indexOf(b.referenceType)));
   const recent = assets.filter((a) => a.talent[0] === t.code && a.current && a.kind === "IMG").sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8);
   const readOnly = isReadOnly();
   return (
     <>
       <section className="mb-8 grid gap-5 sm:grid-cols-[200px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
-        <CreatorPortrait code={t.code} refId={master?.id} className="aspect-[4/5] w-full rounded-2xl border border-edge" />
+        <div className="relative rounded-2xl p-[2px]" style={{ background: `linear-gradient(160deg, ${t.color}, transparent 70%)` }}><CreatorPortrait code={t.code} portrait={portrait} className="aspect-[3/4] w-full rounded-[14px]" />{portrait.source !== "FALLBACK" && <span className="absolute bottom-2 left-2 rounded-md bg-black/65 px-2 py-0.5 text-[10.5px] font-semibold backdrop-blur">{portrait.source === "MASTER_FACE" ? "Master face" : `Canonical · ${portrait.referenceType?.replace(/_/g, " ").toLowerCase()}`}</span>}</div>
         <div className="grid content-start gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div><h1 className="text-3xl font-extrabold tracking-tight">{t.name}</h1><p className="text-muted">{t.code} · {t.age} · {t.markets.join(" / ")} · {t.role}</p></div>
@@ -48,6 +50,19 @@ export default async function TalentDetail({ params, searchParams }: { params: P
         </div>
       </section>
       <h2 className="mb-3 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-bad/60" />Canonical references — identity authority, protected (imports and generated images never land here)</h2>
+      <div className="mb-5 rounded-2xl border border-bad/25 bg-bad/[0.03] p-3">
+        {strip.length === 0 ? <p className="p-3 text-center text-[13px] text-muted">No canonical images uploaded for {t.first} yet. <a href="#references" className="text-blue2">Add a master face →</a></p> : (
+          <ul aria-label="Canonical reference images" className="flex gap-2.5 overflow-x-auto pb-1">{strip.map((r) => (
+            <li key={r.id} className="w-28 flex-none sm:w-32">
+              <a href="#references" className={`block overflow-hidden rounded-xl border-2 ${r.referenceType === "MASTER_FACE" ? "" : "border-edge"}`} style={r.referenceType === "MASTER_FACE" ? { borderColor: t.color } : undefined}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`/api/references/${r.id}/file`} alt={`${t.first} ${r.referenceType}`} loading="lazy" className="aspect-[3/4] w-full object-cover object-top" />
+              </a>
+              <span className="mt-1 block truncate text-[11px] text-muted">{r.referenceType === "MASTER_FACE" ? <b className="text-ink">Master face</b> : r.referenceType.replace(/_/g, " ").toLowerCase()}</span>
+            </li>
+          ))}</ul>
+        )}
+      </div>
       <div className="grid gap-5 xl:grid-cols-2">
         <Card>
           <h2 className="mb-2 font-bold">Identity-critical rules</h2>
@@ -85,7 +100,7 @@ export default async function TalentDetail({ params, searchParams }: { params: P
       <div id="references" className="mt-5"><ReferenceLibrary talent={t.code} refs={refs} identityId={ci.id} error={sp.refError} ok={!!sp.refOk} /></div>
       <h2 id="generated" className="mb-3 mt-10 flex scroll-mt-4 items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-blue2/60" />Generated content — zero identity authority</h2>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-        <div className="rounded-2xl border border-edge bg-panel/70 p-4"><h3 className="mb-2 font-bold">Import to {t.first}</h3><ImportDropzone readOnly={readOnly} fixedCreator={t.code} creators={[{ code: t.code, name: t.name, color: t.color, masterUrl: master ? `/api/references/${master.id}/file` : null }]} title={`Drop images for ${t.first}`} /></div>
+        <div className="rounded-2xl border border-edge bg-panel/70 p-4"><h3 className="mb-2 font-bold">Import to {t.first}</h3><ImportDropzone readOnly={readOnly} fixedCreator={t.code} creators={[{ code: t.code, name: t.name, color: t.color, masterUrl: portrait.url }]} title={`Drop images for ${t.first}`} /></div>
         <div className="rounded-2xl border border-edge bg-panel/70 p-4"><h3 className="mb-2 font-bold">Recent content</h3>{recent.length === 0 ? <Empty>No content yet.</Empty> : <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">{recent.map((a) => <Link key={a.id} href={`/assets/${a.id}`}><AssetTile asset={a} /></Link>)}</div>}</div>
       </div>
       <h2 className="mb-3 mt-10 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-ok/60" />Approved · ready to publish</h2>

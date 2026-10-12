@@ -1,4 +1,5 @@
 import { ReadOnlyError } from "@/lib/runtime/mode";
+import { loadPortraits } from "@/lib/talent/portraits-server";
 import { getRepo } from "@/lib/db";
 import { ensureLaunchStates } from "@/lib/db/seed";
 import { ROSTER } from "@/lib/talent/roster";
@@ -14,6 +15,7 @@ export default async function Launch() {
   const repo = await getRepo();
   await ensureLaunchStates(repo).catch((e) => { if (!(e instanceof ReadOnlyError)) throw e; }); // read-only: show what exists, create nothing
   const rows = await repo.list("launchStates");
+  const portraits = await loadPortraits(repo);
   return (
     <>
       <PageHeader title="Launch" sub="Track each creator to launch. Toggle only what is actually true — Northline does not assume external accounts exist." />
@@ -26,7 +28,7 @@ export default async function Launch() {
             <Card key={t.code}>
               <form action={launchAction} className="grid gap-2">
                 <input type="hidden" name="talent" value={t.code} />
-                <div className="flex items-center justify-between"><span className="flex items-center gap-2 font-bold"><Avatar code={t.code} size={30} />{t.name}</span><Pill tone={t.launchStatus === "active" ? "ok" : "warn"}>{t.launchStatus === "active" ? "pilot" : "setup"} · {done}/{FIELDS.length}</Pill></div>
+                <div className="flex items-center justify-between"><span className="flex items-center gap-2 font-bold"><Avatar code={t.code} size={40} portrait={portraits[t.code]} />{t.name}</span><Pill tone={t.launchStatus === "active" ? "ok" : "warn"}>{t.launchStatus === "active" ? "pilot" : "setup"} · {done}/{FIELDS.length}</Pill></div>
                 <label className="text-[12px] text-muted">Handle<input name="handle" defaultValue={l.handle ?? ""} placeholder="not selected" /></label>
                 {FIELDS.map(([k, label]) => <label key={k} className="flex items-center gap-2 text-[13px]"><input type="checkbox" name={k} defaultChecked={(l as unknown as Record<string, boolean>)[k]} className="!w-auto" />{label}</label>)}
                 <Btn>Save</Btn>

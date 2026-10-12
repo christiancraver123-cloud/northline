@@ -4,14 +4,18 @@ import { snapshots } from "@/lib/agents/ops/service";
 import { AGENT_BY_CODE } from "@/lib/agents/ops/registry";
 import { agentControlAction } from "../actions";
 import { ChatPanel } from "@/components/ChatPanel";
-import { AgentStatusPill, Btn, Card, Empty, PageHeader, Pill, PROVIDER_STATE_TONE, ProviderPill, ago } from "@/components/ui";
+import { Avatar, AgentStatusPill, Btn, Card, Empty, PageHeader, Pill, PROVIDER_STATE_TONE, ProviderPill, ago } from "@/components/ui";
 import { llmProviderStatuses } from "@/lib/llm/status";
 import { defaultRouter } from "@/lib/llm/router";
 import { AGENT_TIER, tierModel } from "@/lib/llm/tiers";
+import { pickPortraits } from "@/lib/talent/portrait";
+import { ROSTER_BY_CODE } from "@/lib/talent/roster";
+import type { TalentCode } from "@/lib/domain/types";
 
 export default async function Agents() {
   const repo = await getRepo();
-  const [snaps, messages, events, reports, runs] = await Promise.all([snapshots(repo), repo.list("agentMessages", { agentId: "ORCHESTRATOR" }), repo.list("agentEvents"), repo.list("agentReports"), repo.list("agentRuns")]);
+  const [snaps, messages, events, reports, runs, refs] = await Promise.all([snapshots(repo), repo.list("agentMessages", { agentId: "ORCHESTRATOR" }), repo.list("agentEvents"), repo.list("agentReports"), repo.list("agentRuns"), repo.list("referenceAssets")]);
+  const portraits = pickPortraits(refs);
   const week = new Date(Date.now() - 7 * 86_400_000).toISOString();
   const cost7 = (code: string) => { const r = runs.filter((x) => x.agentId === code && x.startedAt >= week && x.provider && x.provider !== "rules"); return r.length === 0 ? "$0 (no model calls)" : r.every((x) => x.costUsd != null) ? `$${r.reduce((a, x) => a + (x.costUsd ?? 0), 0).toFixed(3)}` : "UNKNOWN"; };
   const modelFor = (s: (typeof snaps)[number]) => { const pref = s.agent.config.model; if (pref && pref.provider !== "auto") return `${pref.provider}${pref.model ? ` · ${pref.model}` : ""} (set)`; const tier = AGENT_TIER[s.agent.code]; if (tier === "rules") return "rules (no model)"; const m = providers.find((p) => p.state === "configured" && p.name !== "mock"); return m ? `${m.name} · ${tierModel(m.name, tier) ?? `${m.model} (default)`}` : "no model configured → rules"; };
@@ -32,7 +36,7 @@ export default async function Agents() {
             <td><Pill tone={AGENT_TIER[s.agent.code] === "premium" ? "warn" : "mute"}>{AGENT_TIER[s.agent.code]}</Pill></td>
             <td className="max-w-[12rem] text-muted">{modelFor(s)}</td>
             <td className="max-w-[14rem] truncate">{s.current?.title ?? "—"}</td>
-            <td>{s.current?.talent ?? "—"}</td>
+            <td>{s.current?.talent && s.current.talent in ROSTER_BY_CODE ? <span className="inline-flex items-center gap-1.5"><Avatar code={s.current.talent as TalentCode} portrait={portraits[s.current.talent as TalentCode]} size={20} />{ROSTER_BY_CODE[s.current.talent as TalentCode].first}</span> : (s.current?.talent ?? "—")}</td>
             <td><AgentStatusPill status={s.status} /></td>
             <td className="font-mono text-muted">{s.current?.startedAt ? ago(s.current.startedAt).replace(" ago", "") : "—"}</td>
             <td className="max-w-[14rem] text-muted">{s.status === "FAILED" ? <span className="text-bad">{s.lastError}</span> : s.blocked ? `${s.blocked} blocked` : s.queued ? `${s.queued} queued` : s.nextSchedule ? `${s.nextSchedule.name} ${s.nextSchedule.nextRunAt ? s.nextSchedule.nextRunAt.slice(0, 16).replace("T", " ") : ""}` : "idle"}</td>

@@ -8,8 +8,9 @@ import { listIfMigrated, resolvePublisher } from "@/lib/publishing/service";
 import { MOCK_OUTCOMES } from "@/lib/publishing/provider";
 import { instagramStatus } from "@/lib/flags";
 import { isReadOnly } from "@/lib/runtime/mode";
-import { Btn, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips, ago } from "@/components/ui";
-import { TriadDetail, TriadPills } from "@/components/cc";
+import { Btn, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, ago } from "@/components/ui";
+import { CreatorAvatar, CreatorTag, TriadDetail, TriadPills } from "@/components/cc";
+import { pickPortraits } from "@/lib/talent/portrait";
 import { ImportDropzone } from "@/components/ImportDropzone";
 import { ApprovalBoard, type BoardCard } from "./ApprovalBoard";
 import { visibleQueue } from "@/lib/orchestrator/bulk";
@@ -33,6 +34,7 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
   const allAssets = await repo.list("assets");
   const qaAll = await repo.list("qaResults");
   const refsAll = await repo.list("referenceAssets");
+  const portraits = pickPortraits(refsAll); // canonical references only
   const thumb = (a: { id: string; storagePath: string | null } | undefined | null) => (a?.storagePath ? `/api/assets/${a.id}/file` : null);
   const firstAsset = (pid: string) => allAssets.filter((x) => x.productionId === pid && x.current && x.kind !== "REEL").sort((x, y) => x.seq - y.seq)[0] ?? null;
 
@@ -44,7 +46,7 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
       </div>
       <nav aria-label="Creator filter" className="flex flex-wrap gap-1 text-[12.5px]">
         <Link href={`/approvals?${grid ? "view=grid" : ""}`} className={`rounded-full border px-2.5 py-1 ${!creator ? "border-blue2 bg-blue/20" : "border-edge text-muted"}`}>All · {allPending}</Link>
-        {ROSTER.map((t) => <Link key={t.code} href={`/approvals?creator=${t.code}${grid ? "&view=grid" : ""}`} className={`rounded-full border px-2.5 py-1 ${creator === t.code ? "border-transparent text-[#0a0f24]" : "border-edge text-muted"}`} style={creator === t.code ? { background: t.color } : undefined}>{t.first}</Link>)}
+        {ROSTER.map((t) => <Link key={t.code} href={`/approvals?creator=${t.code}${grid ? "&view=grid" : ""}`} className={`flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 ${creator === t.code ? "border-transparent font-semibold text-[#0a0f24]" : "border-edge text-muted"}`} style={creator === t.code ? { background: t.color } : undefined}><CreatorAvatar code={t.code} portrait={portraits[t.code]} size={24} ring={false} />{t.first}</Link>)}
       </nav>
       {!grid && pending.length > 1 && <span className="ml-auto flex items-center gap-2 text-[13px]"><span className="font-mono text-muted">{idx + 1} / {pending.length}</span><Link href={qs({ id: pending[(idx - 1 + pending.length) % pending.length].id })} className="rounded-lg border border-edge px-2.5 py-1">← Prev</Link><Link href={qs({ id: pending[(idx + 1) % pending.length].id })} className="rounded-lg border border-edge px-2.5 py-1">Next →</Link></span>}
     </div>
@@ -53,10 +55,10 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
   let body: React.ReactNode;
   if (grid) {
     const decided = (await repo.list("approvals")).filter((a) => a.state !== "PENDING").sort((a, b) => (b.decidedAt ?? "").localeCompare(a.decidedAt ?? ""));
-    const done = (state: string) => decided.filter((a) => a.state === state && (!creator || prods.get(a.productionId)?.talent[0] === creator)).map((a) => { const p = prods.get(a.productionId); const asset = allAssets.filter((x) => x.productionId === a.productionId && x.kind !== "REEL").sort((x, y) => y.attemptNo - x.attemptNo)[0]; return { id: a.id, code: p?.code ?? "", thumb: thumb(asset), color: ROSTER_BY_CODE[p?.talent[0] ?? "SIE"].color }; });
+    const done = (state: string) => decided.filter((a) => a.state === state && (!creator || prods.get(a.productionId)?.talent[0] === creator)).map((a) => { const p = prods.get(a.productionId); const asset = allAssets.filter((x) => x.productionId === a.productionId && x.kind !== "REEL").sort((x, y) => y.attemptNo - x.attemptNo)[0]; return { id: a.id, code: p?.code ?? "", thumb: thumb(asset), color: ROSTER_BY_CODE[p?.talent[0] ?? "SIE"].color, creator: ROSTER_BY_CODE[p?.talent[0] ?? "SIE"].first, portraitUrl: portraits[p?.talent[0] ?? "SIE"].url }; });
     const cards: BoardCard[] = await Promise.all(pending.map(async (a) => {
       const p = prods.get(a.productionId)!, asset = firstAsset(p.id);
-      return { approvalId: a.id, productionId: p.id, code: p.code, creator: ROSTER_BY_CODE[p.talent[0]].first, color: ROSTER_BY_CODE[p.talent[0]].color, thumb: thumb(asset), qa: asset ? qaTriad(qaAll, asset.id).overall : "NOT RUN", blockers: await approvalBlockers(repo, p.id) };
+      return { approvalId: a.id, productionId: p.id, code: p.code, creator: ROSTER_BY_CODE[p.talent[0]].first, color: ROSTER_BY_CODE[p.talent[0]].color, portraitUrl: portraits[p.talent[0]].url, thumb: thumb(asset), qa: asset ? qaTriad(qaAll, asset.id).overall : "NOT RUN", blockers: await approvalBlockers(repo, p.id) };
     }));
     body = <ApprovalBoard cards={cards} approved={done("APPROVED")} rejected={done("REJECTED")} creator={creator} back={qs({ view: "grid" })} readOnly={readOnly} tags={REJECT_TAGS.map(([t, c]) => [t, c] as const)} />;
   } else if (!ap) {
@@ -80,11 +82,11 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
               : <div className="grid aspect-[4/5] place-items-center p-6 text-center text-muted">{asset ? `${asset.provider} produced no image file.` : "No asset attached."}</div>}
           </div>
           {assets.length > 1 && <div className="flex gap-2 overflow-x-auto">{assets.map((x) => <Link key={x.id} href={qs({ id: ap.id, asset: x.id })} aria-current={x.id === asset?.id ? "true" : undefined} className={`flex-none rounded-lg border px-2 py-1 font-mono text-[12px] ${x.id === asset?.id ? "border-blue2 bg-blue/20" : "border-edge text-muted"}`}>frame {x.seq}</Link>)}</div>}
-          {assets.length <= 1 && !readOnly && <details className="rounded-xl border border-edge p-3"><summary className="cursor-pointer text-[13px] font-semibold text-muted">Replace this image (drop a new version)</summary><div className="mt-2"><ImportDropzone compact readOnly={readOnly} fixedCreator={p.talent[0]} replaceProductionId={p.id} creators={[{ code: t.code, name: t.name, color: t.color, masterUrl: null }]} title="Drop the replacement image" /></div></details>}
+          {assets.length <= 1 && !readOnly && <details className="rounded-xl border border-edge p-3"><summary className="cursor-pointer text-[13px] font-semibold text-muted">Replace this image (drop a new version)</summary><div className="mt-2"><ImportDropzone compact readOnly={readOnly} fixedCreator={p.talent[0]} replaceProductionId={p.id} creators={[{ code: t.code, name: t.name, color: t.color, masterUrl: portraits[t.code].url }]} title="Drop the replacement image" /></div></details>}
         </div>
         <div className="grid content-start gap-4">
           <div className="flex items-start justify-between gap-3">
-            <div><div className="flex items-center gap-2 text-lg font-extrabold"><span className="h-3 w-3 rounded-full" style={{ background: t.color }} />{t.name}</div><p className="text-[13.5px] text-muted">{p.concept}</p></div>
+            <div className="flex min-w-0 items-center gap-3"><Link href={`/talent/${t.code}`} aria-label={`${t.name} talent page`}><CreatorAvatar code={t.code} portrait={portraits[t.code]} size={56} /></Link><div className="min-w-0"><div className="text-lg font-extrabold">{t.name}</div><p className="text-[13.5px] text-muted">{p.concept}</p></div></div>
             <span className="flex-none font-mono text-[12px] text-faint">{p.code}</span>
           </div>
           {triad && <div className="flex flex-wrap gap-1.5"><TriadPills triad={triad} /></div>}
@@ -158,7 +160,7 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
               <div key={a.id} className="flex gap-3 rounded-xl border border-edge p-2.5">
                 <div className="h-28 w-[5.6rem] flex-none overflow-hidden rounded-lg border border-edge bg-panel2">{a.storagePath ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${a.id}/file`} alt={a.filename} className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[10px] text-muted">no file</span>}</div>
                 <details className="min-w-0 flex-1 text-[12.5px]">
-                  <summary className="cursor-pointer"><b>{p?.code ?? "—"}</b> · <TalentChips codes={a.talent} /><span className="block truncate text-muted">{p?.concept}</span><span className="mt-1 inline-block rounded-lg bg-gradient-to-br from-blue to-[#4d5cf0] px-3 py-1 font-bold text-white">Publish…</span></summary>
+                  <summary className="cursor-pointer"><span className="flex items-center gap-2"><CreatorTag code={a.talent[0]} portrait={portraits[a.talent[0]]} /><span className="font-mono text-[11px] text-faint">{p?.code ?? "—"}</span></span><span className="block truncate text-muted">{p?.concept}</span><span className="mt-1 inline-block rounded-lg bg-gradient-to-br from-blue to-[#4d5cf0] px-3 py-1 font-bold text-white">Publish…</span></summary>
                   <form action={publishAction} className="mt-2 grid gap-1.5 rounded-lg border border-edge p-2">
                     <input type="hidden" name="assetId" value={a.id} /><input type="hidden" name="back" value="/approvals" />
                     <p>Publish this image to <b>{publisher.provider!.name === "MOCK_INSTAGRAM" ? "the mock Instagram provider (nothing is posted)" : "Instagram"}</b> for {a.talent[0]}?</p>

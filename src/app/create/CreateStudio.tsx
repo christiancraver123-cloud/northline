@@ -8,6 +8,8 @@ import { briefComplete, EMPTY_BRIEF, previewPrompt, toCreative, type StudioBrief
 import { createImageAction } from "../actions";
 
 export interface StudioCreator {
+  /** Canonical portrait (MASTER_FACE → best canonical reference → none). */
+  portraitUrl: string | null;
   code: TalentCode; name: string; color: string; active: boolean; rules: string[]; storyline: string | null;
   refs: { id: string; type: ReferenceType; authority: ReferenceAuthority; url: string }[];
   recent: { id: string; code: string; concept: string; status: string }[];
@@ -58,14 +60,14 @@ export function CreateStudio({ creators, error, readOnly, initial, initialCreato
         <Step n={1} title="Select creator" done={!!c}>
           <div className="grid grid-cols-3 gap-2 sm:grid-cols-6" role="radiogroup" aria-label="Creator">
             {creators.map((x) => {
-              const master = x.refs.find((r) => r.type === "MASTER_FACE");
               const on = x.code === code;
               return (
                 <button key={x.code} type="button" role="radio" aria-checked={on} onClick={() => { setCode(x.code); setEdited(null); }}
-                  className={`group overflow-hidden rounded-xl border text-left transition ${on ? "border-transparent ring-2" : "border-edge opacity-80 hover:opacity-100"}`} style={on ? { boxShadow: `0 0 0 2px ${x.color}` } : undefined}>
-                  <div className="aspect-[4/5] w-full" style={{ background: `linear-gradient(160deg, ${x.color}55, #0b1128 75%)` }}>
-                    {master ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={master.url} alt={`${x.name} master reference`} className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[11px] text-muted">no master</span>}
+                  className={`group relative overflow-hidden rounded-xl border text-left transition ${on ? "border-transparent" : "border-edge opacity-70 hover:opacity-100"}`} style={on ? { boxShadow: `0 0 0 3px ${x.color}, 0 12px 30px -12px ${x.color}` } : undefined}>
+                  <div className="aspect-[3/4] w-full" style={{ background: `linear-gradient(160deg, ${x.color}55, #0b1128 75%)` }}>
+                    {x.portraitUrl ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={x.portraitUrl} alt={`${x.name} canonical portrait`} className="h-full w-full object-cover object-top" /> : <span className="grid h-full place-items-center text-3xl font-extrabold" style={{ color: x.color }}>{x.name[0]}</span>}
                   </div>
+                  {on && <span className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-[13px] font-black text-[#0a0f24]" style={{ background: x.color }}>✓</span>}
                   <div className="px-2 py-1.5 text-[12.5px] font-bold">{x.name.split(" ")[0]}<span className={`ml-1.5 text-[10px] font-normal ${x.active ? "text-ok" : "text-warn"}`}>{x.active ? "active" : "setup"}</span></div>
                 </button>
               );

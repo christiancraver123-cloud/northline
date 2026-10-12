@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { Portrait, Portraits } from "@/lib/talent/portrait";
 import { isReadOnly } from "@/lib/runtime/mode";
 import type { ReactNode } from "react";
 import type { Asset, Production } from "@/lib/db/records";
@@ -29,15 +30,18 @@ const STATUS_TONE: Record<string, string> = {
 export const StatusPill = ({ status }: { status: string }) => <Pill tone={STATUS_TONE[status] ?? "mute"}>{status.replace("_", " ")}</Pill>;
 export const DemoBadge = ({ origin }: { origin: string }) => (origin === "demo" ? <Pill tone="warn">DEMO</Pill> : null);
 
-export function Avatar({ code, size = 32 }: { code: TalentCode; size?: number }) {
+/** Creator avatar. With a canonical portrait it shows the image (never generated content); without one, the colour/initial block. */
+export function Avatar({ code, size = 32, portrait }: { code: TalentCode; size?: number; portrait?: Portrait | null }) {
   const t = ROSTER_BY_CODE[code];
   return (
-    <span title={t.name} className="inline-grid flex-none place-items-center rounded-xl font-extrabold text-[#0a0f24]"
-      style={{ width: size, height: size, background: t.color, boxShadow: `0 0 14px ${t.color}55`, fontSize: size * 0.42 }}>{t.first[0]}</span>
+    <span title={t.name} className="inline-grid flex-none place-items-center overflow-hidden rounded-xl font-extrabold text-[#0a0f24]"
+      style={{ width: size, height: size, background: t.color, boxShadow: `0 0 0 2px ${t.color}, 0 0 14px ${t.color}55`, fontSize: size * 0.42 }}>
+      {portrait?.url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={portrait.url} alt={t.name} loading="lazy" className="h-full w-full object-cover object-[50%_30%]" /> : t.first[0]}
+    </span>
   );
 }
-export function TalentChips({ codes }: { codes: TalentCode[] }) {
-  return <span className="inline-flex items-center gap-1.5">{codes.map((c) => <Link key={c} href={`/talent/${c}`} className="inline-flex items-center gap-1 hover:underline"><span className="h-2 w-2 rounded-full" style={{ background: ROSTER_BY_CODE[c].color }} />{ROSTER_BY_CODE[c].first}</Link>)}</span>;
+export function TalentChips({ codes, portraits }: { codes: TalentCode[]; portraits?: Portraits }) {
+  return <span className="inline-flex items-center gap-2">{codes.map((c) => <Link key={c} href={`/talent/${c}`} className="inline-flex items-center gap-1.5 hover:underline">{portraits ? <span className="inline-block h-6 w-6 flex-none overflow-hidden rounded-full" style={{ background: ROSTER_BY_CODE[c].color, boxShadow: `0 0 0 2px ${ROSTER_BY_CODE[c].color}` }}>{portraits[c].url && /* eslint-disable-next-line @next/next/no-img-element */ <img src={portraits[c].url!} alt="" loading="lazy" className="h-full w-full object-cover object-[50%_30%]" />}</span> : <span className="h-2 w-2 rounded-full" style={{ background: ROSTER_BY_CODE[c].color }} />}{ROSTER_BY_CODE[c].first}</Link>)}</span>;
 }
 
 /** Visual tile for an asset. Mock/demo assets have no file: shown as an explicit placeholder, never as a real image. */

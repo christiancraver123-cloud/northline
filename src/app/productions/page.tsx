@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { loadPortraits } from "@/lib/talent/portraits-server";
 import { getRepo } from "@/lib/db";
 import { newestFirst } from "@/lib/db/order";
 import { ROSTER } from "@/lib/talent/roster";
 import { CONTENT_TYPES, PRODUCTION_STATUSES } from "@/lib/domain/types";
-import { Card, DemoBadge, Empty, PageHeader, ProdLink, StatusPill, TalentChips } from "@/components/ui";
+import { Avatar, Card, DemoBadge, Empty, PageHeader, ProdLink, StatusPill, TalentChips } from "@/components/ui";
 
 type SP = { q?: string; talent?: string; format?: string; status?: string; campaign?: string; created?: string; warn?: string; provider?: string; qa?: string; from?: string };
 /** Conceptual pipeline stages from the dashboard map onto stored statuses / asset states. */
@@ -12,7 +13,7 @@ const STAGE: Record<string, (p: { status: string }, failed: boolean) => boolean>
 export default async function Productions({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = await searchParams;
   const repo = await getRepo();
-  const [all, campaigns, assets] = await Promise.all([repo.list("productions").then(newestFirst), repo.list("campaigns"), repo.list("assets")]);
+  const [all, campaigns, assets, portraits] = await Promise.all([repo.list("productions").then(newestFirst), repo.list("campaigns"), repo.list("assets"), loadPortraits(repo)]);
   const cur = (pid: string) => assets.filter((x) => x.productionId === pid && x.current);
   const list = all.filter((p) => {
     const a = cur(p.id), failed = a.some((x) => x.status === "FAILED");
@@ -26,6 +27,12 @@ export default async function Productions({ searchParams }: { searchParams: Prom
       <PageHeader title="Productions" sub={`${list.length} of ${all.length}`} />
       {sp.created && <div className="mb-4 rounded-xl border border-ok/30 bg-ok/10 p-3 text-ok">Created {sp.created} production(s). Review them in Approvals.</div>}
       {sp.warn && <div role="alert" className="mb-4 rounded-xl border border-warn/40 bg-warn/10 p-3 text-warn">Some steps need attention: {sp.warn}</div>}
+      <nav aria-label="Filter by creator" className="mb-4 flex flex-wrap gap-2">
+        {ROSTER.map((t) => { const on = sp.talent === t.code; return (
+          <Link key={t.code} href={on ? "/productions" : `/productions?talent=${t.code}`} aria-current={on ? "true" : undefined} className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-[13px] font-semibold transition ${on ? "border-transparent text-[#0a0f24]" : "border-edge text-muted hover:text-ink"}`} style={on ? { background: t.color } : undefined}>
+            <Avatar code={t.code} portrait={portraits[t.code]} size={30} />{t.first}<span className={`font-mono text-[11px] ${on ? "" : "text-faint"}`}>{all.filter((p) => p.talent.includes(t.code)).length}</span>
+          </Link>); })}
+      </nav>
       <form className="mb-4 grid gap-2 sm:grid-cols-4 lg:grid-cols-8">
         <input name="q" defaultValue={sp.q} placeholder="Search code or concept" aria-label="Search" />
         <select name="talent" defaultValue={sp.talent ?? ""} aria-label="Creator"><option value="">All creators</option>{ROSTER.map((t) => <option key={t.code} value={t.code}>{t.first}</option>)}</select>
@@ -43,7 +50,7 @@ export default async function Productions({ searchParams }: { searchParams: Prom
             <thead className="text-[11px] uppercase text-faint"><tr><th className="pb-2">ID</th><th>Creator</th><th>Concept</th><th>Format</th><th>Assets</th><th>Status</th><th>Created</th></tr></thead>
             <tbody>{list.map((p) => {
               const a = assets.filter((x) => x.productionId === p.id);
-              return <tr key={p.id} className="border-t border-edge"><td className="py-2"><ProdLink p={p} /> <DemoBadge origin={p.origin} /></td><td><TalentChips codes={p.talent} /></td><td className="max-w-[260px] truncate">{p.concept}</td><td className="text-muted">{p.contentType}</td>
+              return <tr key={p.id} className="border-t border-edge"><td className="py-2"><ProdLink p={p} /> <DemoBadge origin={p.origin} /></td><td><TalentChips codes={p.talent} portraits={portraits} /></td><td className="max-w-[260px] truncate">{p.concept}</td><td className="text-muted">{p.contentType}</td>
                 <td className="font-mono text-muted">{a.filter((x) => x.status !== "PENDING" && x.status !== "FAILED").length}/{a.length}{a.some((x) => x.status === "FAILED") && <span className="text-bad"> ✗</span>}</td><td><StatusPill status={p.status} /></td><td className="font-mono text-muted">{p.createdAt.slice(0, 10)}</td></tr>;
             })}</tbody>
           </table>

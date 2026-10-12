@@ -6,8 +6,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { bulkDecideAction, moveCardAction } from "../actions";
 
-export interface BoardCard { approvalId: string; productionId: string; code: string; creator: string; color: string; thumb: string | null; qa: "PASS" | "REVIEW" | "FAIL" | "NOT RUN"; blockers: string[] }
-export interface DoneCard { id: string; code: string; thumb: string | null; color: string }
+export interface BoardCard { approvalId: string; productionId: string; code: string; creator: string; color: string; portraitUrl: string | null; thumb: string | null; qa: "PASS" | "REVIEW" | "FAIL" | "NOT RUN"; blockers: string[] }
+export interface DoneCard { id: string; code: string; thumb: string | null; color: string; creator: string; portraitUrl: string | null }
+function Avatar({ url, color, name, size, className = "" }: { url: string | null; color: string; name: string; size: number; className?: string }) {
+  return <span title={name} className={`inline-grid flex-none place-items-center overflow-hidden rounded-full ${className}`} style={{ width: size, height: size, background: color, boxShadow: `0 0 0 2px ${color}` }}>{url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={url} alt={name} draggable={false} className="h-full w-full object-cover object-[50%_30%]" /> : <b className="text-[#0a0f24]" style={{ fontSize: size * 0.45 }}>{name[0]}</b>}</span>;
+}
 const QA_TONE = { PASS: "text-ok border-ok/40", REVIEW: "text-warn border-warn/40", FAIL: "text-bad border-bad/40", "NOT RUN": "text-muted border-edge" } as const;
 
 export function ApprovalBoard({ cards, approved, rejected, creator, back, readOnly, tags }: {
@@ -36,7 +39,7 @@ export function ApprovalBoard({ cards, approved, rejected, creator, back, readOn
       className={`rounded-2xl border-2 border-dashed p-3 transition ${over === target ? (target === "APPROVED" ? "border-ok bg-ok/10" : "border-bad bg-bad/10") : "border-edge"}`}>
       <h3 className={`mb-2 text-[12px] font-bold uppercase tracking-wider ${target === "APPROVED" ? "text-ok" : "text-bad"}`}>{label}</h3>
       {drag && <p className="mb-2 text-[12px] text-muted">Drop to {target === "APPROVED" ? "approve (same checks as the button)" : "reject (recorded as your decision)"}</p>}
-      <div className="grid grid-cols-4 gap-1.5">{items.slice(0, 8).map((x) => <div key={x.id} title={x.code} className="aspect-[4/5] overflow-hidden rounded-md border border-edge" style={{ background: `linear-gradient(160deg, ${x.color}55, #0b1128)` }}>{x.thumb && /* eslint-disable-next-line @next/next/no-img-element */ <img src={x.thumb} alt={x.code} className="h-full w-full object-cover" />}</div>)}</div>
+      <div className="grid grid-cols-4 gap-1.5">{items.slice(0, 8).map((x) => <div key={x.id} title={`${x.creator} · ${x.code}`} className="relative aspect-[4/5] overflow-hidden rounded-md border-2" style={{ borderColor: x.color, background: `linear-gradient(160deg, ${x.color}55, #0b1128)` }}>{x.thumb && /* eslint-disable-next-line @next/next/no-img-element */ <img src={x.thumb} alt={x.code} className="h-full w-full object-cover" />}<Avatar url={x.portraitUrl} color={x.color} name={x.creator} size={18} className="absolute bottom-0.5 left-0.5" /></div>)}</div>
       {!items.length && <p className="text-[12px] text-faint">None yet.</p>}
     </section>
   );
@@ -77,12 +80,12 @@ export function ApprovalBoard({ cards, approved, rejected, creator, back, readOn
               const on = sel.has(c.approvalId);
               return (
                 <li key={c.approvalId} draggable={!readOnly} onDragStart={(e) => { e.dataTransfer.setData("text/plain", c.approvalId); e.dataTransfer.effectAllowed = "move"; setDrag(c.approvalId); }} onDragEnd={() => { setDrag(null); setOver(null); }}
-                  className={`group relative overflow-hidden rounded-xl border bg-panel/80 transition ${on ? "border-blue2 ring-2 ring-blue2/50" : "border-edge"} ${drag === c.approvalId ? "opacity-50" : ""} ${!readOnly ? "cursor-grab" : ""}`}>
+                  style={{ borderTopColor: c.color }} className={`group relative overflow-hidden rounded-xl border border-t-4 bg-panel/80 transition ${on ? "border-blue2 ring-2 ring-blue2/50" : "border-edge"} ${drag === c.approvalId ? "opacity-50" : ""} ${!readOnly ? "cursor-grab" : ""}`}>
                   <label className="absolute left-2 top-2 z-10 grid h-6 w-6 cursor-pointer place-items-center rounded-md bg-black/60"><input type="checkbox" checked={on} onChange={() => toggle(c.approvalId)} aria-label={`Select ${c.code}`} className="size-4 !w-auto" /></label>
                   <Link href={`/approvals?id=${c.approvalId}${creator ? `&creator=${creator}` : ""}`} className="block aspect-[4/5]" style={{ background: `linear-gradient(160deg, ${c.color}55, #0b1128 80%)` }} draggable={false}>
                     {c.thumb ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={c.thumb} alt={c.code} draggable={false} className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[11px] text-muted">no image file</span>}
                   </Link>
-                  <div className="flex items-center justify-between gap-1 p-2 text-[12px]"><span className="flex min-w-0 items-center gap-1.5"><span className="h-2 w-2 flex-none rounded-full" style={{ background: c.color }} /><span className="truncate">{c.creator}</span></span><span className={`rounded-full border px-1.5 font-mono text-[10.5px] ${QA_TONE[c.qa]}`}>QA {c.qa}</span></div>
+                  <div className="flex items-center justify-between gap-1 p-2 text-[12.5px]"><span className="flex min-w-0 items-center gap-2"><Avatar url={c.portraitUrl} color={c.color} name={c.creator} size={30} /><b className="truncate">{c.creator}</b></span><span className={`rounded-full border px-1.5 font-mono text-[10.5px] ${QA_TONE[c.qa]}`}>QA {c.qa}</span></div>
                   {c.blockers.length > 0 && <p className="px-2 pb-2 text-[11px] text-warn" title={c.blockers.join("; ")}>Blocked: {c.blockers[0]}</p>}
                 </li>
               );

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { pickPortraits } from "@/lib/talent/portrait";
 import { getRepo } from "@/lib/db";
 import { approvalBlockers } from "@/lib/orchestrator/approvals";
 import { retryAssetAction, reelVideoAction, resubmitAction, regenerateAction, rerunQaAction, deliveryAction } from "../../actions";
@@ -36,7 +37,7 @@ export default async function ProductionDetail({ params, searchParams }: { param
     <>
       <PageHeader title={p.code} sub={`${p.contentType} · ${p.concept}`} actions={<span className="flex items-center gap-2"><DemoBadge origin={p.origin} /><StatusPill status={p.status} /></span>} />
       {err && <div role="alert" className="mb-4 rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">{err}</div>}
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-muted"><TalentChips codes={p.talent} />{campaign && <Pill tone="info">Campaign: {campaign.name}</Pill>}<Pill>{p.scope}</Pill><Pill>{p.platform}</Pill>{p.identityVersion && <Pill tone="info">{p.identityVersion}</Pill>}<Pill>cost {p.costUsd ? `$${p.costUsd.toFixed(2)}` : "unknown/none"}</Pill></div>
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-muted"><TalentChips codes={p.talent} portraits={pickPortraits(await repo.list("referenceAssets"))} />{campaign && <Pill tone="info">Campaign: {campaign.name}</Pill>}<Pill>{p.scope}</Pill><Pill>{p.platform}</Pill>{p.identityVersion && <Pill tone="info">{p.identityVersion}</Pill>}<Pill>cost {p.costUsd ? `$${p.costUsd.toFixed(2)}` : "unknown/none"}</Pill></div>
       {p.qaNotes.length > 0 && <Card className="mb-4 border-warn/30"><h2 className="mb-1 font-bold text-warn">QA notes</h2><ul className="list-disc pl-4 text-[13px]">{p.qaNotes.map((n) => <li key={n}>{n}</li>)}</ul></Card>}
       <Card className="mb-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">Assets</h2>
@@ -46,7 +47,7 @@ export default async function ProductionDetail({ params, searchParams }: { param
           </span></div>
         {!["APPROVED", "SCHEDULED", "PUBLISHED", "ARCHIVED"].includes(p.status) && p.talent.length === 1 && (
           <details className="mb-3 rounded-xl border border-edge p-3"><summary className="cursor-pointer text-[13px] font-semibold text-muted">Add or replace the image by drag &amp; drop (new version; history kept)</summary>
-            <div className="mt-2"><ImportDropzone compact readOnly={isReadOnly()} fixedCreator={p.talent[0]} replaceProductionId={p.id} creators={[{ code: p.talent[0], name: ROSTER_BY_CODE[p.talent[0]].name, color: ROSTER_BY_CODE[p.talent[0]].color, masterUrl: null }]} title="Drop the new image" /></div>
+            <div className="mt-2"><ImportDropzone compact readOnly={isReadOnly()} fixedCreator={p.talent[0]} replaceProductionId={p.id} creators={[{ code: p.talent[0], name: ROSTER_BY_CODE[p.talent[0]].name, color: ROSTER_BY_CODE[p.talent[0]].color, masterUrl: pickPortraits(await repo.list("referenceAssets"))[p.talent[0]].url }]} title="Drop the new image" /></div>
           </details>
         )}
         {currentAssets.length === 0 ? <Empty>No assets — generation was blocked (see QA notes).</Empty> : (

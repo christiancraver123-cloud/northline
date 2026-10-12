@@ -51,13 +51,26 @@ export function ImportDropzone({ creators, fixedCreator, defaultCreator, replace
   return (
     <div className="grid gap-3">
       {!fixedCreator && (
-        <div role="radiogroup" aria-label="Creator" className="flex flex-wrap gap-2">
-          {creators.map((x) => (
-            <button key={x.code} type="button" role="radio" aria-checked={creator === x.code} onClick={() => setCreator(x.code)}
-              className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-[13px] font-semibold ${creator === x.code ? "border-transparent text-[#0a0f24]" : "border-edge text-muted hover:text-ink"}`} style={creator === x.code ? { background: x.color } : undefined}>
-              <span className="h-6 w-6 overflow-hidden rounded-full" style={{ background: x.color }}>{x.masterUrl && /* eslint-disable-next-line @next/next/no-img-element */ <img src={x.masterUrl} alt="" className="h-full w-full object-cover" />}</span>{x.name.split(" ")[0]}
-            </button>
-          ))}
+        <div role="radiogroup" aria-label="Creator" className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {creators.map((x) => {
+            const on = creator === x.code;
+            return (
+              <button key={x.code} type="button" role="radio" aria-checked={on} aria-label={x.name} onClick={() => setCreator(x.code)}
+                className={`group relative overflow-hidden rounded-xl border text-left transition ${on ? "border-transparent" : "border-edge opacity-70 hover:opacity-100"}`} style={on ? { boxShadow: `0 0 0 3px ${x.color}, 0 12px 30px -12px ${x.color}` } : undefined}>
+                <span className="block aspect-[3/4] w-full" style={{ background: `linear-gradient(160deg, ${x.color}66, #0b1128 80%)` }}>
+                  {x.masterUrl ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={x.masterUrl} alt="" className="h-full w-full object-cover object-top" /> : <span className="grid h-full place-items-center text-3xl font-extrabold" style={{ color: x.color }}>{x.name[0]}</span>}
+                </span>
+                {on && <span className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-[13px] font-black text-[#0a0f24]" style={{ background: x.color }}>✓</span>}
+                <span className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-2 pb-1.5 pt-6 text-[13px] font-bold ${on ? "" : "text-ink/85"}`}>{x.name.split(" ")[0]}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {fixedCreator && c && !replaceProductionId && (
+        <div className="flex items-center gap-2 text-[13px] text-muted">
+          <span className="h-9 w-9 overflow-hidden rounded-full" style={{ background: c.color, boxShadow: `0 0 0 2px ${c.color}` }}>{c.masterUrl && /* eslint-disable-next-line @next/next/no-img-element */ <img src={c.masterUrl} alt="" className="h-full w-full object-cover object-[50%_30%]" />}</span>
+          Importing for <b className="text-ink">{c.name}</b>
         </div>
       )}
       <div

@@ -91,3 +91,11 @@ Added (no pipeline/identity/data changes): production fails closed unless `NORTH
 ## 2026-10-12 — Command Center promote + verify
 Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Render untouched; migration 0009 not applied). Re-verified tests, typecheck, build, secret scan, browser smoke (Sienna → one image → approve → mock publish with retryable failure → retry → analytics), read-only (forced submit refused, row counts unchanged), no external hosts called from the browser.
 **Bug fixed**: after a retryable mock-publish failure the asset was still offered under "Ready to publish", so a second publication could be created alongside the pending retry. Now blocked (service + UI) with "use Retry"; test added.
+
+## 2026-10-12 — Command Center UX + asset workflow polish (branch command-center-oneshot)
+**Built**
+- Manual-first import (`lib/pipeline/import.ts`): server-validated PNG/JPEG/WebP (magic bytes, ≤10 MB), server-chosen storage path, lineage `MANUAL_UPLOAD`, no prompt, no provider job, never a reference; same QA → approval routing as generated images. Replacement = new attempt; old asset kept (`current:false`); refused for APPROVED/SCHEDULED/PUBLISHED/ARCHIVED and creator mismatch. QA skips the prompt-conformance row for imports.
+- Bulk review (`lib/orchestrator/bulk.ts`): `visibleQueue`, `decideMany` (refuses the whole action if any id is outside the visible/filtered queue; per-item approval gate), `moveCard` (only APPROVED/REJECTED targets; never publish).
+- UI: Studio (Import asset default tab, Generate with AI secondary); `ImportDropzone` (native DnD, idle/drag-over/uploading/success/failure); Approvals Focus/Grid views with Select all / Deselect all / APPROVE ALL / DENY ALL (one confirm, shared reason, nothing deleted) and drag to Approved / Rejected; cleaner dashboard; talent page sections (canonical protected, drop-import into Generated content, Approved, Published); production page replace-by-drop.
+**Tests**: 409 pass; typecheck clean; build OK. Browser smoke desktop 1440 + mobile 390 (see final report). Read-only: import zone disabled, bulk buttons disabled, cards not draggable.
+**Known issues**: dashboard "Queued / in progress" includes seeded demo QUEUED production tasks; Google Fonts blocked in sandbox (cosmetic); server action body limit raised to 12 MB.

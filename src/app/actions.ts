@@ -21,10 +21,10 @@ import type { LaunchState } from "@/lib/db/records";
 export async function createAction(formData: FormData) {
   await requireOperator();
   const parsed = CreateRequestSchema.safeParse(JSON.parse(String(formData.get("request") ?? "{}")));
-  if (!parsed.success) redirect(`/create?error=${encodeURIComponent(parsed.error.issues.map((i) => i.message).join("; ").slice(0, 200))}`);
+  if (!parsed.success) redirect(`/create?mode=planner&error=${encodeURIComponent(parsed.error.issues.map((i) => i.message).join("; ").slice(0, 200))}`);
   const r = await submitCreate(await getRepo(), parsed.data, { createdBy: "operator" });
   revalidatePath("/", "layout");
-  if (r.task.status === "FAILED") redirect(`/create?error=${encodeURIComponent((r.task.error ?? "failed").slice(0, 200))}`);
+  if (r.task.status === "FAILED") redirect(`/create?mode=planner&error=${encodeURIComponent((r.task.error ?? "failed").slice(0, 200))}`);
   const n = r.output?.productions?.length ?? 0, failures = r.output?.failures ?? [];
   if (failures.length) redirect(`/productions?created=${n}&warn=${encodeURIComponent(failures.join("; ").slice(0, 300))}`);
   redirect(`/productions?created=${n}`);
@@ -244,14 +244,14 @@ import { isReadOnly } from "@/lib/runtime/mode";
 /** Create studio: exactly ONE image. Requires the founder's explicit confirmation tick. */
 export async function createImageAction(formData: FormData) {
   await requireOperator();
-  if (formData.get("confirmed") !== "yes") redirect(`/create?error=${encodeURIComponent("Tick the confirmation before generating.")}`);
+  if (formData.get("confirmed") !== "yes") redirect(`/create?mode=generate&error=${encodeURIComponent("Tick the confirmation before generating.")}`);
   const parsed = CreateRequestSchema.safeParse(JSON.parse(String(formData.get("request") ?? "{}")));
-  if (!parsed.success) redirect(`/create?error=${encodeURIComponent(parsed.error.issues.map((i) => i.message).join("; ").slice(0, 200))}`);
+  if (!parsed.success) redirect(`/create?mode=generate&error=${encodeURIComponent(parsed.error.issues.map((i) => i.message).join("; ").slice(0, 200))}`);
   const req = parsed.data;
-  if (req.quantity !== 1 || req.talent.length !== 1 || req.creative?.shots.length !== 1) redirect(`/create?error=${encodeURIComponent("The studio generates exactly one image per click.")}`);
+  if (req.quantity !== 1 || req.talent.length !== 1 || req.creative?.shots.length !== 1) redirect(`/create?mode=generate&error=${encodeURIComponent("The studio generates exactly one image per click.")}`);
   const r = await submitCreate(await getRepo(), { ...req, asset_count: 1 }, { createdBy: "operator" });
   revalidatePath("/", "layout");
-  if (r.task.status === "FAILED") redirect(`/create?error=${encodeURIComponent((r.task.error ?? "failed").slice(0, 200))}`);
+  if (r.task.status === "FAILED") redirect(`/create?mode=generate&error=${encodeURIComponent((r.task.error ?? "failed").slice(0, 200))}`);
   const p = r.output?.productions?.[0];
   const failures = r.output?.failures ?? [];
   redirect(p ? `/productions/${p.id}${failures.length ? `?error=${encodeURIComponent(failures.join("; ").slice(0, 300))}` : "?created=1"}` : "/productions");
@@ -311,4 +311,53 @@ export async function archiveProductionAction(formData: FormData) {
   } catch (e) { err = e instanceof Error ? e.message : "failed"; }
   revalidatePath("/", "layout");
   redirect(err ? `/approvals?error=${encodeURIComponent(err)}` : "/approvals?ok=Archived");
+}
+
+// ---- Manual-first import, bulk review, drag-to-state ----------------------------------------------------------------------
+import { importAsset, ImportError } from "@/lib/pipeline/import";
+import { BulkError, decideMany, moveCard } from "@/lib/orchestrator/bulk";
+import { defaultDeps } from "@/lib/pipeline/deps";
+import { REJECT_TAGS } from "@/lib/feedback/reasons";
+
+export type ImportActionResult = { ok: true; productionId: string; code: string; status: string; assetId: string } | { ok: false; error: string };
+/** Upload one image (drag/drop or picker). Works with every generation provider disabled. Returns a result for the drop zone UI. */
+export async function importAction(formData: FormData): Promise<ImportActionResult> {
+  await requireOperator(); // read-only redirects here, before any work
+  try {
+    const file = formData.get("file");
+    if (!(file instanceof File)) return { ok: false, error: "Choose an image file." };
+    const meta = Object.fromEntries(["scene", "location", "outfit", "notes", "caption", "storyBeat"].map((k) => [k, String(formData.get(k) ?? "")]));
+    const repo = await getRepo();
+    const deps = { ...defaultDeps(), trace: async (agent: string, kind: string, message: string, o?: { level?: "info" | "warn" | "error"; data?: Record<string, unknown> }) => { await repo.insert("agentEvents", { agentId: agent as AgentCode, taskId: null, runId: null, level: o?.level ?? "info", kind, message, data: o?.data ?? {} }); } };
+    const r = await importAsset(repo, deps as never, { talent: String(formData.get("talent") ?? ""), bytes: new Uint8Array(await file.arrayBuffer()), filename: file.name, declaredMime: file.type || undefined, meta, createdBy: "founder", replaceProductionId: String(formData.get("replaceProductionId") ?? "") || undefined });
+    revalidatePath("/", "layout");
+    return { ok: true, productionId: r.production.id, code: r.production.code, status: r.status, assetId: r.asset.id };
+  } catch (e) {
+    return { ok: false, error: e instanceof ImportError ? e.message : e instanceof Error ? e.message.slice(0, 200) : "Import failed" };
+  }
+}
+
+/** Bulk decisions on the visible queue. DENY ALL / APPROVE ALL / selected. Requires an explicit confirmation tick. */
+export async function bulkDecideAction(formData: FormData) {
+  await requireOperator();
+  const back = backTo(formData.get("back"), "/approvals?view=grid");
+  const decision = String(formData.get("decision"));
+  if (decision !== "APPROVED" && decision !== "REJECTED") redirect(withMsg(back, "error", "Unknown bulk action."));
+  if (formData.get("confirm") !== "yes") redirect(withMsg(back, "error", "Tick the confirmation first."));
+  const tags = formData.getAll("reason").map(String).filter((c) => REJECT_TAGS.some(([, code]) => code === c));
+  const notes = decision === "REJECTED" ? encodeDecisionNotes(tags, `[bulk deny] ${String(formData.get("notes") ?? "")}`.trim()) : "[bulk approve]";
+  let msg = "", err = "";
+  try {
+    const r = await decideMany(await getRepo(), { ids: formData.getAll("approvalId").map(String), decision, notes, by: "founder", filter: { creator: String(formData.get("creator") ?? "") || null } });
+    msg = `${decision === "APPROVED" ? "Approved" : "Denied"} ${r.done.length}.${r.failed.length ? ` ${r.failed.length} could not be ${decision === "APPROVED" ? "approved" : "denied"}: ${r.failed.map((f) => f.reason).slice(0, 2).join(" | ")}` : ""}`;
+  } catch (e) { err = e instanceof BulkError || e instanceof Error ? e.message : "failed"; }
+  revalidatePath("/", "layout");
+  redirect(err ? withMsg(back, "error", err) : withMsg(back, "ok", msg));
+}
+
+/** Drag a review card to Approved / Rejected. Same approval gate as the buttons; never publishes. */
+export async function moveCardAction(approvalId: string, target: string): Promise<{ ok: boolean; error?: string }> {
+  await requireOperator();
+  try { await moveCard(await getRepo(), approvalId, target, "founder", target === "REJECTED" ? "[moved to Rejected]" : ""); revalidatePath("/", "layout"); return { ok: true }; }
+  catch (e) { return { ok: false, error: e instanceof Error ? e.message : "failed" }; }
 }

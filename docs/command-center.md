@@ -13,6 +13,11 @@ Founder operating view for Northline. World is frozen; this milestone is the web
 - **Inbox** (`/inbox`): placeholder showing INSTAGRAM — BLOCKED / DISCONNECTED. No DM infrastructure, no Meta calls.
 - **Model tiers** (`lib/llm/tiers.ts`): cheap / normal / premium mapped onto Gemini/OpenAI via `GEMINI_MODEL_CHEAP|NORMAL|PREMIUM` and `OPENAI_TEXT_MODEL_*`; unset = provider default.
 
+## Import and bulk review
+- Studio → Import asset (default): pick creator, drop PNG/JPEG/WebP (≤10 MB). Server validates content, stores under a server-chosen path, lineage `MANUAL_UPLOAD`, runs QA, sends to Approvals. No prompt, no AI provider. Imports never become canonical references.
+- Approvals → Grid: Select all / APPROVE ALL / DENY ALL act only on the visible (filtered) queue, with one confirmation. DENY ALL marks items REJECTED (who + when recorded); nothing is deleted. Drag a card to Approved (same gate as the button) or Rejected. There is no drag-to-publish.
+- Replace an image by dropping on the Approvals focus view or the production page: new attempt; the old image stays in history.
+
 ## Flags
 | Variable | Default | Effect |
 |---|---|---|

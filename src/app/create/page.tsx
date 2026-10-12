@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ui";
 import { CreateForm } from "./CreateForm";
 import { CreateStudio, type StudioCreator } from "./CreateStudio";
+import { ImportDropzone } from "@/components/ImportDropzone";
 import { isReadOnly } from "@/lib/runtime/mode";
 import { getRepo } from "@/lib/db";
 import { ROSTER } from "@/lib/talent/roster";
@@ -37,6 +38,26 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
       recent: prods.filter((p) => p.talent[0] === t.code).slice(0, 4).map((p) => ({ id: p.id, code: p.code, concept: p.concept, status: p.status })),
     };
   }));
+  const generate = sp.mode === "generate" || !!sp.from;
+  const tabs = (
+    <div role="tablist" aria-label="Studio" className="mb-5 grid grid-cols-2 gap-2 sm:inline-grid sm:grid-cols-[auto_auto]">
+      <Link role="tab" aria-selected={!generate} href={`/create${sp.creator ? `?creator=${sp.creator}` : ""}`} className={`rounded-xl border px-4 py-2.5 text-center font-bold ${!generate ? "border-blue2 bg-blue/20" : "border-edge text-muted hover:text-ink"}`}>⇪ Import asset</Link>
+      <Link role="tab" aria-selected={generate} href={`/create?mode=generate${sp.creator ? `&creator=${sp.creator}` : ""}`} className={`rounded-xl border px-4 py-2.5 text-center font-bold ${generate ? "border-blue2 bg-blue/20" : "border-edge text-muted hover:text-ink"}`}>✦ Generate with AI</Link>
+    </div>
+  );
+  const header = <PageHeader title="Studio" sub="Bring in images you made anywhere, or generate one. Everything goes through QA and your approval." actions={<Link href="/create?mode=planner" className="rounded-xl border border-edge bg-panel2 px-3.5 py-2 text-[13px] font-bold">Campaign planner</Link>} />;
+  if (!generate) {
+    return (
+      <>
+        {header}{tabs}
+        <section className="rounded-2xl border border-edge bg-panel/80 p-4 sm:p-5">
+          <h2 className="mb-1 text-lg font-bold">Import asset</h2>
+          <p className="mb-4 text-[13px] text-muted">Pick the creator, drop the images. No prompt and no AI provider needed.</p>
+          <ImportDropzone readOnly={readOnly} defaultCreator={ROSTER.find((t) => t.code === sp.creator)?.code ?? null} creators={creators.map((x) => ({ code: x.code, name: x.name, color: x.color, masterUrl: x.refs.find((r) => r.type === "MASTER_FACE")?.url ?? null }))} />
+        </section>
+      </>
+    );
+  }
   const img = resolveImageProvider();
   const limits = cc.budget.limits;
   const day = Array.isArray(limits) ? limits.filter((l) => l.metric === "images_per_day" && l.enabled) : [];
@@ -57,8 +78,7 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
   }
   return (
     <>
-      <PageHeader title="Create" sub="One brief → one image → QA → your approval. Nothing is published from here."
-        actions={<Link href="/create?mode=planner" className="rounded-xl border border-edge bg-panel2 px-3.5 py-2 text-[13px] font-bold">Campaign planner</Link>} />
+      {header}{tabs}
       <CreateStudio creators={creators} error={sp.error} readOnly={readOnly} initial={initial} initialCreator={ROSTER.find((t) => t.code === sp.creator)?.code ?? null}
         provider={{ name: img.provider.name, model: img.provider.model ?? null, mode: img.mode, reason: img.reason, paidEnabled: imageGenerationEnabled() }}
         pricePerImage={pricePerImage(img.mode)} budget={budget} paused={cc.budget.pause.paused === true} />

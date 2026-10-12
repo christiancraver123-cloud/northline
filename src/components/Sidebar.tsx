@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
 
 const NAV = [
-  ["/", "Dashboard"], ["/talent", "Talent"], ["/create", "Create"], ["/productions", "Productions"], ["/approvals", "Approvals"],
+  ["/", "Dashboard"], ["/talent", "Talent"], ["/create", "Studio"], ["/productions", "Productions"], ["/approvals", "Approvals"],
   ["/calendar", "Calendar"], ["/inbox", "Inbox"], ["/analytics", "Analytics"], ["/agents", "Agents"], ["/world", "World"], ["/settings", "Settings"],
 ] as const;
 /** Still reachable, not primary: launch checklists, the asset library and automations. */

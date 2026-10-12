@@ -8,6 +8,9 @@ import { listIfMigrated } from "@/lib/publishing/service";
 import { qaTriad } from "@/lib/pipeline/qa-triad";
 import { parseDecisionNotes, reasonLabel } from "@/lib/feedback/reasons";
 import { TriadPills } from "@/components/cc";
+import { ImportDropzone } from "@/components/ImportDropzone";
+import { isReadOnly } from "@/lib/runtime/mode";
+import { ROSTER_BY_CODE } from "@/lib/talent/roster";
 import { retryPublishAction } from "../../actions";
 
 export default async function ProductionDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; created?: string; ok?: string }> }) {
@@ -41,6 +44,11 @@ export default async function ProductionDetail({ params, searchParams }: { param
             {reel && reel.status === "PENDING" && <form action={reelVideoAction}><input type="hidden" name="productionId" value={p.id} /><Btn>Generate video (Higgsfield stage)</Btn></form>}
             {p.status === "RAW" && !assets.some((a) => a.status === "FAILED" || a.status === "PENDING") && <form action={resubmitAction}><input type="hidden" name="productionId" value={p.id} /><Btn primary>Submit for review</Btn></form>}
           </span></div>
+        {!["APPROVED", "SCHEDULED", "PUBLISHED", "ARCHIVED"].includes(p.status) && p.talent.length === 1 && (
+          <details className="mb-3 rounded-xl border border-edge p-3"><summary className="cursor-pointer text-[13px] font-semibold text-muted">Add or replace the image by drag &amp; drop (new version; history kept)</summary>
+            <div className="mt-2"><ImportDropzone compact readOnly={isReadOnly()} fixedCreator={p.talent[0]} replaceProductionId={p.id} creators={[{ code: p.talent[0], name: ROSTER_BY_CODE[p.talent[0]].name, color: ROSTER_BY_CODE[p.talent[0]].color, masterUrl: null }]} title="Drop the new image" /></div>
+          </details>
+        )}
         {currentAssets.length === 0 ? <Empty>No assets — generation was blocked (see QA notes).</Empty> : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">{currentAssets.map((a) => (
             <div key={a.id}><Link href={`/assets/${a.id}`}><AssetTile asset={a} /></Link><div className="mt-1"><QaPill status={a.qaStatus} /></div><div className="mt-1 truncate font-mono text-[10px] text-faint" title={a.filename}>{a.filename}</div>

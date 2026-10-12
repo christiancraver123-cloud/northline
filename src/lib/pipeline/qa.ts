@@ -67,7 +67,8 @@ export async function runIdentityQa(repo: Repo, deps: Deps, p: Production, attem
   const prompts = (await repo.list("prompts", { productionId: p.id })).filter((x) => x.attemptId === attempt.id);
   const promptFindings: QaFindingRecord[] = prompts.flatMap((x) => x.qa.issues.map((m) => ({ lockId: null, severity: "REVIEW" as const, message: `Shot ${x.shotN}: ${m}` })));
   // The deterministic prompt-conformance row is saved on the first run, and on a re-run only if the attempt never got one.
-  const wantPromptRow = opts.promptRules !== false || !(await repo.list("qaResults", { productionId: p.id })).some((x) => x.attemptId === attempt.id && x.kind === "IDENTITY" && x.method === "prompt_rules");
+  // No prompts = an imported image (nothing was prompted), so there is no prompt to check: skip the prompt-conformance row rather than report a hollow PASS.
+  const wantPromptRow = prompts.length > 0 && (opts.promptRules !== false || !(await repo.list("qaResults", { productionId: p.id })).some((x) => x.attemptId === attempt.id && x.kind === "IDENTITY" && x.method === "prompt_rules"));
   if (wantPromptRow) out.push(await save(repo, p, attempt, null, { kind: "IDENTITY", method: "prompt_rules", status: promptFindings.length ? "REVIEW" : "PASS", inspectedImage: false, provider: null, model: null, findings: promptFindings,
     summary: promptFindings.length ? "Prompt states identity with gaps (no image inspected)." : "Prompt states every canonical hard lock and signature trait. This checks the PROMPT, not the image.", recommendation: null }));
   if (wantPromptRow) await tr("IDENTITY_QA", promptFindings.length ? "QA_REVIEW" : "QA_PASSED", `Identity prompt-conformance for ${p.code} attempt ${attempt.attemptNo}: ${promptFindings.length ? `${promptFindings.length} gap(s)` : "all locks stated"} (image not inspected)`);

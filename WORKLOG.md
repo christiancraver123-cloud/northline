@@ -87,3 +87,7 @@ Added (no pipeline/identity/data changes): production fails closed unless `NORTH
 - `GENERIC_NEG` in `lib/identity/canonical.ts` lists "lingerie" as a negative, which conflicts with the operator's content floor in the Cowork app (lingerie allowed). Not changed — identity data needs an operator decision and a version bump.
 - Regenerate does not reuse a founder-edited prompt (it rebuilds from the brief + revision notes). Use Edit prompt for a new production instead.
 - Assertions on publish: after one asset of a production publishes, the production is PUBLISHED and its other approved frames cannot publish (fine for one-image productions).
+
+## 2026-10-12 — Command Center promote + verify
+Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Render untouched; migration 0009 not applied). Re-verified tests, typecheck, build, secret scan, browser smoke (Sienna → one image → approve → mock publish with retryable failure → retry → analytics), read-only (forced submit refused, row counts unchanged), no external hosts called from the browser.
+**Bug fixed**: after a retryable mock-publish failure the asset was still offered under "Ready to publish", so a second publication could be created alongside the pending retry. Now blocked (service + UI) with "use Retry"; test added.

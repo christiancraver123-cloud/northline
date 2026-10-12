@@ -91,6 +91,9 @@ describe("mock publishing", () => {
     await decide(b.repo, b.ap.id, "APPROVED", "", "founder", { selectedAssetIds: [b.asset.id] });
     const temp = await publishAsset(b.repo, { assetId: b.asset.id, confirmed: true, requestedBy: "founder", env: DEV, mockOutcome: "retryable" });
     expect(temp).toMatchObject({ status: "FAILED", retryable: true, attempts: 1 });
+    // a retryable failure must be retried, not published a second time
+    expect(await publishBlockers(b.repo, b.asset.id)).toEqual(expect.arrayContaining([expect.stringMatching(/use Retry/)]));
+    await expect(publishAsset(b.repo, { assetId: b.asset.id, confirmed: true, requestedBy: "founder", env: DEV })).rejects.toThrow(/use Retry/);
     const ok = await retryPublication(b.repo, temp.id, { env: DEV, mockOutcome: "retryable" });
     expect(ok).toMatchObject({ status: "PUBLISHED", attempts: 2 });
     const jobs = (await b.repo.list("providerJobs")).filter((j) => j.operation === "publish.instagram");

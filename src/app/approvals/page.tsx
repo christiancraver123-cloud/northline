@@ -86,7 +86,8 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
 
   // ---- ready to publish + failed publishes ----
   const publications = await listIfMigrated(repo, "publications");
-  const approvedAssets = (await repo.list("assets")).filter((a) => a.status === "APPROVED" && a.current && a.kind === "IMG" && a.publication !== "PUBLISHED");
+  const retryPending = new Set((publications ?? []).filter((x) => x.status === "FAILED" && x.retryable && x.attempts < x.maxAttempts).map((x) => x.assetId));
+  const approvedAssets = (await repo.list("assets")).filter((a) => a.status === "APPROVED" && a.current && a.kind === "IMG" && a.publication !== "PUBLISHED" && !retryPending.has(a.id)); // retryable failures are handled by Retry below
   const prods = new Map((await repo.list("productions")).map((p) => [p.id, p]));
   const publisher = resolvePublisher();
   const failedPubs = (publications ?? []).filter((x) => x.status === "FAILED").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6);

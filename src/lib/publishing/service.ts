@@ -36,7 +36,9 @@ export async function publishBlockers(repo: Repo, assetId: string, opts: { requi
     const approved = (await repo.list("approvals", { productionId: prod.id })).some((a) => a.state === "APPROVED" && a.selectedAssetIds.includes(asset.id));
     try { assertPublishable(prod, approved); } catch (e) { if (e instanceof ApprovalRequiredError) out.push(e.message); else throw e; }
   }
-  if ((await repo.list("publications", { assetId })).some((p) => p.status === "PUBLISHED" || p.status === "PUBLISHING")) out.push("Already published");
+  const prior = await repo.list("publications", { assetId });
+  if (prior.some((p) => p.status === "PUBLISHED" || p.status === "PUBLISHING")) out.push("Already published");
+  else if (prior.some((p) => p.status === "FAILED" && p.retryable && p.attempts < p.maxAttempts)) out.push("A failed publish of this asset can still be retried — use Retry instead of publishing again");
   return out;
 }
 

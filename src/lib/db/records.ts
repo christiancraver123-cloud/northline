@@ -20,6 +20,8 @@ export interface CreativeBrief {
   shots: { n: number; kind: AssetKind; description: string; camera?: string }[];
   /** Optional operator-supplied shared continuity facts for multi-frame productions (anything omitted is derived). */
   continuity?: Partial<Pick<ContinuitySpec, "bag" | "props" | "timeWindow" | "cameraStyle" | "locationProgression">>;
+  /** Create-studio generation settings (JSON inside productions.brief; no schema change). */
+  generation?: { aspectRatio?: "4:5" | "1:1" | "9:16"; quality?: "low" | "medium" | "high"; identityMode?: "strict"; promptOverride?: string };
   reel?: {
     sourceStill: string; durationSec: number; cameraMovement: string; subjectAction: string;
     transition: string; audioConcept: string; loopStrategy: string; higgsfieldPrompt: string;
@@ -95,7 +97,9 @@ export interface GenerationBriefData {
   concept: string; location: string; timeOfDay: string;
   visualDirection: { outfit: string; lighting: string; palette: string[]; mood: string };
   continuity: string[]; recentConsiderations: string[];
-  providerRequirements: { provider: string; model: string | null; size: string; aspect: string; count: number };
+  providerRequirements: { provider: string; model: string | null; size: string; aspect: string; count: number;
+    /** Create-studio settings (optional; older briefs lack them). targetAspect = the delivery crop the founder asked for. */
+    quality?: "low" | "medium" | "high"; inputFidelity?: "high" | "low"; targetAspect?: "4:5" | "1:1" | "9:16" };
   shots: { n: number; kind: string; description: string; camera?: string }[];
   /** Present for multi-frame productions (>= 2 frames). */
   continuitySpec?: ContinuitySpec;
@@ -176,9 +180,21 @@ export interface LaunchState extends Base {
 }
 
 export interface AnalyticsRecord extends Base {
-  productionId: string; source: "imported" | "manual" | "demo"; views: number | null; reach: number | null;
+  productionId: string;
+  /** "mock" = written by the mock Instagram provider (migration 0009). Never treated as real performance data. */
+  source: "imported" | "manual" | "demo" | "mock"; views: number | null; reach: number | null;
   likes: number | null; comments: number | null; shares: number | null; saves: number | null;
   profileVisits: number | null; follows: number | null; watchTimeSec: number | null; completionRate: number | null;
+  /** Migration 0009 (absent until applied): the published post this snapshot belongs to, and its creator. */
+  publicationId?: string | null; talent?: TalentCode | null;
+}
+
+/** Migration 0009. One founder-confirmed publish of one APPROVED asset. MOCK_INSTAGRAM today; META_INSTAGRAM is a future adapter. */
+export interface Publication extends Base {
+  talent: TalentCode; productionId: string; assetId: string; provider: "MOCK_INSTAGRAM" | "META_INSTAGRAM";
+  status: "QUEUED" | "PUBLISHING" | "PUBLISHED" | "FAILED"; providerPostId: string | null; permalink: string | null; caption: string;
+  error: string | null; retryable: boolean; attempts: number; maxAttempts: number;
+  requestedBy: string; confirmedAt: string; publishedAt: string | null; jobId: string | null;
 }
 
 // ---- Agent Operations Center ------------------------------------------------
@@ -255,7 +271,7 @@ export interface Tables {
   systemFlags: SystemFlag; budgetLimits: BudgetLimitRow; budgetCounters: BudgetCounter; budgetDecisions: BudgetDecision;
   campaigns: Campaign; productions: Production; assets: Asset; referenceAssets: ReferenceAsset; prompts: Prompt;
   captions: Caption; approvals: Approval; workflowRuns: WorkflowRun; providerJobs: ProviderJob;
-  calendarEntries: CalendarEntry; storylines: Storyline; launchStates: LaunchState; analytics: AnalyticsRecord;
+  calendarEntries: CalendarEntry; storylines: Storyline; launchStates: LaunchState; analytics: AnalyticsRecord; publications: Publication;
 }
 export type TableName = keyof Tables;
 export const TABLE_NAMES: TableName[] = [
@@ -263,5 +279,5 @@ export const TABLE_NAMES: TableName[] = [
   "providerJobs", "calendarEntries", "storylines", "launchStates", "analytics",
   "agents", "agentTasks", "agentRuns", "agentEvents", "agentMessages", "agentReports", "agentSchedules", "llmCalls",
   "canonicalIdentities", "generationBriefs", "generationAttempts", "qaResults", "assetDerivatives",
-  "systemFlags", "budgetLimits", "budgetCounters", "budgetDecisions",
+  "systemFlags", "budgetLimits", "budgetCounters", "budgetDecisions", "publications",
 ];

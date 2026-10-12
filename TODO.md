@@ -56,3 +56,10 @@
 - [ ] Identity drift handling: version bump workflow (v1.1) + migrating references/productions; admin UI for editing locks.
 - [ ] Reference-quality checks (min resolution, face detected) when a vision provider is available.
 - [ ] Caption QA and caption edit UI.
+
+## Command Center follow-ups (2026-10-12)
+- [ ] Apply migration 0009 on Supabase (operator, after review)
+- [ ] META_INSTAGRAM adapter once the account is recovered (publish + insights), behind NORTHLINE_PUBLISHING=live + NORTHLINE_INSTAGRAM_LIVE=on
+- [ ] Carousel / Reel in the Create studio
+- [ ] Regenerate with a founder-edited prompt
+- [ ] Follower growth (needs live insights)

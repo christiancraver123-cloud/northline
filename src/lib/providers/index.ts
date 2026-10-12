@@ -4,6 +4,7 @@ import { ROSTER_BY_CODE } from "@/lib/talent/roster";
 import { openaiImage } from "./openai";
 import { higgsfieldVideo } from "./higgsfield";
 import { ProviderError, type ImageProvider, type VideoProvider } from "./types";
+import { imageGenerationEnabled } from "@/lib/flags-core";
 
 export type ImageMode = "mock" | "openai" | "unavailable";
 export interface ImageResolution { provider: ImageProvider; mode: ImageMode; reason: string | null }
@@ -12,6 +13,11 @@ export interface ImageResolution { provider: ImageProvider; mode: ImageMode; rea
 export function resolveImageProvider(env: NodeJS.ProcessEnv = process.env): ImageResolution {
   const want = env.IMAGE_PROVIDER ?? "mock";
   if (want === "openai") {
+    // Paid generation is OFF unless explicitly enabled: no OpenAI image call can happen by accident (tests, previews, read-only hosts).
+    if (!imageGenerationEnabled(env)) {
+      const reason = "Paid image generation is OFF (set NORTHLINE_IMAGE_GENERATION=on to allow OpenAI image calls)";
+      return { mode: "unavailable", reason, provider: { name: "openai", model: env.OPENAI_IMAGE_MODEL || "gpt-image-1", async generate() { throw new ProviderError("openai", reason, false, "provider_unavailable"); } } };
+    }
     if (env.OPENAI_API_KEY) return { provider: openaiImage(env.OPENAI_API_KEY, env.OPENAI_IMAGE_MODEL || undefined), mode: "openai", reason: null };
     const reason = "IMAGE_PROVIDER=openai but OPENAI_API_KEY is not set";
     return { mode: "unavailable", reason, provider: { name: "openai", model: env.OPENAI_IMAGE_MODEL || "gpt-image-1", async generate() { throw new ProviderError("openai", reason, false, "provider_unavailable"); } } };

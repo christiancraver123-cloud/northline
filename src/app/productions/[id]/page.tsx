@@ -3,9 +3,14 @@ import { getRepo } from "@/lib/db";
 import { approvalBlockers } from "@/lib/orchestrator/approvals";
 import { retryAssetAction, reelVideoAction, resubmitAction, regenerateAction, rerunQaAction, deliveryAction } from "../../actions";
 import Link from "next/link";
-import { AssetTile, Btn, Card, DemoBadge, Empty, PageHeader, Pill, QaPill, StatusPill, TalentChips } from "@/components/ui";
+import { AssetTile, Btn, Card, DemoBadge, Empty, PageHeader, Pill, QaPill, StatusPill, TalentChips, ago } from "@/components/ui";
+import { listIfMigrated } from "@/lib/publishing/service";
+import { qaTriad } from "@/lib/pipeline/qa-triad";
+import { parseDecisionNotes, reasonLabel } from "@/lib/feedback/reasons";
+import { TriadPills } from "@/components/cc";
+import { retryPublishAction } from "../../actions";
 
-export default async function ProductionDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string }> }) {
+export default async function ProductionDetail({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ error?: string; created?: string; ok?: string }> }) {
   const { id } = await params;
   const repo = await getRepo();
   const p = await repo.get("productions", id);
@@ -20,7 +25,9 @@ export default async function ProductionDetail({ params, searchParams }: { param
   const currentAssets = assets.filter((a) => a.current);
   attempts.sort((a, b) => a.attemptNo - b.attemptNo);
   const canRegenerate = !["APPROVED", "SCHEDULED", "PUBLISHED", "REJECTED"].includes(p.status) && attempts.length > 0;
-  const err = (await searchParams).error;
+  const spx = await searchParams, err = spx.error;
+  const pubs = ((await listIfMigrated(repo, "publications")) ?? []).filter((x) => x.productionId === id);
+  const feedback = approvals.filter((a) => a.decidedAt && a.notes).map((a) => ({ a, ...parseDecisionNotes(a.notes) }));
   const reel = assets.find((a) => a.kind === "REEL");
   return (
     <>
@@ -69,6 +76,25 @@ export default async function ProductionDetail({ params, searchParams }: { param
             <Btn primary>Regenerate (new attempt)</Btn></form>
         )}
       </Card>
+      {spx.created && <div role="status" className="mb-4 rounded-xl border border-ok/40 bg-ok/10 p-3 text-ok">One image requested. QA ran; if it is ready it is waiting in <Link href="/approvals" className="underline">Approvals</Link>.</div>}
+      <div className="mb-4 grid gap-4 xl:grid-cols-2">
+        <Card>
+          <h2 className="mb-2 font-bold">QA — identity · anatomy · realism</h2>
+          {currentAssets.filter((a) => a.kind !== "REEL").length === 0 ? <p className="text-[13px] text-muted">No images.</p> : currentAssets.filter((a) => a.kind !== "REEL").map((a) => <div key={a.id} className="flex flex-wrap items-center gap-1.5 border-t border-edge py-1.5 text-[12.5px] first:border-0"><span className="w-16 font-mono text-faint">{a.kind}-{String(a.seq).padStart(2, "0")}</span><TriadPills triad={qaTriad(qaAll, a.id)} /></div>)}
+          {feedback.length > 0 && <><h3 className="mb-1 mt-3 font-bold">Founder feedback</h3>{feedback.map(({ a, reasons, text }) => <p key={a.id} className="text-[12.5px]"><StatusPill status={a.state} /> {reasons.map(reasonLabel).join(", ")}{text ? ` — ${text}` : ""} <span className="text-faint">{ago(a.decidedAt)}</span></p>)}</>}
+        </Card>
+        <Card>
+          <h2 className="mb-2 font-bold">Publish state</h2>
+          {pubs.length === 0 ? <p className="text-[13px] text-muted">{p.status === "APPROVED" ? <>Approved and not published. <Link href="/approvals" className="text-blue2">Publish from Approvals →</Link></> : "Not published."}</p> : pubs.map((x) => (
+            <div key={x.id} className="border-t border-edge py-1.5 text-[12.5px] first:border-0">
+              <div className="flex flex-wrap items-center gap-2"><StatusPill status={x.status} /><Pill tone={x.provider === "MOCK_INSTAGRAM" ? "warn" : "info"}>{x.provider}</Pill><span className="text-faint">attempt {x.attempts}/{x.maxAttempts} · {ago(x.publishedAt ?? x.updatedAt)}</span></div>
+              {x.permalink && <p className="mt-0.5 break-all font-mono text-[11.5px] text-muted">{x.permalink}</p>}
+              {x.error && <p className="mt-0.5 text-bad">{x.error}</p>}
+              {x.status === "FAILED" && x.retryable && <form action={retryPublishAction} className="mt-1"><input type="hidden" name="publicationId" value={x.id} /><input type="hidden" name="back" value={`/productions/${p.id}`} /><Btn>Retry publish</Btn></form>}
+            </div>
+          ))}
+        </Card>
+      </div>
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>
           <h2 className="mb-2 font-bold">Creative brief</h2>

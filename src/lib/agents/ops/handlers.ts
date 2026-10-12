@@ -98,7 +98,7 @@ const directorConcepts: Handler = async (c) => {
 const growthRecommendations: Handler = async (c) => {
   const talent = talentOf(c.task);
   const [prods, analytics] = await Promise.all([c.repo.list("productions"), c.repo.list("analytics")]);
-  const real = analytics.filter((a) => a.source !== "demo");
+  const real = analytics.filter((a) => a.source !== "demo" && a.source !== "mock"); // mock = simulated provider data, never real performance
   await c.log("READ_ANALYTICS", real.length ? `Read ${real.length} real/manual analytics record(s)` : "No real analytics data exists — recommendations are structural only", { level: real.length ? "info" : "warn" });
   const who = (talent ? [talent] : (Object.keys(ROSTER_BY_CODE) as TalentCode[]));
   const recs = who.map((t) => {
@@ -113,7 +113,7 @@ const growthRecommendations: Handler = async (c) => {
 
 const performanceReport: Handler = async (c) => {
   const [analytics, prods] = await Promise.all([c.repo.list("analytics"), c.repo.list("productions")]);
-  const real = analytics.filter((a) => a.source !== "demo");
+  const real = analytics.filter((a) => a.source !== "demo" && a.source !== "mock"); // mock = simulated provider data, never real performance
   await c.log("READ_ANALYTICS", `Read ${analytics.length} analytics record(s); ${real.length} real/manual`);
   const published = prods.filter((p) => p.status === "PUBLISHED").length;
   const body = real.length

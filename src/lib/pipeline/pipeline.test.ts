@@ -379,7 +379,8 @@ describe("OpenAI provider behaviour", () => {
     expect(resolveImageProvider({} as never).mode).toBe("mock");
     const u = resolveImageProvider({ IMAGE_PROVIDER: "openai" } as never);
     expect(u.mode).toBe("unavailable");
-    expect(resolveImageProvider({ IMAGE_PROVIDER: "openai", OPENAI_API_KEY: "k" } as never).mode).toBe("openai");
+    expect(resolveImageProvider({ IMAGE_PROVIDER: "openai", OPENAI_API_KEY: "k" } as never).mode).toBe("unavailable"); // paid generation flag off
+    expect(resolveImageProvider({ IMAGE_PROVIDER: "openai", OPENAI_API_KEY: "k", NORTHLINE_IMAGE_GENERATION: "on" } as never).mode).toBe("openai");
     const r = fresh();
     const res = await executeCreate(r, { talent: ["SIE"], format: "POST", concept: "beach" }, mkDeps({ image: u.provider }));
     expect(res.productions[0].status).toBe("RAW");

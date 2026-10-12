@@ -4,9 +4,11 @@ import { usePathname } from "next/navigation";
 import { logoutAction } from "@/app/login/actions";
 
 const NAV = [
-  ["/", "Dashboard"], ["/talent", "Talent"], ["/create", "Create"], ["/productions", "Productions"], ["/approvals", "Approvals"], ["/launch", "Launch"],
-  ["/calendar", "Calendar"], ["/assets", "Assets"], ["/analytics", "Analytics"], ["/agents", "Agents"], ["/automations", "Automations"], ["/settings", "Settings"],
+  ["/", "Dashboard"], ["/talent", "Talent"], ["/create", "Create"], ["/productions", "Productions"], ["/approvals", "Approvals"],
+  ["/calendar", "Calendar"], ["/inbox", "Inbox"], ["/analytics", "Analytics"], ["/agents", "Agents"], ["/world", "World"], ["/settings", "Settings"],
 ] as const;
+/** Still reachable, not primary: launch checklists, the asset library and automations. */
+const MORE = [["/assets", "Assets"], ["/launch", "Launch"], ["/automations", "Automations"]] as const;
 
 export function Sidebar({ pending, unreadReports, driver }: { pending: number; unreadReports: number; driver: string }) {
   const path = usePathname();
@@ -24,10 +26,14 @@ export function Sidebar({ pending, unreadReports, driver }: { pending: number; u
           );
         })}
       </nav>
+      <nav className="flex gap-1 overflow-x-auto lg:grid lg:gap-0.5" aria-label="More">
+        <div className="hidden px-3 text-[10.5px] font-bold uppercase tracking-wider text-faint lg:block">More</div>
+        {MORE.map(([href, label]) => <Link key={href} href={href} aria-current={path.startsWith(href) ? "page" : undefined} className={`rounded-[10px] px-3 py-1.5 text-[13px] ${path.startsWith(href) ? "bg-blue/20 text-ink" : "text-muted hover:text-ink"}`}>{label}</Link>)}
+      </nav>
       <div className="mt-auto hidden rounded-xl border border-edge p-3 text-xs text-muted lg:block">
         Store: <b className="text-ink">{driver === "file" ? "local demo file" : "Supabase"}</b>
         {driver === "file" && <div className="mt-1 text-warn">Demo persistence — not production.</div>}
-        <div className="mt-1">Draft-first: nothing publishes without approval.</div>
+        <div className="mt-1">Nothing publishes without your click. Instagram: <b className="text-bad">blocked</b>.</div>
         <form action={logoutAction} className="mt-2"><button className="text-blue2 hover:underline">Sign out</button></form>
       </div>
     </aside>

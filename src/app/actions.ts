@@ -234,3 +234,81 @@ export async function unblockTaskAction(formData: FormData) {
   await unblockTask(await getRepo(), String(formData.get("id") ?? ""));
   revalidatePath("/"); redirect("/");
 }
+
+// ---- Command Center milestone: one-image Create, mock publishing, insights, archive -----------------------------------------
+import { publishAsset, recordInsights, retryPublication } from "@/lib/publishing/service";
+import { resolvePublisher } from "@/lib/publishing/service";
+import { MOCK_OUTCOMES, type MockOutcome } from "@/lib/publishing/provider";
+import { isReadOnly } from "@/lib/runtime/mode";
+
+/** Create studio: exactly ONE image. Requires the founder's explicit confirmation tick. */
+export async function createImageAction(formData: FormData) {
+  await requireOperator();
+  if (formData.get("confirmed") !== "yes") redirect(`/create?error=${encodeURIComponent("Tick the confirmation before generating.")}`);
+  const parsed = CreateRequestSchema.safeParse(JSON.parse(String(formData.get("request") ?? "{}")));
+  if (!parsed.success) redirect(`/create?error=${encodeURIComponent(parsed.error.issues.map((i) => i.message).join("; ").slice(0, 200))}`);
+  const req = parsed.data;
+  if (req.quantity !== 1 || req.talent.length !== 1 || req.creative?.shots.length !== 1) redirect(`/create?error=${encodeURIComponent("The studio generates exactly one image per click.")}`);
+  const r = await submitCreate(await getRepo(), { ...req, asset_count: 1 }, { createdBy: "operator" });
+  revalidatePath("/", "layout");
+  if (r.task.status === "FAILED") redirect(`/create?error=${encodeURIComponent((r.task.error ?? "failed").slice(0, 200))}`);
+  const p = r.output?.productions?.[0];
+  const failures = r.output?.failures ?? [];
+  redirect(p ? `/productions/${p.id}${failures.length ? `?error=${encodeURIComponent(failures.join("; ").slice(0, 300))}` : "?created=1"}` : "/productions");
+}
+
+const mockOutcome = (v: FormDataEntryValue | null): MockOutcome | undefined => (MOCK_OUTCOMES.includes(String(v) as MockOutcome) ? (String(v) as MockOutcome) : undefined);
+const backTo = (v: FormDataEntryValue | null, fallback: string) => { const s = String(v ?? ""); return s.startsWith("/") && !s.startsWith("//") ? s : fallback; };
+const withMsg = (url: string, k: string, v: string) => `${url}${url.includes("?") ? "&" : "?"}${k}=${encodeURIComponent(v.slice(0, 300))}`;
+
+/** Founder clicks Publish → confirmation → mock (or future live) provider. Never automatic. */
+export async function publishAction(formData: FormData) {
+  await requireOperator();
+  const back = backTo(formData.get("back"), "/approvals");
+  if (isReadOnly()) redirect(withMsg(back, "error", "Read-only mode: publishing is disabled."));
+  let msg = "", err = "";
+  try {
+    const pub = await publishAsset(await getRepo(), { assetId: String(formData.get("assetId")), confirmed: formData.get("confirm") === "yes", requestedBy: "founder", mockOutcome: mockOutcome(formData.get("mockOutcome")) });
+    if (pub.status === "PUBLISHED") msg = `Published (${pub.provider === "MOCK_INSTAGRAM" ? "mock" : "live"}): ${pub.permalink}`;
+    else err = `Publish failed: ${pub.error}${pub.retryable ? " — retry is available" : ""}`;
+  } catch (e) { err = e instanceof Error ? e.message : "publish failed"; }
+  revalidatePath("/", "layout");
+  redirect(err ? withMsg(back, "error", err) : withMsg(back, "ok", msg));
+}
+export async function retryPublishAction(formData: FormData) {
+  await requireOperator();
+  const back = backTo(formData.get("back"), "/approvals");
+  let err = "";
+  try { const p = await retryPublication(await getRepo(), String(formData.get("publicationId")), { mockOutcome: mockOutcome(formData.get("mockOutcome")) }); if (p.status !== "PUBLISHED") err = `Retry failed: ${p.error}`; } catch (e) { err = e instanceof Error ? e.message : "retry failed"; }
+  revalidatePath("/", "layout");
+  redirect(err ? withMsg(back, "error", err) : withMsg(back, "ok", "Published on retry."));
+}
+/** Pull a fresh insights snapshot for a published post (mock provider today). */
+export async function refreshInsightsAction(formData: FormData) {
+  await requireOperator();
+  const back = backTo(formData.get("back"), "/analytics");
+  let err = "";
+  try {
+    const repo = await getRepo();
+    const pub = await repo.get("publications", String(formData.get("publicationId")));
+    if (!pub) throw new Error("Publication not found");
+    const { provider } = resolvePublisher();
+    if (!provider || provider.name !== pub.provider) throw new Error("Insights provider unavailable for this post.");
+    await recordInsights(repo, pub, provider);
+  } catch (e) { err = e instanceof Error ? e.message : "failed"; }
+  revalidatePath("/", "layout");
+  redirect(err ? withMsg(back, "error", err) : back);
+}
+/** Archive a production from review: the pending approval is closed (recorded as rejected with an [archived] note). Nothing is deleted. */
+export async function archiveProductionAction(formData: FormData) {
+  await requireOperator();
+  const pid = String(formData.get("productionId"));
+  let err = "";
+  try {
+    const repo = await getRepo();
+    for (const a of await repo.list("approvals", { productionId: pid, state: "PENDING" })) await repo.update("approvals", a.id, { state: "REJECTED", decidedBy: "founder", decidedAt: new Date().toISOString(), notes: "[archived by founder]" });
+    await repo.update("productions", pid, { status: "ARCHIVED" });
+  } catch (e) { err = e instanceof Error ? e.message : "failed"; }
+  revalidatePath("/", "layout");
+  redirect(err ? `/approvals?error=${encodeURIComponent(err)}` : "/approvals?ok=Archived");
+}

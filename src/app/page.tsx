@@ -1,109 +1,130 @@
 import Link from "next/link";
 import { getRepo } from "@/lib/db";
-import { newestFirst } from "@/lib/db/order";
-import { ROSTER } from "@/lib/talent/roster";
 import { snapshots } from "@/lib/agents/ops/service";
-import { deriveProviderHealth, HEALTH_TONE } from "@/lib/llm/health-derived";
-import { summarizeUsage } from "@/lib/usage";
-import { loadCommandCenter } from "@/lib/ops/load";
+import { loadDashboard, type Tone } from "@/lib/ops/dashboard";
 import { CommandCenterPanel } from "@/components/command-center";
 import { isReadOnly } from "@/lib/runtime/mode";
-import { AgentStatusPill, Avatar, Card, ProviderPill, ago, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips } from "@/components/ui";
+import { AgentStatusPill, Card, Pill, ProviderPill, ago } from "@/components/ui";
+import { CreatorPortrait, TriadPills } from "@/components/cc";
+
+const dot: Record<Tone, string> = { ok: "bg-ok", warn: "bg-warn", bad: "bg-bad", info: "bg-blue2", mute: "bg-faint" };
+const txt: Record<Tone, string> = { ok: "text-ok", warn: "text-warn", bad: "text-bad", info: "text-blue2", mute: "text-muted" };
+const pct = (x: number | null) => (x == null ? "—" : `${(x * 100).toFixed(1)}%`);
+const day = (iso: string | null) => (iso ? iso.slice(0, 10) : "—");
 
 export default async function Dashboard() {
   const repo = await getRepo();
-  const [snaps, reports, llmCalls, tasks, assetsAll] = await Promise.all([snapshots(repo), repo.list("agentReports", { read: false }), repo.list("llmCalls"), repo.list("agentTasks"), repo.list("assets")]);
-  const [prods, approvals, jobs, runs, cal, launch] = await Promise.all([
-    repo.list("productions").then(newestFirst), repo.list("approvals", { state: "PENDING" }), repo.list("providerJobs"), repo.list("workflowRuns").then(newestFirst), repo.list("calendarEntries"), repo.list("launchStates"),
-  ]);
-  const cc = await loadCommandCenter(repo);
-  const failedJobs = jobs.filter((j) => j.state === "FAILED");
-  const health = deriveProviderHealth({ llmCalls, jobs });
-  const usage7 = summarizeUsage({ jobs, llmCalls, tasks, since: new Date(Date.now() - 7 * 86_400_000) });
-  const usage1 = summarizeUsage({ jobs, llmCalls, tasks, since: new Date(Date.now() - 86_400_000) });
-  const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const failedTasks = tasks.filter((t) => t.status === "FAILED" && t.createdAt >= weekAgo);
-  const needsQa = prods.filter((p) => (p.status === "REVIEW" || p.status === "RAW") && assetsAll.some((a) => a.productionId === p.id && a.current && ["HARD_FAIL", "MANUAL_REVIEW_REQUIRED", "REVIEW"].includes(a.qaStatus)));
-  const providerProblems = health.filter((h) => !["HEALTHY", "UNKNOWN"].includes(h.state));
-  const attention: [string, number, string][] = [
-    ["Productions with QA needing a human", needsQa.length, "/productions"],
-    ["Failed agent tasks (7 days)", failedTasks.length, "/agents"],
-    ["Providers with problems", providerProblems.length, "/settings"],
-    ["Unread agent reports", reports.length, "/agents/reports"],
-  ];
-  const generating = prods.filter((p) => p.status === "GENERATING" || p.status === "RAW");
-  const today = new Date().toISOString().slice(0, 10);
-  const upcoming = cal.filter((c) => c.date >= today).sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time)).slice(0, 5);
-  const byId = Object.fromEntries(prods.map((p) => [p.id, p]));
-  const kpis: [string, number, string, string][] = [
-    ["Awaiting approval", approvals.length, "/approvals", approvals.length ? "text-warn" : ""],
-    ["In production", generating.length, "/productions", ""],
-    ["Failed jobs", failedJobs.length, "/productions", failedJobs.length ? "text-bad" : ""],
-    ["Approved / scheduled", prods.filter((p) => p.status === "APPROVED" || p.status === "SCHEDULED").length, "/calendar", ""],
-  ];
+  const [d, snaps] = await Promise.all([loadDashboard(repo), snapshots(repo)]);
+  const readOnly = isReadOnly();
+  const working = snaps.filter((s) => s.status === "WORKING" || s.status === "FAILED" || s.status === "WAITING");
   return (
     <>
-      <PageHeader title="Dashboard" sub="What needs you right now." actions={<Link href="/create" className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold">+ Create</Link>} />
-      <CommandCenterPanel cc={cc} readOnly={isReadOnly()} />
-      <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {kpis.map(([l, n, href, tone]) => <Link key={l} href={href}><Card><div className="text-xs text-muted">{l}</div><div className={`font-mono text-3xl font-semibold ${tone}`}>{n}</div></Card></Link>)}
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div><h1 className="text-2xl font-extrabold tracking-tight">Northline</h1><p className="text-muted">What needs you, who needs content, and what the system is doing.</p></div>
+        <Link href="/create" className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold">+ Create image</Link>
       </div>
-      <div className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
+
+      <section aria-label="Status" className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-edge bg-edge sm:grid-cols-3 lg:grid-cols-6">
+        {d.status.map((s) => {
+          const body = <div className="h-full bg-panel/95 px-3 py-2.5" title={s.title}><div className="text-[10.5px] font-bold uppercase tracking-wider text-faint">{s.label}</div><div className={`mt-0.5 flex items-center gap-1.5 font-mono text-[13px] font-semibold ${txt[s.tone]}`}><span className={`h-1.5 w-1.5 flex-none rounded-full ${dot[s.tone]}`} /><span className="truncate">{s.value}</span></div></div>;
+          return s.href ? <Link key={s.label} href={s.href} className="hover:brightness-125">{body}</Link> : <div key={s.label}>{body}</div>;
+        })}
+      </section>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="grid content-start gap-5">
           <Card>
-            <h2 className="mb-3 font-bold">Needs approval</h2>
-            {approvals.length === 0 ? <Empty>Nothing waiting. Use Create to start a production.</Empty> : approvals.slice(0, 6).map((a) => {
-              const p = byId[a.productionId]; if (!p) return null;
-              return <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-edge py-2 first:border-0"><span className="flex items-center gap-3"><ProdLink p={p} /><TalentChips codes={p.talent} /><span className="text-muted">{p.concept}</span><DemoBadge origin={p.origin} /></span><Link className="text-blue2" href="/approvals">Review →</Link></div>;
-            })}
+            <h2 className="mb-2 font-bold">Needs attention</h2>
+            <ul className="grid gap-1">{d.attention.map((a, i) => (
+              <li key={i}><Link href={a.href} className="flex items-start gap-2.5 rounded-lg px-2 py-1.5 text-[13.5px] hover:bg-blue2/10"><span className={`mt-1.5 h-2 w-2 flex-none rounded-full ${dot[a.tone]}`} /><span className="min-w-0 flex-1">{a.text}</span><span className="text-faint">→</span></Link></li>
+            ))}</ul>
           </Card>
+
+          <section aria-label="Creators">
+            <div className="mb-2 flex items-baseline justify-between"><h2 className="font-bold">Creators <span className="text-[12px] font-normal text-muted">· sorted by priority</span></h2><Link href="/talent" className="text-[13px] text-blue2">All talent →</Link></div>
+            <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+              {d.creators.map((c) => (
+                <Link key={c.code} href={`/talent/${c.code}`} className="group overflow-hidden rounded-2xl border border-edge bg-panel/80 hover:border-blue2/50">
+                  <div className="flex gap-3 p-3">
+                    <CreatorPortrait code={c.code} refId={d.masters[c.code]} className="h-24 w-20 flex-none rounded-xl" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-start justify-between gap-2"><b className="truncate">{c.name}</b><span className="text-right"><span className="font-mono text-xl font-bold" style={{ color: c.color }}>{c.priority.score}</span><span className="block text-[10px] uppercase tracking-wider text-faint">priority</span></span></div>
+                      <div className="mt-0.5 flex flex-wrap gap-1"><Pill tone={c.active ? "ok" : "warn"}>{c.active ? "active" : "setup"}</Pill>{!c.aiDisclosure && <Pill tone="warn">disclosure ✗</Pill>}{c.agentActivity && <Pill tone="info">agent working</Pill>}</div>
+                      <p className="mt-1 truncate text-[12px] text-muted">{c.priority.reasons.slice(0, 2).join(" · ") || "No urgent signal"}</p>
+                    </div>
+                  </div>
+                  <dl className="grid grid-cols-3 gap-px border-t border-edge bg-edge text-[11.5px]">
+                    {([["Last post", day(c.lastContentAt)], ["Next planned", c.nextPlanned ?? "—"], ["Gap", c.postingGapDays == null ? "never" : `${c.postingGapDays}d`], ["Approved ready", String(c.approvedReady)], ["In review", String(c.awaitingApproval)], ["Engagement", c.engagementRate == null ? "no data" : `${pct(c.engagementRate)}${c.insightsAreMock ? " (mock)" : ""}`]] as const).map(([k, v]) => <div key={k} className="bg-panel/95 px-2.5 py-1.5"><dt className="text-faint">{k}</dt><dd className="truncate font-mono">{v}</dd></div>)}
+                  </dl>
+                  {c.storyline && <p className="truncate border-t border-edge px-3 py-1.5 text-[12px] text-muted">Story: {c.storyline}</p>}
+                </Link>
+              ))}
+            </div>
+          </section>
+
           <Card>
-            <h2 className="mb-3 font-bold">Recent productions</h2>
-            {prods.length === 0 ? <Empty>No productions yet.</Empty> : prods.slice(0, 6).map((p) => (
-              <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-edge py-2 first:border-0"><span className="flex items-center gap-3"><ProdLink p={p} /><TalentChips codes={p.talent} /><span className="text-muted">{p.contentType} · {p.concept}</span></span><StatusPill status={p.status} /></div>
-            ))}
-          </Card>
-        </div>
-        <div className="grid content-start gap-5">
-          <Card>
-            <h2 className="mb-3 font-bold">Needs attention</h2>
-            <div className="grid gap-1.5 text-[13px]">{attention.map(([l, n, href]) => <Link key={l} href={href} className="flex items-center justify-between gap-2 py-1"><span>{l}</span><Pill tone={n ? "warn" : "mute"}>{n}</Pill></Link>)}</div>
-          </Card>
-          <Card>
-            <h2 className="mb-1 font-bold">Usage</h2>
-            <p className="mb-2 text-[11.5px] text-faint">Recorded units. {usage7.costNote}.</p>
-            <div className="grid gap-1.5 text-[13px]">
-              {([["24 hours", usage1], ["7 days", usage7]] as const).map(([label, u]) => <div key={label} className="border-t border-edge pt-2 first:border-0 first:pt-0"><b>{label}</b><br /><span className="text-muted">{u.images.succeeded} image(s) generated · {u.images.failed} failed · {u.images.inputTokens.toLocaleString()} in ({u.images.imageInputTokens.toLocaleString()} image) / {u.images.outputTokens.toLocaleString()} out · {u.llm.calls} model call(s), {u.llm.failed} failed · {u.tasks.complete} task(s) done, {u.tasks.failed} failed</span></div>)}
+            <div className="mb-3 flex items-baseline justify-between"><h2 className="font-bold">Production pipeline</h2><Link href="/productions" className="text-[13px] text-blue2">Productions →</Link></div>
+            <div className="grid grid-cols-5 gap-2 2xl:grid-cols-10">
+              {d.pipeline.map((s) => (
+                <Link key={s.key} href={s.key === "QUEUED" || s.key === "BLOCKED" ? "/agents" : `/productions?status=${s.key}`} title={s.note} className={`rounded-xl border px-2 py-2 text-center ${s.count ? (s.key === "FAILED" || s.key === "BLOCKED" ? "border-bad/40 bg-bad/10" : s.key === "REVIEW" ? "border-warn/40 bg-warn/10" : "border-edge bg-panel2") : "border-edge opacity-55"}`}>
+                  <div className="font-mono text-xl font-bold">{s.count}</div><div className="text-[10.5px] uppercase tracking-wide text-muted">{s.label}</div>
+                </Link>
+              ))}
             </div>
           </Card>
+        </div>
+
+        <div className="grid content-start gap-5">
           <Card>
-            <h2 className="mb-1 font-bold">Provider health</h2>
-            <p className="mb-2 text-[11.5px] text-faint">Derived from recorded calls, so it is the same after a restart. “Unknown” = nothing recent to judge by.</p>
-            <div className="grid gap-2 text-[13px]">{health.map((h) => <div key={h.id} className="flex flex-wrap items-start justify-between gap-2 border-t border-edge pt-2 first:border-0 first:pt-0"><span className="min-w-0"><b>{h.label}</b><br /><span className="text-[11.5px] text-muted break-words">{h.detail}</span></span><Pill tone={HEALTH_TONE[h.state]}>{h.state.replace("_", " ")}</Pill></div>)}</div>
+            <div className="mb-3 flex items-baseline justify-between"><h2 className="font-bold">Approvals <span className="font-mono text-warn">{d.approvals.length || ""}</span></h2><Link href="/approvals" className="text-[13px] text-blue2">Review →</Link></div>
+            {d.approvals.length === 0 ? <p className="text-[13px] text-muted">Nothing waiting. <Link href="/create" className="text-blue2">Create an image →</Link></p> : (
+              <div className="grid grid-cols-2 gap-3">{d.approvals.slice(0, 4).map((a) => (
+                <Link key={a.approvalId} href={`/approvals?id=${a.approvalId}`} className="group block">
+                  <div className="relative aspect-[4/5] overflow-hidden rounded-xl border border-edge" style={{ background: "linear-gradient(160deg,#1a2350,#0b1128)" }}>
+                    {a.asset?.storagePath ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${a.asset.id}/file`} alt={a.production.code} className="h-full w-full object-cover transition group-hover:scale-[1.02]" /> : <span className="grid h-full place-items-center p-2 text-center text-[11px] text-muted">{a.asset ? `${a.asset.provider} · no image file` : "no asset"}</span>}
+                    <span className="absolute left-1.5 top-1.5 rounded-md bg-black/60 px-1.5 py-0.5 font-mono text-[10.5px]">{a.production.code}</span>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-1">{a.triad ? <TriadPills triad={a.triad} compact /> : null}</div>
+                  <p className="mt-0.5 truncate text-[12px] text-muted">{a.production.concept}</p>
+                  <p className="text-[11px] text-faint">{a.ageHours}h old · {a.provider}{a.costUsd != null ? ` · $${a.costUsd.toFixed(2)}` : ""}</p>
+                </Link>
+              ))}</div>
+            )}
           </Card>
+
           <Card>
-            <div className="mb-3 flex items-center justify-between"><h2 className="font-bold">Agent activity</h2><Link className="text-blue2" href="/agents">Open →</Link></div>
-            <div className="mb-3 flex flex-wrap gap-1.5 text-[12px]">{(["WORKING", "QUEUED", "WAITING", "SCHEDULED", "IDLE", "FAILED", "PAUSED"] as const).map((k) => { const n = snaps.filter((x) => x.status === k).length; return n ? <span key={k} className="inline-flex items-center gap-1"><AgentStatusPill status={k} /><b className="font-mono">{n}</b></span> : null; })}</div>
-            <div className="grid gap-1.5">{snaps.map((x) => <Link key={x.agent.code} href={`/agents/${x.agent.code}`} className="flex items-center justify-between gap-2 text-[13px]"><span className="truncate">{x.agent.name}<span className="ml-2 text-[11px] text-faint">{x.current ? x.current.title.slice(0, 34) : x.lastEvent ? ago(x.lastEvent.createdAt) : ""}</span></span><span className="flex items-center gap-1.5">{x.lastRun && <ProviderPill provider={x.lastRun.provider} />}<AgentStatusPill status={x.status} /></span></Link>)}</div>
-            {reports.length > 0 && <Link href="/agents/reports" className="mt-3 block text-warn">{reports.length} unread agent report{reports.length > 1 ? "s" : ""} →</Link>}
+            <h2 className="mb-2 font-bold">System</h2>
+            <div className="grid gap-0">{d.system.map((s) => (
+              <div key={s.name} className="flex items-start justify-between gap-3 border-t border-edge py-1.5 text-[13px] first:border-0">
+                <span className="min-w-0"><b>{s.name}</b><span className="block text-[11.5px] text-muted break-words">{s.detail}</span></span>
+                <span className={`flex-none font-mono text-[11.5px] font-semibold ${txt[s.tone]}`}>{s.state}</span>
+              </div>
+            ))}</div>
           </Card>
+
           <Card>
-            <h2 className="mb-3 font-bold">Creators</h2>
-            <div className="grid gap-2">{ROSTER.map((t) => {
-              const l = launch.find((x) => x.talent === t.code);
-              return <Link key={t.code} href={`/talent/${t.code}`} className="flex items-center justify-between gap-2"><span className="flex items-center gap-2"><Avatar code={t.code} size={28} />{t.name}</span><Pill tone={t.launchStatus === "active" ? "ok" : "warn"}>{t.launchStatus}{l && !l.aiDisclosure ? " · disclosure ✗" : ""}</Pill></Link>;
-            })}</div>
+            <div className="mb-2 flex items-baseline justify-between"><h2 className="font-bold">Agents</h2><Link className="text-[13px] text-blue2" href="/agents">Open →</Link></div>
+            {working.length === 0 ? <p className="text-[13px] text-muted">All agents idle or scheduled. Idle agents make no model calls.</p> : working.map((x) => (
+              <Link key={x.agent.code} href={`/agents/${x.agent.code}`} className="flex items-center justify-between gap-2 border-t border-edge py-1.5 text-[13px] first:border-0">
+                <span className="min-w-0"><b>{x.agent.name}</b><span className="block truncate text-[11.5px] text-muted">{x.current ? x.current.title : x.status === "FAILED" ? x.lastError : `${x.waiting} waiting`}{x.current?.startedAt ? ` · ${ago(x.current.startedAt)}` : ""}</span></span>
+                <span className="flex flex-none items-center gap-1.5">{x.lastRun && <ProviderPill provider={x.lastRun.provider} model={x.lastRun.model} />}<AgentStatusPill status={x.status} /></span>
+              </Link>
+            ))}
           </Card>
-          <Card>
-            <h2 className="mb-3 font-bold">Upcoming</h2>
-            {upcoming.length === 0 ? <Empty>Approved content appears here with a suggested slot.</Empty> : upcoming.map((c) => <div key={c.id} className="flex justify-between border-t border-edge py-1.5 first:border-0"><span className="font-mono text-muted">{c.date} {c.time}</span><span>{byId[c.productionId]?.code}</span></div>)}
-          </Card>
-          <Card>
-            <h2 className="mb-3 font-bold">Workflow runs</h2>
-            {runs.length === 0 ? <Empty>No runs yet.</Empty> : runs.slice(0, 4).map((r) => <div key={r.id} className="flex items-center justify-between border-t border-edge py-1.5 first:border-0"><span>{r.workflow}</span><StatusPill status={r.state} /></div>)}
-          </Card>
+
+          {d.recentPublications.length > 0 && (
+            <Card>
+              <div className="mb-2 flex items-baseline justify-between"><h2 className="font-bold">Recently published <Pill tone="warn">mock</Pill></h2><Link className="text-[13px] text-blue2" href="/analytics">Analytics →</Link></div>
+              {d.recentPublications.map((p) => <div key={p.id} className="flex justify-between gap-2 border-t border-edge py-1.5 text-[12.5px] first:border-0"><span className="truncate">{p.talent} · {p.caption || "no caption"}</span><span className="flex-none text-faint">{ago(p.publishedAt)}</span></div>)}
+            </Card>
+          )}
         </div>
       </div>
+
+      <details className="mt-6 rounded-2xl border border-edge p-3">
+        <summary className="cursor-pointer font-bold text-muted">Operations detail — workers, queue, budget limits, emergency pause</summary>
+        <div className="mt-3"><CommandCenterPanel cc={d.cc} readOnly={readOnly} /></div>
+      </details>
     </>
   );
 }

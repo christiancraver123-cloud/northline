@@ -6,7 +6,9 @@ export type FailureCategory = "provider_unavailable" | "quota_exceeded" | "rate_
 export interface ImageReference { bytes: Uint8Array; mime: string; type: ReferenceType }
 export interface ImageRequest { productionCode: string; shotN: number; prompt: string; negative: string; talent: TalentCode; references: ImageReference[]; size?: string;
   /** Optional (default: unset = provider default). `high` asks the edits endpoint to preserve input-image detail (faces) more closely. Experiments opt in; production prompts do not use it yet. */
-  inputFidelity?: "high" | "low" }
+  inputFidelity?: "high" | "low";
+  /** Optional render quality (provider default when unset). */
+  quality?: "low" | "medium" | "high" }
 export interface ImageResult { provider: string; model: string | null; bytes: Uint8Array | null; mime: string; costUsd: number | null; credits: number | null; externalId: string | null; metadata?: Record<string, unknown> }
 export interface ImageProvider { readonly name: string; readonly model?: string | null; generate(req: ImageRequest): Promise<ImageResult> }
 

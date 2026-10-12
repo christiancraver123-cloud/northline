@@ -4,7 +4,12 @@
 export const REJECTION_REASONS = [
   ["face_drift", "Face drift (doesn't look like her)"], ["wrong_eyes", "Wrong eyes"], ["wrong_body", "Wrong body"], ["looks_ai", "Looks too AI"], ["anatomy", "Anatomy / hands"],
   ["too_posed", "Too posed"], ["bad_lighting", "Bad lighting"], ["bad_environment", "Bad environment"], ["weak_charisma", "Weak charisma"], ["wrong_outfit", "Wrong outfit"],
-  ["continuity", "Continuity"], ["unwanted_text", "Unwanted text / signage"], ["personality_mismatch", "Creator personality mismatch"], ["other", "Other"],
+  ["continuity", "Continuity"], ["unwanted_text", "Unwanted text / signage"], ["personality_mismatch", "Creator personality mismatch"], ["wrong_pose", "Pose"], ["wrong_style", "Style"], ["other", "Other"],
+] as const;
+/** The founder's quick reject tags (Approvals). Each maps onto a stored reason code, so learning data stays one vocabulary. */
+export const REJECT_TAGS = [
+  ["IDENTITY", "face_drift"], ["ANATOMY", "anatomy"], ["REALISM", "looks_ai"], ["POSE", "wrong_pose"], ["OUTFIT", "wrong_outfit"],
+  ["SCENE", "bad_environment"], ["LIGHTING", "bad_lighting"], ["STYLE", "wrong_style"], ["OTHER", "other"],
 ] as const;
 export type RejectionReason = (typeof REJECTION_REASONS)[number][0];
 const CODES = new Set<string>(REJECTION_REASONS.map(([c]) => c));

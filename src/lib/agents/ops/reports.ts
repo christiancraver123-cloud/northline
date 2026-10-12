@@ -20,7 +20,7 @@ export async function buildCreatorsReport(repo: Repo): Promise<ReportDraft> {
     repo.list("productions"), repo.list("approvals", { state: "PENDING" }), repo.list("assets"), repo.list("launchStates"), repo.list("agentTasks"), repo.list("analytics"),
     repo.list("agents").then((a) => a.find((x) => x.code === "ORCHESTRATOR")),
   ]);
-  const real = analytics.filter((a) => a.source !== "demo");
+  const real = analytics.filter((a) => a.source !== "demo" && a.source !== "mock"); // mock = simulated provider data, never real performance
   const sections = ROSTER.map((t) => {
     const mine = prods.filter((p) => p.talent[0] === t.code);
     const mineIds = new Set(mine.map((p) => p.id));

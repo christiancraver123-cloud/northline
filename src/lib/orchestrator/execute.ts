@@ -13,6 +13,7 @@ import { loadReferences, selectReferences } from "@/lib/references/service";
 import { briefData, saveBrief } from "@/lib/pipeline/brief";
 import { contentHistory } from "@/lib/pipeline/content";
 import { buildPrompts } from "@/lib/pipeline/prompts";
+import { identityPromptFindings, worst } from "@/lib/agents/identity";
 import { createShotAsset, filenameFor, runImageJob } from "@/lib/pipeline/generate";
 import { runContentQa, runIdentityQa, runTechnicalQa } from "@/lib/pipeline/qa";
 import { finalizeAttempt } from "@/lib/pipeline/finalize";
@@ -102,7 +103,15 @@ async function produce(repo: Repo, pp: PlannedProduction, platform: "instagram" 
 
   // 4. prompts (prompt-level identity gate: HARD findings block generation)
   const refsByShot = Object.fromEntries(cd.shots.map((sh) => [sh.n, selectReferences(refs, sh).map((r) => r.id)]));
-  const built = buildPrompts(data, identity, { refsByShot });
+  let built = buildPrompts(data, identity, { refsByShot });
+  // Founder-edited final prompt (Create studio, single image). It replaces the assembled positive prompt but still goes through the
+  // canonical identity hard-lock gate below: an edit that contradicts a lock blocks generation exactly like an assembled prompt would.
+  const override = cd.generation?.promptOverride;
+  if (override && built.length === 1) {
+    const findings = identityPromptFindings(primary, override, identity);
+    built = [{ ...built[0], positive: override, findings, severity: worst(findings) }];
+    await tr("PROMPT_ENGINEER", "PROMPT_OVERRIDE", `Founder-edited prompt used for ${code} (identity gate re-run: ${findings.length ? findings.map((f) => f.severity).join(", ") : "no findings"})`);
+  }
   await tr("PROMPT_ENGINEER", "PROMPTS_BUILT", `Built ${built.length} prompt(s) for ${code} from the Generation Brief`);
   const prompts = [];
   for (const b of built) prompts.push(await repo.insert("prompts", { productionId: production.id, provider: deps.image.name, version: 1, shotN: b.shotN, positive: b.positive, negative: b.negative, identityRefs: b.identityRefs, qa: { ok: !b.findings.length, issues: b.findings.map((f) => f.message) }, briefId: brief.id, attemptId: attempt.id, origin: deps.origin }));

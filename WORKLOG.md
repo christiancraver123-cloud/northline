@@ -76,3 +76,14 @@ Added (no pipeline/identity/data changes): production fails closed unless `NORTH
 ## 2026-10-01 — Session 6c: Sienna status decision + non-generation engineering
 **Decision recorded**: MASTER_FACE ONLY + HIGH INPUT FIDELITY = best known OpenAI strategy; PARTIALLY VALIDATED, POSE GENERALIZATION UNVALIDATED (`docs/identity-strategy-sienna.md`). No generation performed this session segment; no references touched; no FACE_3Q_RIGHT added; no provider switch.
 **Built (isolated, not wired, no migrations applied)**: budget governor library + proposed 0007 SQL verified on embedded Postgres (40-way concurrent reservation → exact cap); learning-memory guard; usage summary + dashboard card. **Docs**: architecture, failure recovery, operator workflow, durable-jobs plan, budget-governor plan, learning-memory plan, Sienna pose-control options A–E (no winner). **Mobile**: remaining 15 pages audited at 390 px — all fit.
+
+## 2026-10-12 — Command Center milestone (one-shot directive)
+**Built**: founder dashboard (status bar, needs attention, creators by priority, pipeline, approvals with QA pills, system health); one-image Create studio with settings, sectioned prompt preview and editable final prompt (still identity-gated); single-image Approvals with Identity/Anatomy/Realism QA, reject tags, regenerate / edit prompt / archive; mock publishing (provider abstraction, founder confirmation, provider job, bounded retry); mock insights + Analytics; explainable creator priority; Inbox placeholder (Instagram BLOCKED); nav per directive (Assets/Launch/Automations under More); agent roster with tier/model/cost; model tiers; feature flags (`NORTHLINE_IMAGE_GENERATION`, `NORTHLINE_PUBLISHING`, `NORTHLINE_INSTAGRAM_LIVE`). Details: `docs/command-center.md`.
+**Behaviour changes**: `IMAGE_PROVIDER=openai` is UNAVAILABLE unless `NORTHLINE_IMAGE_GENERATION=on`; strict identity mode sends `input_fidelity=high` and the chosen quality; mock analytics excluded from agent "real data".
+**Migration 0009** written and tested on embedded Postgres; NOT applied.
+**Tests**: 400 pass (20 new), typecheck clean, build OK, secret scan clean, browser smoke (create → approve → mock publish → analytics) OK at 1440 and 390 px.
+**Not touched**: World, identity data, reference authority, governor logic, read-only enforcement.
+### DISCOVERED ISSUES
+- `GENERIC_NEG` in `lib/identity/canonical.ts` lists "lingerie" as a negative, which conflicts with the operator's content floor in the Cowork app (lingerie allowed). Not changed — identity data needs an operator decision and a version bump.
+- Regenerate does not reuse a founder-edited prompt (it rebuilds from the brief + revision notes). Use Edit prompt for a new production instead.
+- Assertions on publish: after one asset of a production publishes, the production is PUBLISHED and its other approved frames cannot publish (fine for one-image productions).

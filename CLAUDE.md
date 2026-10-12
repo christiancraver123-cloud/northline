@@ -16,7 +16,7 @@ Flow: request → orchestrator → task plan → agents → production records �
 - `lib/agents/` — agents as typed deterministic functions (strategist, creative director, prompt engineer, caption writer, content QA) + `identity.ts` (identity block + Identity QA). LLM-backed versions can drop in behind the same signatures.
 - `lib/orchestrator/` — `contracts.ts` (zod CreateRequest), `intent.ts` (NL parser), `plan.ts` (task plan), `execute.ts` (pipeline, provider jobs, targeted retry, Reel video stage), `approvals.ts`, `schedule.ts`.
 - `lib/providers/` — `ImageProvider`/`VideoProvider`/`StorageProvider` interfaces; adapters: mock (default), openai (stills, untested without a key), higgsfield (**stub**), local storage. Provider-specific code stays in this folder.
-- `lib/publishing/gate.ts` — draft-first gate. There is **no publishing adapter**; any future one must call `assertPublishable`.
+- `lib/publishing/` — `gate.ts` (draft-first gate), `provider.ts` (MOCK_INSTAGRAM + META_INSTAGRAM stub), `service.ts` (founder-confirmed publish, bounded retry, insights). Only MOCK exists; live Meta is not implemented and Instagram is BLOCKED. Every publish calls `assertPublishable`. See `docs/command-center.md`.
 - `app/` — pages (Dashboard, Talent, Create, Productions, Approvals, Launch, Calendar, Assets, Analytics, Agents, Automations, Settings), `actions.ts` (server actions), `api/` (n8n webhook, create, health, asset file).
 - `lib/agents/ops/` — **Agent Operations Center**: `registry.ts` (10 agents), `service.ts` (ensureAgents, enqueue, derived status, controls, schedules, approval waits), `worker.ts` (concurrent queue runner, per-provider lanes), `handlers.ts` (task kinds), `commands.ts` (submitCreate, delegate, createAssignment), `chat.ts` (operator chat), `reports.ts`, `cron.ts`.
 - `lib/identity/` — **versioned canonical identity records** (`canonical.ts`: hard/soft locks, provider block; `service.ts`: immutable snapshots). `lib/references/` — canonical reference library + explicit promotion. `lib/pipeline/` — Generation Brief (`brief.ts`), prompts, image jobs + lineage (`generate.ts`), QA stages (`qa.ts`), content QA (`content.ts`), finalize, revision loop (`revise.ts`). `lib/orchestrator/execute.ts` wires them. `lib/media/` — image inspection + dev placeholder PNG. See `docs/pipeline.md`.
@@ -51,7 +51,7 @@ SIE Sienna Veyra · ALE Alessia Varenne · MIL Mila Calloway · VES Vesper Laure
 - LLM keys (`GEMINI_API_KEY`, `OPENAI_API_KEY`) are server-only; adapters send them in headers and never echo upstream bodies.
 
 ## Conventions / don't break
-- Draft-first: nothing publishes, schedules externally, DMs, follows, comments, or spends money without an approval workflow. Approval only changes internal state.
+- Draft-first: nothing publishes, schedules externally, DMs, follows, comments, or spends money without an approval workflow. Approval only changes internal state. Publishing is a separate founder click + confirmation (mock provider only). Paid image calls need `NORTHLINE_IMAGE_GENERATION=on`. Mock analytics (`source='mock'`) are never real data.
 - Approval is blocked while assets are failed/pending or a creator's virtual/AI disclosure isn't confirmed on Launch.
 - Never fabricate analytics/publishing/n8n state; demo data is labelled `DEMO`. Never invent provider pricing (`costUsd`/`credits` null = unknown).
 - Stills and video are separate stages (Reel: source still → `submitReelVideo`).

@@ -51,7 +51,7 @@ export async function runImageJob(repo: Repo, deps: Deps, j: ShotJob, runId: str
   job = await setJob(repo, job.id, { state: "SUBMITTED", startedAt: new Date().toISOString() });
   job = await setJob(repo, job.id, { state: "PROCESSING" });
   try {
-    const r = await deps.image.generate({ productionCode: j.production.code, shotN: j.asset.seq, prompt: j.prompt.positive, negative: j.prompt.negative, talent: j.production.talent[0], references: images, size: j.brief.data.providerRequirements.size });
+    const r = await deps.image.generate({ productionCode: j.production.code, shotN: j.asset.seq, prompt: j.prompt.positive, negative: j.prompt.negative, talent: j.production.talent[0], references: images, size: j.brief.data.providerRequirements.size, quality: j.brief.data.providerRequirements.quality, inputFidelity: j.brief.data.providerRequirements.inputFidelity });
     let storagePath: string | null = null, meta: Partial<Asset> = {};
     if (r.bytes) {
       const info = inspectImage(r.bytes);

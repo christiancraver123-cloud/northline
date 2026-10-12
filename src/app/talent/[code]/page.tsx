@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { getRepo } from "@/lib/db";
 import { newestFirst } from "@/lib/db/order";
@@ -6,7 +7,12 @@ import { REFERENCE_TYPES } from "@/lib/domain/types";
 import { uploadReferenceAction, referenceControlAction } from "../../actions";
 import { loadIdentity } from "@/lib/identity/service";
 import { ReferenceLibrary } from "@/components/ReferenceLibrary";
-import { Avatar, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill } from "@/components/ui";
+import { AssetTile, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, ago } from "@/components/ui";
+import Link from "next/link";
+import { CreatorPortrait } from "@/components/cc";
+import { creatorOverviews } from "@/lib/ops/creators";
+import { listIfMigrated } from "@/lib/publishing/service";
+import { weightsFromEnv } from "@/lib/priority";
 
 export default async function TalentDetail({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ refError?: string; refOk?: string }> }) {
   const t = getTalent((await params).code.toUpperCase());
@@ -17,16 +23,22 @@ export default async function TalentDetail({ params, searchParams }: { params: P
   const loaded = await loadIdentity(repo, t.code); // persists the immutable snapshot on first view
   const ci = loaded.identity;
   const mine = prods.filter((p) => p.talent.includes(t.code));
+  const [assets, analytics, calendar, jobs, launchAll, storylines, tasks, publications] = await Promise.all([repo.list("assets"), repo.list("analytics"), repo.list("calendarEntries"), repo.list("providerJobs"), repo.list("launchStates"), repo.list("storylines"), repo.list("agentTasks"), listIfMigrated(repo, "publications")]);
+  const ov = creatorOverviews({ productions: prods, assets, publications, analytics, calendar, jobs, launch: launchAll, storylines, tasks }, new Date(), weightsFromEnv()).find((o) => o.code === t.code)!;
+  const approved = assets.filter((a) => a.talent[0] === t.code && a.current && a.kind === "IMG" && a.status === "APPROVED").slice(-12).reverse();
+  const myPubs = (publications ?? []).filter((x) => x.talent === t.code && x.status === "PUBLISHED").sort((a, b) => (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""));
+  const master = refs.find((r) => r.referenceType === "MASTER_FACE" && r.status === "ACTIVE");
   return (
     <>
-      <PageHeader title={t.name} sub={`${t.code} · ${t.age} · ${t.markets.join(" / ")} · ${t.role}`} actions={<Avatar code={t.code} size={48} />} />
+      <PageHeader title={t.name} sub={`${t.code} · ${t.age} · ${t.markets.join(" / ")} · ${t.role}`} actions={<span className="flex items-center gap-3"><span className="text-right"><span className="block font-mono text-2xl font-bold" style={{ color: t.color }}>{ov.priority.score}</span><span className="text-[10px] uppercase tracking-wider text-faint">priority</span></span><CreatorPortrait code={t.code} refId={master?.id} className="h-20 w-16 rounded-xl" /><Link href={`/create?creator=${t.code}`} className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-3.5 py-2 text-[13px] font-bold">Create image</Link></span>} />
+      <h2 className="mb-3 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-bad/60" />Canonical identity — authority; never changed by generated content</h2>
       <div className="grid gap-5 xl:grid-cols-2">
         <Card>
           <h2 className="mb-2 font-bold">Identity-critical rules</h2>
           <ul className="grid gap-2">{t.criticalRules.map((r) => <li key={r} className="rounded-lg border border-bad/30 bg-bad/5 p-2.5 text-[13px]">{r}</li>)}</ul>
           <h2 className="mb-2 mt-5 font-bold">Canonical identity</h2>
           <dl className="grid grid-cols-[90px_1fr] gap-x-3 gap-y-1.5 text-[13px]">
-            {(["hair", "eyes", "skin", "face", "body", "jewelry"] as const).map((k) => <><dt key={k + "d"} className="text-muted capitalize">{k}</dt><dd key={k}>{t.identity[k]}</dd></>)}
+            {(["hair", "eyes", "skin", "face", "body", "jewelry"] as const).map((k) => <Fragment key={k}><dt className="text-muted capitalize">{k}</dt><dd>{t.identity[k]}</dd></Fragment>)}
           </dl>
           <p className="mt-3 text-[12px] text-faint">Canonical identity <b className="font-mono text-ink">{ci.id}</b> — stored snapshot in the database{loaded.drift ? " (code facts drifted — bump the version)" : ""}; productions record this version. Source: src/lib/identity/canonical.ts + roster.ts. Generated images never replace it.</p>
           <h2 className="mb-2 mt-5 font-bold">Hard locks <span className="text-[11px] font-normal text-faint">(violation = HARD_FAIL)</span></h2>
@@ -55,6 +67,21 @@ export default async function TalentDetail({ params, searchParams }: { params: P
         </div>
       </div>
       <div id="references" className="mt-5"><ReferenceLibrary talent={t.code} refs={refs} identityId={ci.id} error={sp.refError} ok={!!sp.refOk} /></div>
+      <h2 className="mb-3 mt-8 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-blue2/60" />Generated content — zero identity authority</h2>
+      <div className="grid gap-5 xl:grid-cols-3">
+        <Card>
+          <h2 className="mb-2 font-bold">Priority <span className="font-mono" style={{ color: t.color }}>{ov.priority.score}</span></h2>
+          <ul className="grid gap-0.5 text-[13px]">{ov.priority.parts.filter((x) => x.reason !== "base").map((x) => <li key={x.reason} className="flex justify-between gap-2"><span>{x.reason}</span><span className="font-mono text-muted">{x.points > 0 ? "+" : ""}{x.points || ""}</span></li>)}</ul>
+          <p className="mt-2 text-[11.5px] text-faint">Base {ov.priority.parts[0].points}. Explainable score; it never generates, spends or publishes.</p>
+          <dl className="mt-3 grid grid-cols-2 gap-1 text-[12.5px]"><dt className="text-muted">Storyline</dt><dd>{ov.storyline ?? "none active"}</dd><dt className="text-muted">Last post</dt><dd>{ov.lastContentAt ? ago(ov.lastContentAt) : "never"}</dd><dt className="text-muted">Next planned</dt><dd>{ov.nextPlanned ?? "—"}</dd><dt className="text-muted">Engagement</dt><dd>{ov.engagementRate == null ? "no data" : `${(ov.engagementRate * 100).toFixed(1)}%${ov.insightsAreMock ? " (mock)" : ""}`}</dd></dl>
+        </Card>
+        <Card className="xl:col-span-2">
+          <h2 className="mb-2 font-bold">Approved assets <span className="text-[12px] font-normal text-muted">({approved.length}{approved.length === 12 ? "+" : ""})</span></h2>
+          {approved.length === 0 ? <Empty>Nothing approved yet.</Empty> : <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">{approved.map((a) => <Link key={a.id} href={`/assets/${a.id}`}><AssetTile asset={a} label={a.publication === "PUBLISHED" ? "posted" : undefined} /></Link>)}</div>}
+          <h2 className="mb-2 mt-4 font-bold">Published posts {myPubs.some((x) => x.provider === "MOCK_INSTAGRAM") && <Pill tone="warn">mock</Pill>}</h2>
+          {publications === null ? <p className="text-[13px] text-warn">Migration 0009 not applied — no publishing records.</p> : myPubs.length === 0 ? <p className="text-[13px] text-muted">No posts published through Northline.</p> : myPubs.slice(0, 8).map((x) => <div key={x.id} className="flex justify-between gap-2 border-t border-edge py-1.5 text-[12.5px] first:border-0"><span className="min-w-0 truncate">{x.caption || "no caption"}</span><span className="flex-none text-faint">{ago(x.publishedAt)}</span></div>)}
+        </Card>
+      </div>
       <Card className="mt-5">
         <h2 className="mb-2 font-bold">Productions</h2>
         {mine.length === 0 ? <Empty>No productions yet.</Empty> : mine.map((p) => <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-edge py-2 first:border-0"><span className="flex items-center gap-3"><ProdLink p={p} /><span className="text-muted">{p.contentType} · {p.concept}</span><DemoBadge origin={p.origin} /></span><StatusPill status={p.status} /></div>)}

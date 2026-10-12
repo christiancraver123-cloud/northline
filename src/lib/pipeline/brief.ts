@@ -31,6 +31,15 @@ export function buildContinuitySpec(identity: CanonicalIdentity, brief: Creative
   };
 }
 
+/** Provider size/quality from the founder's settings. OpenAI renders 1024x1024 or 1024x1536 (2:3); 4:5 and 9:16 are delivered as crops of the 2:3 frame. */
+export function providerRequirements(deps: Pick<Deps, "image">, brief: Pick<CreativeBrief, "shots" | "generation">): GenerationBriefData["providerRequirements"] {
+  const g = brief.generation;
+  const base = { provider: deps.image.name, model: deps.image.model ?? null, count: brief.shots.length };
+  if (!g) return { ...base, size: "1024x1536", aspect: "2:3 portrait" };
+  const aspect = g.aspectRatio ?? "4:5", square = aspect === "1:1";
+  return { ...base, size: square ? "1024x1024" : "1024x1536", aspect: square ? "1:1 square" : `2:3 portrait, delivered as ${aspect}`, quality: g.quality ?? "high", inputFidelity: (g.identityMode ?? "strict") === "strict" ? "high" : undefined, targetAspect: aspect };
+}
+
 export function briefData(a: {
   production: Pick<Production, "code" | "contentType" | "platform" | "concept">; identity: CanonicalIdentity; brief: CreativeBrief; refs: ReferenceAsset[];
   history: ContentHistory; deps: Deps; revision: GenerationBriefData["revision"];
@@ -51,7 +60,7 @@ export function briefData(a: {
     visualDirection: { outfit: brief.outfit, lighting: brief.lighting, palette: identity.visualLanguage.palette, mood: identity.visualLanguage.expression },
     continuity: [brief.storyBeat, "same creator identity, outfit and time of day across every frame", "identity has priority over outfit, pose, environment, lighting and activity"],
     recentConsiderations: rec,
-    providerRequirements: { provider: a.deps.image.name, model: a.deps.image.model ?? null, size: "1024x1536", aspect: "2:3 portrait", count: brief.shots.length },
+    providerRequirements: providerRequirements(a.deps, brief),
     shots: brief.shots.map((s) => ({ n: s.n, kind: s.kind, description: s.description, camera: s.camera })),
     continuitySpec: buildContinuitySpec(identity, brief),
     revision: a.revision,

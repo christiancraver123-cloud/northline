@@ -1,53 +1,143 @@
+import Link from "next/link";
 import { getRepo } from "@/lib/db";
 import { approvalBlockers } from "@/lib/orchestrator/approvals";
-import { decideAction } from "../actions";
-import { REJECTION_REASONS } from "@/lib/feedback/reasons";
-import { AssetTile, Btn, Card, DemoBadge, Empty, PageHeader, ProdLink, QaPill, StatusPill, TalentChips } from "@/components/ui";
-import Link from "next/link";
+import { archiveProductionAction, decideAction, publishAction, regenerateAction, retryPublishAction } from "../actions";
+import { REJECT_TAGS } from "@/lib/feedback/reasons";
+import { qaTriad } from "@/lib/pipeline/qa-triad";
+import { listIfMigrated, resolvePublisher } from "@/lib/publishing/service";
+import { MOCK_OUTCOMES } from "@/lib/publishing/provider";
+import { instagramStatus } from "@/lib/flags";
+import { isReadOnly } from "@/lib/runtime/mode";
+import { Btn, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, TalentChips, ago } from "@/components/ui";
+import { TriadDetail } from "@/components/cc";
 
-export default async function Approvals({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+type SP = { error?: string; ok?: string; id?: string; asset?: string };
+
+export default async function Approvals({ searchParams }: { searchParams: Promise<SP> }) {
+  const sp = await searchParams;
   const repo = await getRepo();
-  const pending = await repo.list("approvals", { state: "PENDING" });
-  const items = await Promise.all(pending.map(async (a) => {
-    const p = await repo.get("productions", a.productionId);
-    if (!p) return null;
-    return { a, p, assets: (await repo.list("assets", { productionId: p.id })).filter((x) => x.current).sort((x, y) => x.seq - y.seq), qa: await repo.list("qaResults", { productionId: p.id }), captions: await repo.list("captions", { productionId: p.id }), blockers: await approvalBlockers(repo, p.id) };
-  }));
-  const err = (await searchParams).error;
-  const decided = (await repo.list("approvals")).filter((a) => a.state !== "PENDING").sort((a, b) => (b.decidedAt ?? "").localeCompare(a.decidedAt ?? "")).slice(0, 8);
+  const readOnly = isReadOnly();
+  const pending = (await repo.list("approvals", { state: "PENDING" })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)); // oldest first
+  const idx = Math.max(0, pending.findIndex((a) => a.id === sp.id));
+  const ap = pending[idx] ?? null;
+  const qs = (o: Partial<SP>) => `/approvals?${new URLSearchParams(Object.fromEntries(Object.entries(o).filter(([, v]) => v))).toString()}`;
+
+  // ---- focused item ----
+  let focus: React.ReactNode = <Empty>Nothing to review. <Link className="text-blue2" href="/create">Create an image →</Link></Empty>;
+  if (ap) {
+    const p = (await repo.get("productions", ap.productionId))!;
+    const assets = (await repo.list("assets", { productionId: p.id })).filter((x) => x.current && x.kind !== "REEL").sort((x, y) => x.seq - y.seq);
+    const asset = assets.find((x) => x.id === sp.asset) ?? assets[0] ?? null;
+    const [qa, captions, blockers, prompts, jobs, refs] = await Promise.all([repo.list("qaResults", { productionId: p.id }), repo.list("captions", { productionId: p.id }), approvalBlockers(repo, p.id), repo.list("prompts", { productionId: p.id }), repo.list("providerJobs", { productionId: p.id }), repo.list("referenceAssets")]);
+    const prompt = asset?.promptId ? prompts.find((x) => x.id === asset.promptId) : undefined;
+    const job = asset ? jobs.find((j) => j.id === asset.generationJobId) : undefined;
+    const triad = asset ? qaTriad(qa, asset.id) : null;
+    const used = asset ? refs.filter((r) => asset.referenceIds.includes(r.id)) : [];
+    focus = (
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+        <div>
+          <div className="relative overflow-hidden rounded-2xl border border-edge" style={{ background: "linear-gradient(160deg,#1a2350,#0b1128)" }}>
+            {asset?.storagePath ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${asset.id}/file`} alt={`${p.code} frame ${asset.seq}`} className="mx-auto max-h-[78vh] w-auto object-contain" />
+              : <div className="grid aspect-[4/5] place-items-center p-6 text-center text-muted">{asset ? `${asset.provider} produced no image file (${asset.status}).` : "No asset attached."}<br /><span className="text-[12px] text-faint">Mock generation has no pixels. Use IMAGE_PROVIDER=mock-png for placeholder files, or a real provider.</span></div>}
+            {asset && <span className="absolute left-3 top-3 rounded-lg bg-black/60 px-2 py-1 font-mono text-[12px]">{p.code} · frame {asset.seq} · attempt {asset.attemptNo}</span>}
+          </div>
+          {assets.length > 1 && <div className="mt-2 flex gap-2 overflow-x-auto">{assets.map((x) => <Link key={x.id} href={qs({ id: ap.id, asset: x.id })} aria-current={x.id === asset?.id ? "true" : undefined} className={`flex-none rounded-lg border px-2 py-1 font-mono text-[12px] ${x.id === asset?.id ? "border-blue2 bg-blue/20" : "border-edge text-muted"}`}>frame {x.seq}</Link>)}</div>}
+          {asset?.storagePath && <a href={`/api/assets/${asset.id}/file`} target="_blank" rel="noreferrer" className="mt-2 inline-block text-[13px] text-blue2">Open / download full size ↗</a>}
+        </div>
+        <div className="grid content-start gap-4">
+          <Card>
+            <div className="flex flex-wrap items-center justify-between gap-2"><span className="flex flex-wrap items-center gap-2"><ProdLink p={p} /><TalentChips codes={p.talent} /><DemoBadge origin={p.origin} /></span><StatusPill status={p.status} /></div>
+            <p className="mt-1 text-[14px]">{p.concept}</p>
+            <dl className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-0.5 text-[12.5px]">
+              <dt className="text-muted">Provider</dt><dd>{asset ? `${asset.provider}${asset.model ? ` · ${asset.model}` : ""}` : "—"}</dd>
+              <dt className="text-muted">Cost</dt><dd>{job?.costUsd != null ? `$${job.costUsd.toFixed(2)}` : asset?.provider === "mock" ? "$0 (mock)" : "UNKNOWN"}</dd>
+              <dt className="text-muted">Attempt</dt><dd>{asset?.attemptNo ?? "—"}</dd>
+              <dt className="text-muted">Created</dt><dd>{ago(asset?.createdAt ?? p.createdAt)}</dd>
+              <dt className="text-muted">Identity version</dt><dd className="font-mono">{asset?.identityVersion ?? p.identityVersion ?? "—"}</dd>
+              <dt className="text-muted">References</dt><dd>{used.length ? used.map((r) => r.referenceType.replace(/_/g, " ").toLowerCase()).join(", ") : "none attached"}</dd>
+            </dl>
+            {used.length > 0 && <div className="mt-2 flex gap-2">{used.map((r) => /* eslint-disable-next-line @next/next/no-img-element */ <img key={r.id} src={`/api/references/${r.id}/file`} alt={r.referenceType} title={r.referenceType} className="h-16 w-14 rounded-lg border border-edge object-cover" />)}</div>}
+          </Card>
+          {triad && <Card><h3 className="mb-2 font-bold">QA</h3><TriadDetail triad={triad} /></Card>}
+          {prompt && <details className="rounded-2xl border border-edge p-3 text-[12.5px]"><summary className="cursor-pointer font-bold">Prompt</summary><p className="mt-2 whitespace-pre-wrap break-words font-mono text-[11.5px] text-muted">{prompt.positive}</p></details>}
+          {captions.map((c) => <p key={c.id} className="rounded-xl border border-edge p-2 text-[13px]">“{c.text}”</p>)}
+          {blockers.length > 0 && <p className="text-[13px] text-warn">Approval blocked: {blockers.join("; ")}. <Link href="/launch" className="text-blue2">Launch →</Link></p>}
+
+          <form action={decideAction} className="grid gap-3 rounded-2xl border border-edge bg-panel/80 p-4">
+            <input type="hidden" name="approvalId" value={ap.id} />
+            {assets.length > 1 ? <div className="flex flex-wrap gap-3 text-[12.5px]">{assets.map((x) => <label key={x.id} className="flex items-center gap-1.5"><input type="checkbox" name="asset" value={x.id} defaultChecked={x.status === "RAW" && x.qaStatus !== "HARD_FAIL"} className="size-4 !w-auto" />approve frame {x.seq}</label>)}</div> : asset && <input type="hidden" name="asset" value={asset.id} />}
+            <div><div className="mb-1 text-[12.5px] font-semibold text-muted">Reject / revision reasons</div><div className="flex flex-wrap gap-1.5">{REJECT_TAGS.map(([tag, code]) => <label key={tag} className="flex cursor-pointer items-center gap-1 rounded-full border border-edge px-2.5 py-1 text-[12px] has-[:checked]:border-bad/60 has-[:checked]:bg-bad/15"><input type="checkbox" name="reason" value={code} className="sr-only" />{tag}</label>)}</div></div>
+            <input name="notes" placeholder="Notes (stored as founder feedback; never changes canonical identity)" aria-label="Notes" />
+            <div className="flex flex-wrap gap-2">
+              <Btn primary name="decision" value="APPROVED" disabled={blockers.length > 0}>Approve</Btn>
+              <Btn name="decision" value="REJECTED">Reject</Btn>
+              <Btn name="decision" value="REVISION_REQUESTED">Request revision</Btn>
+            </div>
+          </form>
+          <div className="flex flex-wrap gap-2">
+            <form action={regenerateAction} className="flex flex-1 gap-2"><input type="hidden" name="productionId" value={p.id} /><input name="notes" placeholder="What to change (regenerate)" className="min-w-0 flex-1" aria-label="Regeneration notes" /><Btn>Regenerate</Btn></form>
+            <Link href={`/create?from=${p.id}`} className="rounded-xl border border-edge bg-panel2 px-3.5 py-2 text-[13px] font-bold">Edit prompt</Link>
+            <form action={archiveProductionAction}><input type="hidden" name="productionId" value={p.id} /><Btn>Archive</Btn></form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- ready to publish + failed publishes ----
+  const publications = await listIfMigrated(repo, "publications");
+  const approvedAssets = (await repo.list("assets")).filter((a) => a.status === "APPROVED" && a.current && a.kind === "IMG" && a.publication !== "PUBLISHED");
+  const prods = new Map((await repo.list("productions")).map((p) => [p.id, p]));
+  const publisher = resolvePublisher();
+  const failedPubs = (publications ?? []).filter((x) => x.status === "FAILED").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 6);
+  const ig = instagramStatus();
+  const decided = (await repo.list("approvals")).filter((a) => a.state !== "PENDING").sort((a, b) => (b.decidedAt ?? "").localeCompare(a.decidedAt ?? "")).slice(0, 6);
+
   return (
     <>
-      <PageHeader title="Approvals" sub="Human approval is mandatory. Approving never publishes — it only unlocks scheduling." />
-      {err && <div role="alert" className="mb-4 rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">{err}</div>}
-      {pending.length === 0 ? <Empty>Nothing to review. <Link className="text-blue2" href="/create">Create something →</Link></Empty> : (
-        <div className="grid gap-4">{items.filter(Boolean).map((it) => {
-          const { a, p, assets, captions, blockers, qa } = it!;
-          const manual = assets.filter((x) => x.qaStatus === "MANUAL_REVIEW_REQUIRED").length;
-          return (
-            <Card key={a.id}>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><span className="flex items-center gap-3"><ProdLink p={p} /><TalentChips codes={p.talent} /><span className="text-muted">{p.contentType} · {p.concept}</span><DemoBadge origin={p.origin} /></span><StatusPill status={p.status} /></div>
-              <div className="mb-3 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-6">{assets.map((x) => (
-                <label key={x.id} className="block cursor-pointer"><AssetTile asset={x} /><span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]"><input form={`f-${a.id}`} type="checkbox" name="asset" value={x.id} defaultChecked={x.status === "RAW" && x.qaStatus !== "HARD_FAIL"} className="!w-auto" />approve <QaPill status={x.qaStatus} /></span></label>
-              ))}</div>
-              {manual > 0 && <p className="mb-2 rounded-lg border border-warn/30 bg-warn/10 p-2 text-[12.5px] text-warn">{manual} asset(s) were NOT visually verified by any automated inspector — you are the identity/technical check. Compare against the canonical references before approving.</p>}
-              <details className="mb-3 text-[12px] text-muted"><summary className="cursor-pointer">QA details ({qa.length})</summary>{qa.map((q) => <p key={q.id} className="border-t border-edge py-1"><b>{q.kind}</b> · {q.method} · <QaPill status={q.status} /> {q.inspectedImage ? "(image inspected)" : "(image not inspected)"} — {q.summary}</p>)}</details>
-              {captions.map((c) => <p key={c.id} className="mb-3 rounded-lg border border-edge p-2 text-[13px]">“{c.text}”</p>)}
-              {p.qaNotes.length > 0 && <p className="mb-2 text-warn">QA: {p.qaNotes.join("; ")}</p>}
-              {blockers.length > 0 && <p className="mb-2 text-warn">Blocked: {blockers.join("; ")}. <Link href="/launch" className="text-blue2">Launch →</Link></p>}
-              <form id={`f-${a.id}`} action={decideAction} className="flex flex-wrap items-center gap-2"><input type="hidden" name="approvalId" value={a.id} />
-                <details className="w-full rounded-lg border border-edge p-2 text-[12.5px]"><summary className="cursor-pointer font-semibold text-muted">Why? (reasons for revision / rejection — Northline learns from these)</summary>
-                  <div className="mt-2 grid gap-1.5 sm:grid-cols-2 lg:grid-cols-3">{REJECTION_REASONS.map(([code, label]) => <label key={code} className="flex items-center gap-2"><input type="checkbox" name="reason" value={code} className="size-4" />{label}</label>)}</div>
+      <PageHeader title="Approvals" sub="One image at a time. Approving never publishes; publishing is a separate click with its own confirmation."
+        actions={pending.length > 1 ? <span className="flex items-center gap-2 text-[13px]"><span className="font-mono text-muted">{idx + 1} / {pending.length}</span><Link href={qs({ id: pending[(idx - 1 + pending.length) % pending.length].id })} className="rounded-lg border border-edge px-2.5 py-1">← Prev</Link><Link href={qs({ id: pending[(idx + 1) % pending.length].id })} className="rounded-lg border border-edge px-2.5 py-1">Next →</Link></span> : null} />
+      {sp.error && <div role="alert" className="mb-4 rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">{sp.error}</div>}
+      {sp.ok && <div role="status" className="mb-4 rounded-xl border border-ok/40 bg-ok/10 p-3 text-ok">{sp.ok}</div>}
+      {focus}
+
+      <Card className="mt-6">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">Ready to publish</h2><span className="flex items-center gap-2 text-[12px]"><Pill tone="bad">{ig.label}</Pill>{publisher.provider ? <Pill tone="warn">{publisher.provider.name}</Pill> : <Pill tone="mute">publishing off</Pill>}</span></div>
+        {publications === null ? <p className="text-[13px] text-warn">Publishing tables are missing — migration 0009 has not been applied to this database.</p>
+          : !publisher.provider ? <p className="text-[13px] text-muted">{publisher.reason}</p>
+          : approvedAssets.length === 0 ? <p className="text-[13px] text-muted">No approved, unpublished images.</p> : (
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{approvedAssets.map((a) => {
+            const p = prods.get(a.productionId);
+            return (
+              <div key={a.id} className="flex gap-3 rounded-xl border border-edge p-2.5">
+                <div className="h-28 w-[5.6rem] flex-none overflow-hidden rounded-lg border border-edge bg-panel2">{a.storagePath ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${a.id}/file`} alt={a.filename} className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[10px] text-muted">no file</span>}</div>
+                <details className="min-w-0 flex-1 text-[12.5px]">
+                  <summary className="cursor-pointer"><b>{p?.code ?? "—"}</b> · <TalentChips codes={a.talent} /><span className="block truncate text-muted">{p?.concept}</span><span className="mt-1 inline-block rounded-lg bg-gradient-to-br from-blue to-[#4d5cf0] px-3 py-1 font-bold text-white">Publish…</span></summary>
+                  <form action={publishAction} className="mt-2 grid gap-1.5 rounded-lg border border-edge p-2">
+                    <input type="hidden" name="assetId" value={a.id} /><input type="hidden" name="back" value="/approvals" />
+                    <p>Publish this image to <b>{publisher.provider!.name === "MOCK_INSTAGRAM" ? "the mock Instagram provider (nothing is posted)" : "Instagram"}</b> for {a.talent[0]}?</p>
+                    {publisher.provider!.name === "MOCK_INSTAGRAM" && <label className="text-[12px]">Mock outcome<select name="mockOutcome" defaultValue="success">{MOCK_OUTCOMES.map((o) => <option key={o}>{o}</option>)}</select></label>}
+                    <label className="flex items-center gap-1.5"><input type="checkbox" name="confirm" value="yes" required className="size-4 !w-auto" />I confirm this publish.</label>
+                    <Btn primary disabled={readOnly}>Publish now</Btn>
+                  </form>
                 </details>
-                <input name="notes" placeholder="Notes (optional; a revision needs a reason or a note)" aria-label="Notes" className="min-w-48 flex-1" />
-                <Btn primary name="decision" value="APPROVED" disabled={blockers.length > 0}>Approve</Btn>
-                <Btn name="decision" value="REVISION_REQUESTED">Request revision</Btn>
-                <Btn name="decision" value="REJECTED">Reject</Btn>
-              </form>
-            </Card>
-          );
-        })}</div>
-      )}
-      {decided.length > 0 && <Card className="mt-5"><h2 className="mb-2 font-bold">Recent decisions</h2>{decided.map((d) => <div key={d.id} className="flex justify-between border-t border-edge py-1.5 first:border-0"><span className="text-muted">{d.decidedBy} · {d.decidedAt?.slice(0, 16).replace("T", " ")}{d.notes ? ` — ${d.notes}` : ""}</span><StatusPill status={d.state} /></div>)}</Card>}
+              </div>
+            );
+          })}</div>
+        )}
+        {failedPubs.length > 0 && (
+          <div className="mt-4 border-t border-edge pt-3"><h3 className="mb-1 font-bold text-bad">Failed publishes</h3>{failedPubs.map((x) => (
+            <div key={x.id} className="flex flex-wrap items-center justify-between gap-2 border-t border-edge py-1.5 text-[12.5px] first:border-0">
+              <span className="min-w-0 break-words">{prods.get(x.productionId)?.code} · attempt {x.attempts}/{x.maxAttempts} · <span className="text-bad">{x.error}</span></span>
+              {x.retryable ? <form action={retryPublishAction} className="flex items-center gap-1.5"><input type="hidden" name="publicationId" value={x.id} /><input type="hidden" name="back" value="/approvals" />{x.provider === "MOCK_INSTAGRAM" && <select name="mockOutcome" defaultValue="retryable" aria-label="Mock outcome" className="!w-auto">{MOCK_OUTCOMES.map((o) => <option key={o}>{o}</option>)}</select>}<Btn>Retry</Btn></form> : <Pill tone="mute">not retryable</Pill>}
+            </div>
+          ))}</div>
+        )}
+      </Card>
+
+      {decided.length > 0 && <Card className="mt-5"><h2 className="mb-2 font-bold">Recent decisions</h2>{decided.map((d) => <div key={d.id} className="flex justify-between gap-2 border-t border-edge py-1.5 text-[12.5px] first:border-0"><span className="min-w-0 truncate text-muted">{prods.get(d.productionId)?.code} · {d.decidedBy} · {ago(d.decidedAt)}{d.notes ? ` — ${d.notes}` : ""}</span><StatusPill status={d.state} /></div>)}</Card>}
+      {pending.length > 1 && <Card className="mt-5"><h2 className="mb-2 font-bold">Queue</h2><div className="flex flex-wrap gap-2">{await Promise.all(pending.map(async (a, i) => { const p = prods.get(a.productionId); return <Link key={a.id} href={qs({ id: a.id })} className={`rounded-lg border px-2.5 py-1 font-mono text-[12px] ${i === idx ? "border-blue2 bg-blue/20" : "border-edge text-muted"}`}>{p?.code ?? "?"}</Link>; }))}</div></Card>}
+      <p className="mt-4 text-[12px] text-faint">QA reads PASS only when an automated inspector actually looked at the image; otherwise it says REVIEW with confidence “none”, and you are the check.</p>
     </>
   );
 }

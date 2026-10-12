@@ -10,6 +10,7 @@ import { providerState, recordFailure, recordSuccess } from "./health";
 import { geminiProvider } from "./gemini";
 import { openaiLlmProvider } from "./openai";
 import { mockLlm } from "./mock";
+import { tierForKind, tierModel } from "./tiers";
 import { LlmError, type LlmProvider, type LlmProviderName, type LlmRequest, type LlmResult, type ModelPreference } from "./types";
 
 /** Task kinds where switching provider silently could change identity-relevant output. */
@@ -42,7 +43,8 @@ export function createRouter(providers: Record<LlmProviderName, LlmProvider>): R
     if (p.provider === "auto") {
       // Identity-critical kinds don't auto-route to an LLM at all unless the operator set a preference.
       if (IDENTITY_CRITICAL_KINDS.has(kind) || !ANALYSIS_KINDS.has(kind)) return [];
-      for (const n of auto()) add(n);
+      // Cost tier: cheap work (QA, summaries, captions) uses the configured cheap model; planning uses premium. Unset tiers = provider default.
+      for (const n of auto()) add(n, tierModel(n, tierForKind(kind)));
       return chain;
     }
     add(p.provider, p.model);

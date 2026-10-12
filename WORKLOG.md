@@ -104,3 +104,10 @@ Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Ren
 - Portrait rule in `lib/talent/portrait.ts` (pure, tested): active MASTER_FACE → best active canonical reference (face-forward types first) → colour/initial. Reads `referenceAssets` only; never generated/imported assets; writes nothing.
 - Portraits added: dashboard creator row (larger 3:4 cards, top of page), Studio import + generate pickers (large tiles, check + colour ring on selection), Approvals (filter pills, grid cards, focus header, decided thumbs, ready-to-publish), Talent index (portrait cards) + detail (hero + canonical reference strip), Productions (creator filter strip + row avatars), Analytics (creator rows, top/bottom/latest posts), Launch, Agents current-task cell.
 - Local demo DB has no canonical references until the operator uploads them; smoke used crops of the master roster sheet loaded into a throwaway local `.data` only (not committed).
+
+## 2026-10-12 — Canonical masters from the local library (verification run)
+- Source: operator Mac `~/Downloads/Northline Media/AI Influencers/01 TALENT/<Creator>/01 Canonical References/00 Master Face/` (staged read-only). Imported with the existing `scripts/import-references.ts` (uploadReference → MASTER authority, ACTIVE, identity v1.0, storage read-back sha check).
+- Local file store: 6/6 MASTER_FACE + Sienna FACE_3Q_RIGHT/UPPER_BODY; second run skipped all 8 (sha dedupe) → idempotent; portrait resolver returns MASTER_FACE for all six. Local `.data` is not committed.
+- Live Supabase already received the same 8 references in an earlier session (see above); not re-run here (no store credentials in this session).
+- Open identity flag (unchanged): Skye's master shows the beauty mark on her RIGHT cheek; the hard lock says LEFT. Imported with REVIEW REQUIRED note; lock not edited.
+- Added `src/lib/talent/import-set.test.ts` (one master per creator from that creator's own folder).

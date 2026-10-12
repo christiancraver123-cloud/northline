@@ -111,3 +111,7 @@ Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Ren
 - Live Supabase already received the same 8 references in an earlier session (see above); not re-run here (no store credentials in this session).
 - Open identity flag (unchanged): Skye's master shows the beauty mark on her RIGHT cheek; the hard lock says LEFT. Imported with REVIEW REQUIRED note; lock not edited.
 - Added `src/lib/talent/import-set.test.ts` (one master per creator from that creator's own folder).
+
+## 2026-10-12 — Creator image package (ChatGPT "Creator-Asset-Package", 253 images)
+- Placed into the Mac app's Inbox as batch `_Inbox (…)/2026-10-12 Creator Asset Package/` (240 images, sha-checked against manifest.csv; manifest copied alongside). Creator folders (Photos + Originals) are reviewable; `Reference material - <Creator>`, `Archive - <Creator>`, `Roster`, `Unassigned - …` are reference-only. Skipped: 3 NSFW-labelled Mila grids, 10 test placeholders.
+- Branch: `scripts/import-library.ts` + `src/lib/pipeline/library.ts` import the same package straight into this app's store as ARCHIVED library productions (MANUAL_UPLOAD, no QA, no approval, zero authority, sha-idempotent). Not run against live Supabase: unreachable from this session.

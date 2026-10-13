@@ -52,6 +52,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
           <p className="mt-2.5 max-w-[60ch] text-[15px] text-muted">{summary}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Link href="/hud" className="inline-flex items-center gap-2 rounded-xl border border-[#5ce8ff]/40 bg-[#5ce8ff]/[0.07] px-4 py-2.5 text-[13.5px] font-semibold text-[#a8f4ff] hover:border-[#5ce8ff]/70 hover:bg-[#5ce8ff]/[0.12]"><Icon name="bolt" size={15} />Command HUD</Link>
           <Link href="/create?mode=generate" className="inline-flex items-center gap-2 rounded-xl border border-edge bg-panel2 px-4 py-2.5 text-[13.5px] font-semibold hover:border-[#4a414c]"><Icon name="spark" size={15} />Generate</Link>
           <Link href="/create" className="inline-flex items-center gap-2 rounded-xl bg-blue2 px-4 py-2.5 text-[13.5px] font-semibold text-[#1a1410] shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_8px_20px_-10px_rgba(226,200,150,.6)] hover:bg-[#ecd6ab]"><Icon name="upload" size={15} />Import images</Link>
         </div>

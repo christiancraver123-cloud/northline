@@ -144,3 +144,10 @@ Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Ren
 - New app icon (champagne N) for web manifest, apple-touch and `Northline.app` AppIcon.icns.
 - Instagram status label is now "Instagram blocked / disconnected" (tests updated).
 - Checked: tsc, 431 unit tests, `next build`, Playwright sweep of 17 pages at 1440px (no errors), phone width 390px (no sideways scroll), palette + keyboard flows.
+
+## 2026-10-13 — Command HUD (/hud)
+- New full-screen mission-control mode at `/hud` (`src/app/hud/page.tsx` + `src/components/hud/Hud.tsx`, styles under `.hud` in globals.css, Chakra Petch font self-hosted).
+- Monitors: roster (6 creator units: priority, in review, ready, images), studio core (animated rings; pipeline arcs = real stage proportions; creators orbit with review badges; centre = approvals waiting), system status + provider health, 24h activity bars (agent events + decisions + new images), event log, review-queue filmstrip, schedule, alerts ticker.
+- Real data only; animation is decoration. Read-only page; every monitor links to the page that owns the data. Auto-refreshes every 20 s. Esc exits, F full screen. Boot sequence plays once per browser session.
+- Entry points: dashboard "Command HUD" button, sidebar (Today), ⌘K. Sidebar hidden on /hud.
+- SVG coordinates are rounded so server and browser render identical markup (unrounded trig caused a hydration mismatch).

@@ -9,7 +9,7 @@ import { CommandPalette, openPalette, type PaletteItem } from "./CommandPalette"
 
 type Item = readonly [href: string, label: string, icon: string, hint?: string];
 const GROUPS: { title: string; items: Item[] }[] = [
-  { title: "Today", items: [["/", "Dashboard", "home"], ["/approvals", "Approvals", "check", "Review and approve"], ["/inbox", "Inbox", "inbox", "Images waiting in your folder"], ["/live", "Live", "live", "What's happening right now"]] },
+  { title: "Today", items: [["/", "Dashboard", "home"], ["/approvals", "Approvals", "check", "Review and approve"], ["/inbox", "Inbox", "inbox", "Images waiting in your folder"], ["/live", "Live", "live", "What's happening right now"], ["/hud", "Command HUD", "bolt", "Full-screen mission control"]] },
   { title: "Make", items: [["/create", "Studio", "spark", "Import or generate images"], ["/collabs", "Collabs", "collab", "Plan creator collaborations"], ["/productions", "Productions", "film"], ["/calendar", "Calendar", "calendar"]] },
   { title: "Roster", items: [["/talent", "Talent", "user"], ["/launch", "Launch", "flag", "Launch checklist"], ["/assets", "Assets", "image"]] },
   { title: "Measure", items: [["/analytics", "Analytics", "chart"]] },
@@ -24,7 +24,7 @@ export function Sidebar({ pending, unreadReports, driver, creators = [] }: { pen
   const [mac, setMac] = useState(true);
   useEffect(() => setMenu(false), [path]);
   useEffect(() => setMac(/Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent)), []);
-  if (path.startsWith("/login")) return null; // no app chrome on the sign-in screen
+  if (path.startsWith("/login") || path.startsWith("/hud")) return null; // no app chrome on the sign-in screen
   const on = (href: string) => (href === "/" ? path === "/" : href === "/talent" ? path === "/talent" : path === href || path.startsWith(href + "/"));
   const count = (label: string) => (label === "Approvals" || label === "Approve") && pending > 0 ? pending : label === "Agents" && unreadReports > 0 ? unreadReports : 0;
 

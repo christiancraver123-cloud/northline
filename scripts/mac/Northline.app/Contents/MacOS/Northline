@@ -21,7 +21,10 @@ if [ ! -f .phone-login ]; then
   { printf 'NORTHLINE_ADMIN_PASSWORD=%q\n' "$PW"; printf 'NORTHLINE_SESSION_SECRET=%s\n' "$(openssl rand -hex 32)"; } > .phone-login; chmod 600 .phone-login; unset PW
 fi
 say "Starting… the first start takes a few minutes."
-/bin/zsh -lc '
+# Script apps can be launched under Rosetta (Intel mode) on Apple Silicon. Force native arm64 so node loads the same
+# native modules that npm installed (otherwise: "Cannot find module lightningcss.darwin-x64.node").
+ARCH=""; [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && ARCH="arch -arm64"
+$ARCH /bin/zsh -lc '
   set -a; . ./.phone-login; set +a
   export NORTHLINE_AUTH_DISABLED=false
   LAN=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)

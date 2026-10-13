@@ -1,5 +1,9 @@
 "use server";
 import { redirect } from "next/navigation";
+import { suggestSlot } from "@/lib/orchestrator/schedule";
+import { planCollab } from "@/lib/collab/plan";
+import { collabMembers } from "@/lib/collab/members";
+import { createCollabProductions } from "@/lib/collab/create";
 import { promises as fs } from "node:fs";
 import { resolveKey } from "@/lib/inbox/folder-server";
 import { classifyFolder, INBOX_NOTE } from "@/lib/inbox/folder";
@@ -385,4 +389,49 @@ export async function sendInboxAction(formData: FormData) {
   }
   revalidatePath("/", "layout");
   redirect(problems.length ? withMsg(back, "error", `Sent ${sent} to Approvals. ${problems.length} not sent: ${problems.slice(0, 3).join(" | ")}`) : withMsg(back, "ok", `Sent ${sent} to Approvals.`));
+}
+
+/** Collab planner → IDEA productions (one per post, captions attached). Never generates, schedules or posts. */
+export async function createCollabAction(formData: FormData) {
+  await requireOperator();
+  const codes = formData.getAll("c").map(String), event = String(formData.get("event") ?? ""), location = String(formData.get("location") ?? "");
+  const back = `/collabs?${new URLSearchParams([...codes.map((c) => ["c", c]), ["event", event], ["location", location]]).toString()}`;
+  let msg = "", err = "";
+  try {
+    const repo = await getRepo();
+    const plan = planCollab({ codes, event, location }, await collabMembers(repo));
+    const made = await createCollabProductions(repo, plan);
+    msg = `Created ${made.length} productions (${made.join(", ")}). They're ideas: make or import the images, then approve.`;
+  } catch (e) { err = e instanceof Error ? e.message.slice(0, 240) : "failed"; }
+  revalidatePath("/", "layout");
+  redirect(err ? withMsg(back, "error", err) : withMsg(back, "ok", msg));
+}
+
+/** Tonight: push a slot to the next open slot (one post per creator per day, 90 min apart). */
+export async function rescheduleSlotAction(formData: FormData) {
+  await requireOperator();
+  const repo = await getRepo();
+  const entry = await repo.get("calendarEntries", String(formData.get("entryId") ?? ""));
+  if (!entry || entry.state === "PUBLISHED") redirect(withMsg("/", "error", "That slot can't be moved."));
+  const others = (await repo.list("calendarEntries")).filter((e) => e.id !== entry.id && e.state !== "PUBLISHED");
+  const slot = suggestSlot(others, entry.talent, new Date());
+  await repo.update("calendarEntries", entry.id, { date: slot.date, time: slot.time });
+  revalidatePath("/", "layout");
+  redirect(withMsg("/", "ok", `Moved to ${slot.date} ${slot.time}.`));
+}
+
+/** Tonight: the operator posted it by hand on Instagram. Records it; Northline itself never posts. */
+export async function markPostedAction(formData: FormData) {
+  await requireOperator();
+  if (formData.get("confirm") !== "yes") redirect(withMsg("/", "error", "Tick “I posted it” first."));
+  const repo = await getRepo();
+  const entry = await repo.get("calendarEntries", String(formData.get("entryId") ?? ""));
+  if (!entry) redirect(withMsg("/", "error", "Slot not found."));
+  const prod = await repo.get("productions", entry.productionId);
+  if (!prod || !["APPROVED", "SCHEDULED"].includes(prod.status)) redirect(withMsg("/", "error", "Only an approved production can be marked as posted."));
+  await repo.update("calendarEntries", entry.id, { state: "PUBLISHED" });
+  await repo.update("productions", prod.id, { status: "PUBLISHED", qaNotes: [...prod.qaNotes, `Posted by hand on Instagram; recorded ${new Date().toISOString()}.`] });
+  for (const a of (await repo.list("assets", { productionId: prod.id })).filter((a) => a.current && a.status === "APPROVED")) await repo.update("assets", a.id, { publication: "PUBLISHED" });
+  revalidatePath("/", "layout");
+  redirect(withMsg("/", "ok", `${prod.code} recorded as posted.`));
 }

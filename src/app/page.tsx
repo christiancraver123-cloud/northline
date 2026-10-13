@@ -8,13 +8,22 @@ import { ROSTER_BY_CODE } from "@/lib/talent/roster";
 import { AgentStatusPill, ago } from "@/components/ui";
 import { CreatorAvatar, CreatorPortrait } from "@/components/cc";
 import { loadPortraits } from "@/lib/talent/portraits-server";
+import { missedSlots, nightSteps, tonightSlots } from "@/lib/ops/tonight";
+import { CopyButton } from "@/components/CopyButton";
+import { markPostedAction, rescheduleSlotAction } from "./actions";
 
 const dot: Record<Tone, string> = { ok: "bg-ok", warn: "bg-warn", bad: "bg-bad", info: "bg-blue2", mute: "bg-faint" };
 const txt: Record<Tone, string> = { ok: "text-ok", warn: "text-warn", bad: "text-bad", info: "text-blue2", mute: "text-muted" };
 
-export default async function Dashboard() {
+export default async function Dashboard({ searchParams }: { searchParams: Promise<{ ok?: string; error?: string }> }) {
+  const sp = await searchParams;
   const repo = await getRepo();
-  const [d, snaps, portraits] = await Promise.all([loadDashboard(repo), snapshots(repo), loadPortraits(repo)]);
+  const [d, snaps, portraits, cal, prods, captions, assets] = await Promise.all([loadDashboard(repo), snapshots(repo), loadPortraits(repo), repo.list("calendarEntries"), repo.list("productions"), repo.list("captions"), repo.list("assets")]);
+  const prodBy = new Map(prods.map((p) => [p.id, p]));
+  const now = new Date();
+  const slotCard = (e: (typeof cal)[number]) => { const p = prodBy.get(e.productionId); const img = assets.find((a) => a.productionId === e.productionId && a.current && a.kind === "IMG" && a.storagePath); return p ? { e, p, img, caption: captions.find((c) => c.productionId === p.id)?.text ?? "", steps: nightSteps(p, !!img) } : null; };
+  const tonight = tonightSlots(cal, now).map(slotCard).filter((x) => x !== null);
+  const missed = missedSlots(cal, now).map(slotCard).filter((x) => x !== null);
   const readOnly = isReadOnly();
   const get = (label: string) => d.status.find((s) => s.label === label)!;
   const signals = [
@@ -68,6 +77,38 @@ export default async function Dashboard() {
         <ul className="grid gap-1.5">{attention.map((a, i) => (
           <li key={i}><Link href={a.href} className="flex items-center gap-3 rounded-xl border border-edge bg-panel/60 px-4 py-2.5 text-[14px] hover:border-blue2/50"><span className={`h-2 w-2 flex-none rounded-full ${dot[a.tone]}`} /><span className="min-w-0 flex-1">{a.text}</span><span className="text-faint">→</span></Link></li>
         ))}</ul>
+      </section>
+
+      <section aria-label="Tonight" className="mb-8">
+        <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">Tonight {tonight.length > 0 && <span className="text-warn">· {tonight.length}</span>}{missed.length > 0 && <span className="text-bad"> · {missed.length} missed</span>}</h2>
+        {sp.ok && <div role="status" className="mb-2 rounded-xl border border-ok/40 bg-ok/10 p-2.5 text-[13px] text-ok">{sp.ok}</div>}
+        {sp.error && <div role="alert" className="mb-2 rounded-xl border border-bad/40 bg-bad/10 p-2.5 text-[13px] text-bad">{sp.error}</div>}
+        {tonight.length === 0 && missed.length === 0 ? <p className="rounded-xl border border-dashed border-edge p-4 text-[13px] text-muted">Nothing scheduled for tonight. Approving an image puts it on the calendar.</p> : (
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div className="grid content-start gap-3">{tonight.map(({ e, p, img, caption, steps }) => (
+              <div key={e.id} className="flex gap-3 rounded-2xl border border-edge bg-panel/70 p-3">
+                <div className="h-28 w-[5.6rem] flex-none overflow-hidden rounded-xl border border-edge" style={{ background: ROSTER_BY_CODE[e.talent].color }}>{img && /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${img.id}/file`} alt={p.code} className="h-full w-full object-cover" />}</div>
+                <div className="min-w-0 flex-1 text-[13px]">
+                  <div className="flex flex-wrap items-center gap-2"><CreatorAvatar code={e.talent} portrait={portraits[e.talent]} size={24} /><b>{ROSTER_BY_CODE[e.talent].first}</b><span className="font-mono text-[12px] text-muted">{e.time} · {p.code}</span></div>
+                  <p className="mt-1 truncate text-muted">{p.concept}</p>
+                  {caption && <div className="mt-1 flex items-center gap-2"><span className="min-w-0 truncate">“{caption}”</span><CopyButton text={caption} label="Copy caption" /></div>}
+                  <ol className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">{steps.map((s, i) => <li key={s.label} className={s.done ? "text-ok" : "text-muted"}>{s.done ? "✓" : `${i + 1}.`} {s.label}</li>)}</ol>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    {steps[1].done && !steps[2].done && <form action={markPostedAction} className="flex items-center gap-2"><input type="hidden" name="entryId" value={e.id} /><label className="flex items-center gap-1.5 text-[12px]"><input type="checkbox" name="confirm" value="yes" required className="size-4 !w-auto" />I posted it</label><button className="rounded-lg bg-ok/80 px-3 py-1 text-[12px] font-bold text-[#0a0f24]">Record</button></form>}
+                    <form action={rescheduleSlotAction}><input type="hidden" name="entryId" value={e.id} /><button className="rounded-lg border border-edge px-3 py-1 text-[12px]">Not tonight → next open slot</button></form>
+                    {!steps[1].done && <Link href="/approvals" className="text-[12px] text-blue2">Approvals →</Link>}
+                  </div>
+                </div>
+              </div>))}
+              {tonight.length === 0 && <p className="text-[13px] text-muted">Nothing for tonight.</p>}
+            </div>
+            <div><h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-faint">Missed slots · {missed.length}</h3>
+              {missed.length === 0 ? <p className="text-[12.5px] text-muted">Nothing missed.</p> : <ul className="grid gap-2">{missed.map(({ e, p }) => (
+                <li key={e.id} className="rounded-xl border border-edge p-2.5 text-[12.5px]"><div className="flex items-center gap-2"><CreatorAvatar code={e.talent} portrait={portraits[e.talent]} size={20} /><span className="font-mono text-[11px] text-muted">{p.code} · was {e.date} {e.time}</span></div><p className="my-1 truncate">{p.concept}</p>
+                  <form action={rescheduleSlotAction}><input type="hidden" name="entryId" value={e.id} /><button className="rounded-lg border border-edge px-2.5 py-1 text-[11.5px]">Move to next open slot</button></form></li>))}</ul>}
+            </div>
+          </div>
+        )}
       </section>
 
       <section aria-label="Approvals" className="mb-8">

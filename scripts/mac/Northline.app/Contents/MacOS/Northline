@@ -1,0 +1,41 @@
+#!/bin/bash
+# Northline.app — starts the Northline Command Center in the background (if it isn't already running) and opens it in its own window.
+# Works for your phone too: it listens on your Wi-Fi/Tailscale address with a password (asked once, stored only on this Mac).
+APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"          # folder that contains Northline.app
+NL="${NORTHLINE_HOME:-$APP_DIR/Northline Command Center (new)}"
+[ -d "$NL" ] || NL="$HOME/Downloads/Northline Media/Northline Command Center (new)"
+PORT=3100; URL="http://localhost:$PORT"
+say() { osascript -e "display notification \"$1\" with title \"Northline\"" >/dev/null 2>&1; }
+alert() { osascript -e "display alert \"Northline\" message \"$1\"" >/dev/null 2>&1; }
+open_window() {
+  if [ -d "/Applications/Google Chrome.app" ]; then open -na "Google Chrome" --args --app="$URL" --window-size=1400,900; else open "$URL"; fi
+}
+if [ ! -d "$NL" ]; then alert "Can't find the 'Northline Command Center (new)' folder. Keep Northline.app in the 'Northline Media' folder (or put the folder back)."; exit 1; fi
+# Already running? Just open the window.
+if curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest"; then open_window; exit 0; fi
+cd "$NL" || exit 1
+# Phone password (first run only). Typed into a Mac dialog, saved in a private file in the app folder.
+if [ ! -f .phone-login ]; then
+  PW=$(osascript -e 'text returned of (display dialog "Choose a password for Northline (8+ characters). You will type it on your phone, and on this Mac when asked." default answer "" with hidden answer with title "Northline" buttons {"Cancel","Save"} default button "Save")' 2>/dev/null) || exit 0
+  if [ ${#PW} -lt 8 ]; then alert "That password is too short (8+ characters). Open Northline again to try again."; exit 1; fi
+  { printf 'NORTHLINE_ADMIN_PASSWORD=%q\n' "$PW"; printf 'NORTHLINE_SESSION_SECRET=%s\n' "$(openssl rand -hex 32)"; } > .phone-login; chmod 600 .phone-login; unset PW
+fi
+say "Starting… the first start takes a few minutes."
+/bin/zsh -lc '
+  set -a; . ./.phone-login; set +a
+  export NORTHLINE_AUTH_DISABLED=false
+  LAN=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
+  TS=$(command -v tailscale >/dev/null 2>&1 && tailscale ip -4 2>/dev/null | head -1)
+  export NORTHLINE_LAN_HOSTS="$LAN,$TS"
+  printf "%s\n%s\n" "$LAN" "$TS" > .phone-address
+  command -v node >/dev/null 2>&1 || { osascript -e "display alert \"Northline\" message \"Node.js is not installed. Get the LTS version from nodejs.org, then open Northline again.\""; exit 1; }
+  [ -d node_modules ] || npm ci > .northline-install.log 2>&1
+  npx tsx scripts/import-references.ts --root "../AI Influencers" > /dev/null 2>&1
+  PKG="../_Backups/Creator Asset Package 2026-10-12"
+  if [ -d "$PKG" ] && [ ! -f .data/.library-2026-10-12-done ]; then npx tsx scripts/import-library.ts --dir "$PKG" --batch 2026-10-12 > .data-library-import.log 2>&1 && touch .data/.library-2026-10-12-done; fi
+  nohup npm run dev -- -H 0.0.0.0 -p '"$PORT"' > .northline.log 2>&1 &
+'
+for i in $(seq 1 180); do curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest" && break; sleep 2; done
+open_window
+LAN=$(sed -n 1p .phone-address 2>/dev/null)
+[ -n "$LAN" ] && say "Ready. On your phone (same Wi-Fi): http://$LAN:$PORT"

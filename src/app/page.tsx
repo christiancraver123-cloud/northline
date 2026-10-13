@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { getRepo } from "@/lib/db";
+import { getRepo, storeDriver } from "@/lib/db";
 import { snapshots } from "@/lib/agents/ops/service";
 import { loadDashboard, type Tone } from "@/lib/ops/dashboard";
 import { CommandCenterPanel } from "@/components/command-center";
@@ -27,7 +27,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const readOnly = isReadOnly();
   const get = (label: string) => d.status.find((s) => s.label === label)!;
   const signals = [
-    { label: readOnly ? "Read-only" : "Live", value: readOnly ? "changes off" : get("Environment").value.toLowerCase(), tone: (readOnly ? "warn" : "ok") as Tone, href: "/settings" },
+    { label: readOnly ? "Read-only" : "Running", value: readOnly ? "changes off" : storeDriver() === "file" ? "on this Mac" : get("Environment").value.toLowerCase(), tone: (readOnly ? "warn" : "ok") as Tone, href: "/settings" },
     { label: "Instagram", value: "blocked", tone: "bad" as Tone, href: "/inbox" },
     { label: "Approvals", value: get("Approvals").value, tone: get("Approvals").tone, href: "/approvals" },
     { label: "Failed jobs", value: get("Failed (7d)").value, tone: get("Failed (7d)").tone, href: "/productions?status=FAILED" },
@@ -39,7 +39,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   return (
     <>
       <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div><h1 className="text-2xl font-extrabold tracking-tight">Studio</h1><p className="text-[13.5px] text-muted">What needs you, and who needs content.</p></div>
+        <div><p className="text-[12px] font-bold uppercase tracking-[0.16em] text-blue2">Northline Studio</p><h1 className="bg-gradient-to-r from-ink to-blue2/80 bg-clip-text text-[28px] font-extrabold tracking-tight text-transparent sm:text-[34px]">Good to see you.</h1><p className="text-[13.5px] text-muted">What needs you tonight, and who needs content.</p></div>
         <div className="flex flex-wrap items-center gap-2">
           <Link href="/create" className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold">⇪ Import</Link>
           <Link href="/create?mode=generate" className="rounded-xl border border-edge bg-panel2 px-4 py-2 font-bold">✦ Generate</Link>
@@ -97,6 +97,7 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                     {steps[1].done && !steps[2].done && <form action={markPostedAction} className="flex items-center gap-2"><input type="hidden" name="entryId" value={e.id} /><label className="flex items-center gap-1.5 text-[12px]"><input type="checkbox" name="confirm" value="yes" required className="size-4 !w-auto" />I posted it</label><button className="rounded-lg bg-ok/80 px-3 py-1 text-[12px] font-bold text-[#0a0f24]">Record</button></form>}
                     <form action={rescheduleSlotAction}><input type="hidden" name="entryId" value={e.id} /><button className="rounded-lg border border-edge px-3 py-1 text-[12px]">Not tonight → next open slot</button></form>
                     {!steps[1].done && <Link href="/approvals" className="text-[12px] text-blue2">Approvals →</Link>}
+                    {steps[1].done && <Link href={`/post/${p.id}`} className="rounded-lg bg-ok/85 px-3 py-1 text-[12px] font-bold text-[#0a0f24]">Post kit →</Link>}
                   </div>
                 </div>
               </div>))}

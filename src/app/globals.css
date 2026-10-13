@@ -21,11 +21,24 @@
 :root { color-scheme: dark; }
 body {
   background: var(--color-bg); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
-  background-image: radial-gradient(1000px 500px at 85% -10%, rgba(91,140,255,.18), transparent 60%), radial-gradient(800px 400px at -10% 110%, rgba(139,92,246,.12), transparent 60%);
+  background-image:
+    radial-gradient(900px 480px at 88% -12%, rgba(91,140,255,.20), transparent 60%),
+    radial-gradient(700px 420px at 30% -20%, rgba(255,122,182,.08), transparent 60%),
+    radial-gradient(800px 420px at -10% 110%, rgba(139,92,246,.14), transparent 60%);
   background-attachment: fixed;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
 }
+h1, h2, h3 { letter-spacing: -0.01em; }
+::selection { background: rgba(91,140,255,.35); }
+* { scrollbar-width: thin; scrollbar-color: #26305e transparent; }
+img { -webkit-user-drag: auto; }
+button, a { -webkit-tap-highlight-color: transparent; }
+button:not(:disabled), [role="button"], summary { cursor: pointer; }
+button { transition: transform .12s ease, filter .15s ease, background-color .15s ease, border-color .15s ease; }
+button:not(:disabled):active { transform: scale(.98); }
+input:focus, textarea:focus, select:focus { border-color: var(--color-blue2); outline: none; box-shadow: 0 0 0 3px rgba(91,140,255,.18); }
 :focus-visible { outline: 2px solid var(--color-blue2); outline-offset: 2px; }
-textarea, input, select { background: #060a1c; border: 1px solid var(--color-edge); border-radius: 10px; padding: 8px 11px; color: var(--color-ink); width: 100%; }
+textarea, input, select { background: #070c20; transition: border-color .15s, box-shadow .15s; border: 1px solid var(--color-edge); border-radius: 10px; padding: 8px 11px; color: var(--color-ink); width: 100%; }
 
 /* Mobile safety: a grid with no explicit column utility gets ONE shrinkable column (minmax(0,1fr)) instead of an `auto` column that grows to its widest
    unbreakable child and pushes the whole page past the phone screen. Inside @layer base so every Tailwind grid-cols-* utility still wins. */

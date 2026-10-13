@@ -127,3 +127,10 @@ Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Ren
 - Tonight (dashboard): today's calendar slots + missed slots (`lib/ops/tonight.ts`, NY wall clock), nightly checklist, copy caption, "Not tonight → next open slot", and "I posted it" (operator records a manual Instagram post: calendar/production/assets → PUBLISHED; Northline itself still never posts).
 - Live (`/live`): ops board — posted today, real-only views/follows (mock/demo insights excluded), live accounts, recorded AI spend, 14-day views chart, event feed, roster with portraits, face wall.
 - Fix: `suggestSlot` now counts days in New York (late-evening ET was skipping a day because the UTC date had already rolled over).
+
+## 2026-10-13 — Post kit, caption writer, phone access, UI polish
+- Post kit `/post/[productionId]`: image(s) with "Make 4:5 Instagram size" (existing derive) + downloads (`?download=1` on asset/derivative file routes), caption writer, copy-full-caption (caption + hashtags + #aigenerated), phone posting steps incl. Instagram "Add AI label", "I posted it" record (operator only; never posts). Linked from Approvals ready list, Tonight, production page, talent Approved tiles.
+- Caption writer (`lib/captions`): AI via the router (CAPTION_WRITER / caption.write, cheap tier) when a text model is configured, else per-creator voice templates (free, deterministic, "Write more" rotates). Output filtered (explicit words, real brands, minors). llmCalls recorded.
+- Phone: `scripts/mac/Start Northline for phone.command` — password (chosen in Terminal, stored in .phone-login, never in chat), binds 0.0.0.0, prints Wi-Fi and Tailscale URLs; `allowedDevOrigins` from NORTHLINE_LAN_HOSTS. Verified login + full flow over a LAN IP in a mobile browser.
+- UI: grouped sidebar with icons + creator shortcuts, phone top bar + bottom tab bar + menu sheet, no chrome on /login, refined background/inputs/cards/headers, devIndicators off, hydration warning from browser extensions suppressed on <html>/<body>.
+- withMsg keeps #anchors (ok/error messages were lost on /talent/X#all).

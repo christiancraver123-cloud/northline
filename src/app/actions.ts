@@ -1,5 +1,6 @@
 "use server";
 import { redirect } from "next/navigation";
+import { writeCaptions, type CaptionOptions } from "@/lib/captions/service";
 import { sendLibraryToReview } from "@/lib/pipeline/library";
 import { suggestSlot } from "@/lib/orchestrator/schedule";
 import { planCollab } from "@/lib/collab/plan";
@@ -267,7 +268,8 @@ export async function createImageAction(formData: FormData) {
 
 const mockOutcome = (v: FormDataEntryValue | null): MockOutcome | undefined => (MOCK_OUTCOMES.includes(String(v) as MockOutcome) ? (String(v) as MockOutcome) : undefined);
 const backTo = (v: FormDataEntryValue | null, fallback: string) => { const s = String(v ?? ""); return s.startsWith("/") && !s.startsWith("//") ? s : fallback; };
-const withMsg = (url: string, k: string, v: string) => `${url}${url.includes("?") ? "&" : "?"}${k}=${encodeURIComponent(v.slice(0, 300))}`;
+/** Adds ?k=v to a URL, keeping any #anchor at the end (so "/talent/SIE#all" → "/talent/SIE?ok=…#all"). */
+const withMsg = (url: string, k: string, v: string) => { const [base, hash] = url.split("#"); return `${base}${base.includes("?") ? "&" : "?"}${k}=${encodeURIComponent(v.slice(0, 300))}${hash ? `#${hash}` : ""}`; };
 
 /** Founder clicks Publish → confirmation → mock (or future live) provider. Never automatic. */
 export async function publishAction(formData: FormData) {
@@ -447,4 +449,47 @@ export async function sendLibraryAction(formData: FormData) {
   const r = await sendLibraryToReview(repo, defaultDeps(), ids);
   revalidatePath("/", "layout");
   redirect(r.failed.length ? withMsg(back, "error", `Sent ${r.sent} to Approvals. ${r.failed.length} not sent: ${r.failed.slice(0, 2).map((f) => f.reason).join(" | ")}`) : withMsg(back, "ok", `Sent ${r.sent} to Approvals.`));
+}
+
+/** Caption writer: 3 options in the creator's voice (AI if a text model is configured, otherwise her voice templates). */
+export async function writeCaptionsAction(productionId: string, seed = 0, avoid: string[] = []): Promise<CaptionOptions & { ok: boolean; error?: string }> {
+  await requireOperator();
+  try {
+    const repo = await getRepo();
+    const p = await repo.get("productions", productionId);
+    if (!p) return { ok: false, error: "Production not found.", options: [], source: "templates" };
+    const r = await writeCaptions(repo, p.talent[0], { concept: p.concept, location: p.brief?.location && p.brief.location !== "not specified" ? p.brief.location : undefined, scene: p.brief?.hook }, seed, avoid.slice(0, 9));
+    return { ok: true, ...r };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message.slice(0, 160) : "failed", options: [], source: "templates" }; }
+}
+
+/** Save the chosen/edited caption as the production's feed caption. */
+export async function saveCaptionAction(productionId: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  await requireOperator();
+  const clean = text.replace(/\s+$/g, "").slice(0, 2200);
+  if (!clean.trim()) return { ok: false, error: "Caption is empty." };
+  const repo = await getRepo();
+  const p = await repo.get("productions", productionId);
+  if (!p) return { ok: false, error: "Production not found." };
+  const approval = ["APPROVED", "SCHEDULED", "PUBLISHED"].includes(p.status) ? "APPROVED" : "PENDING";
+  const existing = (await repo.list("captions", { productionId })).find((c) => c.kind === "FEED");
+  if (existing) await repo.update("captions", existing.id, { text: clean, approval });
+  else await repo.insert("captions", { productionId, talent: p.talent[0], text: clean, kind: "FEED", approval, origin: p.origin });
+  revalidatePath("/", "layout");
+  return { ok: true };
+}
+
+/** Post kit: the operator posted this production by hand on Instagram. Records it (calendar, production, assets); never posts. */
+export async function markProductionPostedAction(formData: FormData) {
+  await requireOperator();
+  const pid = String(formData.get("productionId") ?? ""), back = `/post/${pid}`;
+  if (formData.get("confirm") !== "yes") redirect(withMsg(back, "error", "Tick “I posted it” first."));
+  const repo = await getRepo();
+  const prod = await repo.get("productions", pid);
+  if (!prod || !["APPROVED", "SCHEDULED"].includes(prod.status)) redirect(withMsg(back, "error", "Only an approved post can be marked as posted."));
+  for (const c of await repo.list("calendarEntries", { productionId: pid })) await repo.update("calendarEntries", c.id, { state: "PUBLISHED" });
+  await repo.update("productions", pid, { status: "PUBLISHED", qaNotes: [...prod.qaNotes, `Posted by hand on Instagram; recorded ${new Date().toISOString()}.`] });
+  for (const a of (await repo.list("assets", { productionId: pid })).filter((a) => a.current && a.status === "APPROVED")) await repo.update("assets", a.id, { publication: "PUBLISHED" });
+  revalidatePath("/", "layout");
+  redirect(withMsg(back, "ok", `${prod.code} recorded as posted. Nice.`));
 }

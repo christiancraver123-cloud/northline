@@ -7,12 +7,12 @@ import { ROSTER_BY_CODE } from "@/lib/talent/roster";
 import type { TalentCode } from "@/lib/domain/types";
 
 export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border border-edge bg-panel/80 p-4 ${className}`}>{children}</section>;
+  return <section className={`rounded-2xl border border-edge/80 bg-gradient-to-b from-panel/90 to-panel/60 p-4 shadow-[0_1px_0_rgba(255,255,255,.04)_inset,0_20px_40px_-30px_rgba(0,0,0,.8)] ${className}`}>{children}</section>;
 }
 export function PageHeader({ title, sub, actions }: { title: string; sub?: string; actions?: ReactNode }) {
   return (
-    <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
-      <div><h1 className="text-2xl font-extrabold tracking-tight">{title}</h1>{sub && <p className="text-muted">{sub}</p>}</div>
+    <header className="mb-6 flex flex-wrap items-end justify-between gap-3">
+      <div><h1 className="bg-gradient-to-r from-ink via-ink to-blue2/80 bg-clip-text text-[26px] font-extrabold tracking-tight text-transparent sm:text-[30px]">{title}</h1>{sub && <p className="mt-0.5 text-[14px] text-muted">{sub}</p>}</div>
       {actions}
     </header>
   );

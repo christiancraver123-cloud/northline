@@ -4,16 +4,16 @@ import type { CanonicalIdentityRecord } from "@/lib/db/records";
 import { ROSTER } from "@/lib/talent/roster";
 import type { TalentCode } from "@/lib/domain/types";
 import { ReadOnlyError } from "@/lib/runtime/mode";
-import { IDENTITY_VERSION, buildCanonicalIdentity, identityHash, identityId, type CanonicalIdentity } from "./canonical";
+import { versionFor, buildCanonicalIdentity, identityHash, identityId, type CanonicalIdentity } from "./canonical";
 
 /** Ensure an ACTIVE snapshot exists for every creator at the current version. Never mutates an existing snapshot. */
 export async function ensureIdentities(repo: Repo): Promise<CanonicalIdentityRecord[]> {
   const existing = await repo.list("canonicalIdentities");
   for (const t of ROSTER) {
-    if (existing.some((r) => r.code === t.code && r.version === IDENTITY_VERSION)) continue;
+    if (existing.some((r) => r.code === t.code && r.version === versionFor(t.code))) continue;
     const ci = buildCanonicalIdentity(t.code);
     for (const old of existing.filter((r) => r.code === t.code && r.status === "ACTIVE")) await repo.update("canonicalIdentities", old.id, { status: "SUPERSEDED" });
-    existing.push(await repo.insert("canonicalIdentities", { code: t.code, version: IDENTITY_VERSION, identityId: ci.id, contentHash: identityHash(ci), status: "ACTIVE", data: ci, origin: "live" }));
+    existing.push(await repo.insert("canonicalIdentities", { code: t.code, version: versionFor(t.code), identityId: ci.id, contentHash: identityHash(ci), status: "ACTIVE", data: ci, origin: "live" }));
   }
   return existing;
 }

@@ -51,7 +51,19 @@ describe("canonical identity architecture", () => {
     expect(identityHash(ci)).toBe(identityHash(buildCanonicalIdentity("SIE")));
     for (const k of ["core", "hardLocks", "softLocks", "creativeVariables", "negativeConstraints", "visualLanguage", "personalityVoice", "contentUniverse", "qaRules", "providerBlock", "referenceHierarchy"]) expect(ci, k).toHaveProperty(k);
     expect(ci.referenceHierarchy[0]).toMatchObject({ type: "MASTER_FACE", authority: "MASTER", rank: 100 });
-    expect(ROSTER.map((t) => buildCanonicalIdentity(t.code).id)).toEqual(["SIE-IDENTITY-v1.0", "ALE-IDENTITY-v1.0", "MIL-IDENTITY-v1.0", "VES-IDENTITY-v1.0", "ZOE-IDENTITY-v1.0", "SKY-IDENTITY-v1.0"]);
+    expect(ROSTER.map((t) => buildCanonicalIdentity(t.code).id)).toEqual(["SIE-IDENTITY-v1.0", "ALE-IDENTITY-v1.0", "MIL-IDENTITY-v1.0", "VES-IDENTITY-v1.0", "ZOE-IDENTITY-v1.0", "SKY-IDENTITY-v1.1"]);
+  });
+  it("SKY v1.1: beauty mark on her RIGHT cheek (matches her master); a stored v1.0 snapshot is superseded, never edited", async () => {
+    const sky = buildCanonicalIdentity("SKY");
+    expect(sky.hardLocks.find((l) => l.id === "SKY-MARK")!.description).toMatch(/RIGHT cheek/);
+    const { FileRepo } = await import("@/lib/db/file-store");
+    const { ensureIdentities } = await import("@/lib/identity/service");
+    const repo = new FileRepo(null);
+    const old = buildCanonicalIdentity("SKY", "v1.0");
+    await repo.insert("canonicalIdentities", { code: "SKY", version: "v1.0", identityId: old.id, contentHash: "old", status: "ACTIVE", data: old, origin: "live" });
+    await ensureIdentities(repo);
+    const recs = (await repo.list("canonicalIdentities")).filter((r) => r.code === "SKY");
+    expect(recs.map((r) => [r.version, r.status, r.contentHash])).toEqual([["v1.0", "SUPERSEDED", "old"], ["v1.1", "ACTIVE", identityHash(sky)]]);
   });
   it("creator-specific hard locks come from identity data", () => {
     const ids = (c: Parameters<typeof buildCanonicalIdentity>[0]) => buildCanonicalIdentity(c).hardLocks.map((l) => l.id);

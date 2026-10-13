@@ -31,7 +31,7 @@ export const IMPORT_SET: Entry[] = [
   { code: "ZOE", folder: "Zoe Avell", file: `${FACE}/ZOE_canon_master-face-v2_poolside-matcha_2026-09-30.png`, type: "MASTER_FACE", notes: "Operator's final master proof. Brown eyes and LEFT-nostril stud checked. Wears gold hoops (not in her locks)." },
   {
     code: "SKY", folder: "Skye Halston", file: `${FACE}/SKY_canon_master-face-v2_poolside-sunset-bun_2026-09-30.png`, type: "MASTER_FACE",
-    notes: "REVIEW REQUIRED: hard lock is beauty mark on her LEFT cheek; this master shows it on her RIGHT cheek (image-left). Lock unchanged; operator to keep or regenerate this master.",
+    notes: "Operator's final master proof. Beauty mark on her RIGHT cheek (image-left); the lock was updated to match on 2026-10-12 (SKY-IDENTITY-v1.1).",
   },
 ];
 

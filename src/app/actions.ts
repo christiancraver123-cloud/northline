@@ -1,5 +1,8 @@
 "use server";
 import { redirect } from "next/navigation";
+import { promises as fs } from "node:fs";
+import { resolveKey } from "@/lib/inbox/folder-server";
+import { classifyFolder, INBOX_NOTE } from "@/lib/inbox/folder";
 import { revalidatePath } from "next/cache";
 import { getRepo } from "@/lib/db";
 import { requireOperator } from "@/lib/auth/guard";
@@ -360,4 +363,26 @@ export async function moveCardAction(approvalId: string, target: string): Promis
   await requireOperator();
   try { await moveCard(await getRepo(), approvalId, target, "founder", target === "REJECTED" ? "[moved to Rejected]" : ""); revalidatePath("/", "layout"); return { ok: true }; }
   catch (e) { return { ok: false, error: e instanceof Error ? e.message : "failed" }; }
+}
+
+/** Send selected folder-inbox images (creator folders only) into Northline: each becomes a manual import → QA → Approvals. */
+export async function sendInboxAction(formData: FormData) {
+  await requireOperator();
+  const back = backTo(formData.get("back"), "/inbox");
+  const keys = [...new Set(formData.getAll("key").map(String))].slice(0, 30);
+  if (!keys.length) redirect(withMsg(back, "error", "Tick at least one image."));
+  const repo = await getRepo();
+  const deps = { ...defaultDeps(), trace: async (agent: string, kind: string, message: string, o?: { level?: "info" | "warn" | "error"; data?: Record<string, unknown> }) => { await repo.insert("agentEvents", { agentId: agent as AgentCode, taskId: null, runId: null, level: o?.level ?? "info", kind, message, data: o?.data ?? {} }); } };
+  let sent = 0; const problems: string[] = [];
+  for (const key of keys) {
+    const full = resolveKey(key), g = classifyFolder(key.split("/")[1] ?? "");
+    if (!full || g.kind !== "creator") { problems.push(`${key.split("/").pop()}: not in a creator folder`); continue; }
+    try {
+      const bytes = new Uint8Array(await fs.readFile(full));
+      await importAsset(repo, deps as never, { talent: g.code, bytes, filename: key.split("/").pop()!, meta: { notes: `${INBOX_NOTE}${key}` }, createdBy: "founder" });
+      sent++;
+    } catch (e) { problems.push(`${key.split("/").pop()}: ${e instanceof Error ? e.message.slice(0, 120) : "failed"}`); }
+  }
+  revalidatePath("/", "layout");
+  redirect(problems.length ? withMsg(back, "error", `Sent ${sent} to Approvals. ${problems.length} not sent: ${problems.slice(0, 3).join(" | ")}`) : withMsg(back, "ok", `Sent ${sent} to Approvals.`));
 }

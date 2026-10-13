@@ -7,7 +7,10 @@ import { ROSTER_BY_CODE } from "@/lib/talent/roster";
 import { REFERENCE_TYPES, authorityFor, type QaSeverity, type ReferenceAuthority, type ReferenceType, type TalentCode } from "@/lib/domain/types";
 
 export const IDENTITY_VERSION = "v1.0";
-export const identityId = (code: TalentCode, version = IDENTITY_VERSION) => `${code}-IDENTITY-${version}`;
+/** Per-creator bumps. SKY v1.1 (2026-10-12, operator): beauty mark on her RIGHT cheek to match her master face; home market San Diego. */
+export const VERSION_OVERRIDES: Partial<Record<TalentCode, string>> = { SKY: "v1.1" };
+export const versionFor = (code: TalentCode) => VERSION_OVERRIDES[code] ?? IDENTITY_VERSION;
+export const identityId = (code: TalentCode, version = versionFor(code)) => `${code}-IDENTITY-${version}`;
 
 export interface QaRule { label: string; /** Regex source, tested case-insensitively. */ pattern: string }
 
@@ -110,7 +113,7 @@ const LOCKS: Record<TalentCode, { hard: IdentityLock[]; soft: IdentityLock[]; cr
   },
   SKY: {
     hard: [
-      hl("SKY-MARK", "beauty mark on left cheek", "Beauty mark on HER LEFT cheek (permanent marker).", "A beauty mark sits on her left cheek (image-right when facing camera); absent or wrong side = HARD FAIL.", [{ label: "beauty mark", pattern: "beauty mark on (her )?left cheek" }]),
+      hl("SKY-MARK", "beauty mark on right cheek", "Beauty mark on HER RIGHT cheek (permanent marker, image-left in a front-facing shot).", "A beauty mark sits on her right cheek (image-left when facing camera), as in her master face; absent or wrong side = HARD FAIL.", [{ label: "beauty mark", pattern: "beauty mark on (her )?right cheek" }], [{ label: "left-cheek mark", pattern: "beauty mark on (her )?left cheek" }]),
       hl("SKY-HAIR", "sun-bleached blonde", "Sun-bleached blonde hair with darker natural roots.", "Hair is sun-bleached blonde with darker roots; reject dark hair.", [{ label: "blonde hair", pattern: "blonde" }], [{ label: "dark hair", pattern: "black hair|dark brown hair" }]),
       hl("SKY-EYES", "green-hazel eyes", "Green-hazel eyes.", "Eyes are green-hazel.", [{ label: "green-hazel eyes", pattern: "green-hazel eyes" }]),
     ],
@@ -118,13 +121,13 @@ const LOCKS: Record<TalentCode, { hard: IdentityLock[]; soft: IdentityLock[]; cr
       sl("SKY-SHELL", "shell necklace", "Tiny shell necklace; no Sienna-style gold hoops.", "A tiny shell necklace is visible; no gold hoops.", [{ label: "shell necklace", pattern: "shell necklace" }], [{ label: "hoops", pattern: "hoops" }]),
       sl("SKY-FRECKLES", "heavy freckles", "Heavy freckles, sun-kissed nose, minimal makeup.", "Heavy freckles visible; minimal makeup.", [{ label: "freckles", pattern: "freckles" }]),
     ],
-    creative: ["outfit", "surf/beach location within Encinitas/San Diego", "time of day", "activity"],
+    creative: ["outfit", "surf/beach location in and around San Diego", "time of day", "activity"],
   },
 };
 
 const HIERARCHY = REFERENCE_TYPES.map((t) => ({ type: t, authority: authorityFor(t), rank: t === "MASTER_FACE" ? 100 : 80 }));
 
-export function buildCanonicalIdentity(code: TalentCode, version = IDENTITY_VERSION): CanonicalIdentity {
+export function buildCanonicalIdentity(code: TalentCode, version = versionFor(code)): CanonicalIdentity {
   const t = ROSTER_BY_CODE[code];
   const l = LOCKS[code];
   const block = `${t.first}, a ${t.age}-year-old adult woman. ${t.identity.signature.join("; ")}. ${t.identity.body}. Expression: ${t.visual.expression}.`;

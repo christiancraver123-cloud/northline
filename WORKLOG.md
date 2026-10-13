@@ -115,3 +115,9 @@ Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Ren
 ## 2026-10-12 — Creator image package (ChatGPT "Creator-Asset-Package", 253 images)
 - Placed into the Mac app's Inbox as batch `_Inbox (…)/2026-10-12 Creator Asset Package/` (240 images, sha-checked against manifest.csv; manifest copied alongside). Creator folders (Photos + Originals) are reviewable; `Reference material - <Creator>`, `Archive - <Creator>`, `Roster`, `Unassigned - …` are reference-only. Skipped: 3 NSFW-labelled Mila grids, 10 test placeholders.
 - Branch: `scripts/import-library.ts` + `src/lib/pipeline/library.ts` import the same package straight into this app's store as ARCHIVED library productions (MANUAL_UPLOAD, no QA, no approval, zero authority, sha-idempotent). Not run against live Supabase: unreachable from this session.
+
+## 2026-10-12 — Merge-lite from the original Mac Command Center + Skye decisions
+- Operator: this branch is the one Northline going forward; bring over what's good from the Mac app, lightly.
+- Ported the folder Inbox: `/inbox` now shows `_Inbox (unsorted Higgsfield + ChatGPT downloads)/<batch>/<folder>/` (or NORTHLINE_INBOX_DIR), read-only, with Claude's review.json verdicts. Creator folders: tick → "Send to Approvals" (importAsset: QA → Approvals, MANUAL_UPLOAD, inbox key recorded so it shows "in Northline"). Collab/reference folders are view-only. DMs placeholder moved into a collapsed section. `/api/inbox/file` refuses anything outside batch/folder/file.
+- Not ported (yet): Mac `collabs` planner + social graph (`lib/network.ts`, `lib/collab.ts`), `/live`, Tonight panel. Worth a later pass if collabs matter.
+- Skye (operator decision 2026-10-12): beauty mark stays as in her master → hard lock now RIGHT cheek (image-left); home market San Diego. Identity bumped to SKY-IDENTITY-v1.1 via per-creator VERSION_OVERRIDES; the stored v1.0 snapshot is superseded, never edited. Other creators stay v1.0.

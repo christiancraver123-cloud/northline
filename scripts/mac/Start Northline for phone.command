@@ -2,6 +2,7 @@
 # Opens Northline so your PHONE can use it too (password-protected). Lives next to the "Northline Command Center (new)" folder.
 # Same Wi-Fi: open the address it prints on your phone. Anywhere (recommended): install Tailscale on the Mac + phone, sign in to both.
 cd "$(dirname "$0")/Northline Command Center (new)" || exit 1
+command -v node >/dev/null 2>&1 && dirname "$(command -v node)" > .node-bin  # lets Northline.app use this same Node
 if ! command -v node >/dev/null 2>&1; then echo "Node.js is not installed. Get it from https://nodejs.org"; read -r -p "Press Enter to close"; exit 1; fi
 [ -d node_modules ] || { echo "First run: installing packages…"; npm ci || { read -r -p "Install failed. Press Enter to close"; exit 1; }; }
 npx tsx scripts/import-references.ts --root "../AI Influencers" >/dev/null 2>&1 || true

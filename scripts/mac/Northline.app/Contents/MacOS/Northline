@@ -12,7 +12,10 @@ open_window() {
 }
 if [ ! -d "$NL" ]; then alert "Can't find the 'Northline Command Center (new)' folder. Keep Northline.app in the 'Northline Media' folder (or put the folder back)."; exit 1; fi
 # Already running? Just open the window.
-if curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest"; then open_window; exit 0; fi
+if curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest"; then
+  # Running but broken (e.g. started under Rosetta)? Restart it.
+  if grep -q "lightningcss.darwin-x64" "$NL/.northline.log" 2>/dev/null; then PIDS=$(lsof -ti tcp:$PORT 2>/dev/null); [ -n "$PIDS" ] && kill $PIDS; sleep 2; : > "$NL/.northline.log"; else open_window; exit 0; fi
+fi
 cd "$NL" || exit 1
 # Phone password (first run only). Typed into a Mac dialog, saved in a private file in the app folder.
 if [ ! -f .phone-login ]; then
@@ -24,7 +27,16 @@ say "Starting… the first start takes a few minutes."
 # Script apps can be launched under Rosetta (Intel mode) on Apple Silicon. Force native arm64 so node loads the same
 # native modules that npm installed (otherwise: "Cannot find module lightningcss.darwin-x64.node").
 ARCH=""; [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && ARCH="arch -arm64"
-$ARCH /bin/zsh -lc '
+# Use the same Node as Terminal: interactive login shell (loads ~/.zshrc, e.g. nvm), and the path the Terminal
+# start scripts recorded in .node-bin (a different, Intel-only Node would also cause the darwin-x64 error).
+$ARCH /bin/zsh -lic '
+  [ -f .node-bin ] && export PATH="$(cat .node-bin):$PATH"
+  if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && ! file -L "$(command -v node)" 2>/dev/null | grep -q arm64; then
+    for d in /opt/homebrew/bin $(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V -r) /usr/local/bin; do
+      [ -x "$d/node" ] && file -L "$d/node" | grep -q arm64 && { export PATH="$d:$PATH"; break; }
+    done
+  fi
+  echo "node: $(command -v node) $(node -p process.arch 2>/dev/null)" > .northline-node.txt
   set -a; . ./.phone-login; set +a
   export NORTHLINE_AUTH_DISABLED=false
   LAN=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)

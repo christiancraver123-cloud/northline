@@ -2,6 +2,7 @@
 # Double-click to open Northline at http://localhost:3100 (opens in its own app window when Google Chrome is installed).
 # First run installs packages (a few minutes). Your old app ("Start Northline") is untouched.
 cd "$(dirname "$0")/Northline Command Center (new)" || exit 1
+command -v node >/dev/null 2>&1 && dirname "$(command -v node)" > .node-bin  # lets Northline.app use this same Node
 if ! command -v node >/dev/null 2>&1; then echo "Node.js is not installed. Get the LTS version from https://nodejs.org, then double-click this again."; read -r -p "Press Enter to close"; exit 1; fi
 if [ ! -d node_modules ]; then echo "First run: installing packages…"; npm ci || { read -r -p "Install failed. Press Enter to close"; exit 1; }; fi
 echo "Loading the six master faces (skips any already loaded)…"

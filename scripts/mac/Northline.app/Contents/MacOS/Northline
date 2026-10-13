@@ -14,8 +14,10 @@ if [ ! -d "$NL" ]; then alert "Can't find the 'Northline Command Center (new)' f
 # Already running? Just open the window.
 if curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest"; then
   # Running but broken (e.g. started under Rosetta)? Restart it.
-  if grep -q "lightningcss.darwin-x64" "$NL/.northline.log" 2>/dev/null; then PIDS=$(lsof -ti tcp:$PORT 2>/dev/null); [ -n "$PIDS" ] && kill $PIDS; sleep 2; : > "$NL/.northline.log"; else open_window; exit 0; fi
+  if grep -q "lightningcss.darwin-x64" "$NL/.northline.log" 2>/dev/null; then PIDS=$(lsof -ti tcp:$PORT 2>/dev/null); [ -n "$PIDS" ] && kill $PIDS; sleep 2; else open_window; exit 0; fi
 fi
+# A run under the wrong (Intel) Node leaves a cached build error behind: clear the build cache before starting again.
+if grep -q "lightningcss.darwin-x64" "$NL/.northline.log" 2>/dev/null; then rm -rf "$NL/.next"; : > "$NL/.northline.log"; fi
 cd "$NL" || exit 1
 # Phone password (first run only). Typed into a Mac dialog, saved in a private file in the app folder.
 if [ ! -f .phone-login ]; then

@@ -23,15 +23,23 @@ if [ ! -f "$NL/.phone-login" ]; then
   { printf 'NORTHLINE_ADMIN_PASSWORD=%q\n' "$PW"; printf 'NORTHLINE_SESSION_SECRET=%s\n' "$(openssl rand -hex 32)"; } > "$NL/.phone-login"; chmod 600 "$NL/.phone-login"; unset PW
 fi
 chmod +x "$RES/server.sh" 2>/dev/null
-: > "$LOG"
 say "Starting… the first start takes a minute."
+start_server() {
+  : > "$LOG"
 # Start as a detached child (launchd jobs can't read your Downloads folder). Force native arm64 on Apple Silicon.
-if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
-  nohup /usr/bin/arch -arm64 /bin/zsh -lc "exec '$RES/server.sh' '$NL' $PORT" >> "$LOG" 2>&1 < /dev/null &
-else
-  nohup /bin/zsh -lc "exec '$RES/server.sh' '$NL' $PORT" >> "$LOG" 2>&1 < /dev/null &
+  if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+    nohup /usr/bin/arch -arm64 /bin/zsh -lc "exec '$RES/server.sh' '$NL' $PORT" >> "$LOG" 2>&1 < /dev/null &
+  else
+    nohup /bin/zsh -lc "exec '$RES/server.sh' '$NL' $PORT" >> "$LOG" 2>&1 < /dev/null &
+  fi
+  disown
+}
+start_server
+wait_up() { for i in $(seq 1 120); do curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest" && return 0; sleep 2; done; return 1; }
+wait_up
+if ! healthy; then
+  # Usually a stale build cache from an earlier bad run: clear it and try once more.
+  stop_server; rm -rf "$NL/.next"; start_server; wait_up
 fi
-disown
-for i in $(seq 1 120); do curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest" && break; sleep 2; done
 if healthy; then echo "ok $(date)" > "$NL/.northline-health.txt"; open_window
 else echo "unhealthy $(date)" > "$NL/.northline-health.txt"; open_window; alert "Northline started but a page failed to load. Details are in .northline.log in the app folder."; fi

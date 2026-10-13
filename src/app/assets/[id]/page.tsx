@@ -76,7 +76,7 @@ export default async function AssetDetail({ params, searchParams }: { params: Pr
             ))}
             {a.storagePath && !derivs.length && <form action={deliveryAction}><input type="hidden" name="productionId" value={a.productionId} /><input type="hidden" name="assetId" value={a.id} /><input type="hidden" name="back" value={`/assets/${a.id}`} /><Btn>Create 4:5 delivery copy</Btn></form>}
           </Card>
-          {prompt && <Card><h2 className="mb-2 font-bold">Prompt (v{prompt.version})</h2><p className="text-[12.5px] text-[#c6cdf0]">{prompt.positive}</p><p className="mt-2 text-[12px] text-faint">{prompt.negative}</p></Card>}
+          {prompt && <Card><h2 className="mb-2 font-bold">Prompt (v{prompt.version})</h2><p className="text-[12.5px] text-[#d9d1cf]">{prompt.positive}</p><p className="mt-2 text-[12px] text-faint">{prompt.negative}</p></Card>}
           {jobs.length > 1 && <Card><h2 className="mb-2 font-bold">Job history</h2>{jobs.map((j) => <div key={j.id} className="flex justify-between border-t border-edge py-1 text-[12px] first:border-0"><span className="font-mono">retry {j.retryCount}{j.failureCategory ? ` · ${j.failureCategory}` : ""}{j.error ? ` · ${j.error}` : ""}</span><StatusPill status={j.state} /></div>)}</Card>}
           {a.approval === "APPROVED" && a.storagePath && (
             <Card>

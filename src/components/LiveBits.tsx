@@ -12,14 +12,14 @@ export function LiveClock() {
     return () => clearInterval(t);
   }, []);
   return (
-    <span className="inline-flex items-center gap-2 font-mono text-[11px] tracking-wider text-ink">
+    <span className="inline-flex items-center gap-2 text-[13px] text-muted">
       <span className="h-2 w-2 animate-pulse rounded-full bg-bad" aria-hidden />
-      LIVE {now ? now.toLocaleTimeString("en-US", { hour12: false, timeZone: "America/New_York" }) : "--:--:--"} ET
+      <span className="num">{now ? now.toLocaleTimeString("en-US", { hour12: false, timeZone: "America/New_York" }) : "--:--:--"}</span> New York
     </span>
   );
 }
 
-const SERIES = "#46a97a"; // validated vs the dark surface (lightness band + contrast)
+const SERIES = "#7cc49a"; // validated vs the dark surface (lightness band + contrast)
 
 /** Single-series area chart with a crosshair tooltip and a table fallback. */
 export function AreaChart({ points, label }: { points: Array<{ day: string; value: number }>; label: string }) {
@@ -40,7 +40,7 @@ export function AreaChart({ points, label }: { points: Array<{ day: string; valu
   return (
     <div>
       <div className="mb-2 flex items-baseline justify-between">
-        <p className="text-[12px] font-bold uppercase tracking-wider text-muted">{label}</p>
+        <p className="h-section">{label}</p>
         <button className="font-mono text-[10px] text-muted underline" onClick={() => setTable((v) => !v)}>
           {table ? "chart" : "table"}
         </button>
@@ -63,8 +63,8 @@ export function AreaChart({ points, label }: { points: Array<{ day: string; valu
           <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={`${label}: ${total.toLocaleString()} total`} onMouseLeave={() => setHover(null)}>
             {[0, 0.5, 1].map((f) => (
               <g key={f}>
-                <line x1={P.l} x2={W - P.r} y1={y(max * f)} y2={y(max * f)} stroke="#26305e" strokeWidth={1} />
-                <text x={P.l - 6} y={y(max * f) + 3} textAnchor="end" fontSize={9} fill="#6b76a8" fontFamily="monospace">
+                <line x1={P.l} x2={W - P.r} y1={y(max * f)} y2={y(max * f)} stroke="#332d35" strokeWidth={1} />
+                <text x={P.l - 6} y={y(max * f) + 3} textAnchor="end" fontSize={9} fill="#857a86" fontFamily="monospace">
                   {Math.round(max * f).toLocaleString()}
                 </text>
               </g>
@@ -76,12 +76,12 @@ export function AreaChart({ points, label }: { points: Array<{ day: string; valu
             ))}
             {hover !== null ? (
               <>
-                <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={H - P.b} stroke="#8b95c9" strokeWidth={1} strokeDasharray="2 3" />
-                <circle cx={x(hover)} cy={y(points[hover]!.value)} r={4} fill={SERIES} stroke="#0b1128" strokeWidth={2} />
+                <line x1={x(hover)} x2={x(hover)} y1={P.t} y2={H - P.b} stroke="#aaa0a7" strokeWidth={1} strokeDasharray="2 3" />
+                <circle cx={x(hover)} cy={y(points[hover]!.value)} r={4} fill={SERIES} stroke="#0c0a0d" strokeWidth={2} />
               </>
             ) : null}
-            <text x={P.l} y={H - 6} fontSize={9} fill="#6b76a8" fontFamily="monospace">{fmtDay(points[0]!.day)}</text>
-            <text x={W - P.r} y={H - 6} textAnchor="end" fontSize={9} fill="#6b76a8" fontFamily="monospace">{fmtDay(points[points.length - 1]!.day)}</text>
+            <text x={P.l} y={H - 6} fontSize={9} fill="#857a86" fontFamily="monospace">{fmtDay(points[0]!.day)}</text>
+            <text x={W - P.r} y={H - 6} textAnchor="end" fontSize={9} fill="#857a86" fontFamily="monospace">{fmtDay(points[points.length - 1]!.day)}</text>
           </svg>
           {h ? (
             <div className="pointer-events-none absolute top-0 border border-edge bg-panel2 px-2 py-1 font-mono text-[10.5px]" style={{ left: `${(x(hover!) / W) * 100}%`, transform: "translateX(-50%)" }}>

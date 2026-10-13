@@ -37,7 +37,7 @@ export default async function ProductionDetail({ params, searchParams }: { param
     <>
       <PageHeader title={p.code} sub={`${p.contentType} · ${p.concept}`} actions={<span className="flex items-center gap-2"><DemoBadge origin={p.origin} /><StatusPill status={p.status} /></span>} />
       {err && <div role="alert" className="mb-4 rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">{err}</div>}
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-muted">{["APPROVED", "SCHEDULED", "PUBLISHED"].includes(p.status) && <Link href={`/post/${p.id}`} className="rounded-lg bg-ok/85 px-3 py-1 text-[13px] font-bold text-[#0a0f24]">Post kit →</Link>}<TalentChips codes={p.talent} portraits={pickPortraits(await repo.list("referenceAssets"))} />{campaign && <Pill tone="info">Campaign: {campaign.name}</Pill>}<Pill>{p.scope}</Pill><Pill>{p.platform}</Pill>{p.identityVersion && <Pill tone="info">{p.identityVersion}</Pill>}<Pill>cost {p.costUsd ? `$${p.costUsd.toFixed(2)}` : "unknown/none"}</Pill></div>
+      <div className="mb-4 flex flex-wrap items-center gap-3 text-muted">{["APPROVED", "SCHEDULED", "PUBLISHED"].includes(p.status) && <Link href={`/post/${p.id}`} className="rounded-lg bg-ok/85 px-3 py-1 text-[13px] font-bold text-[#141016]">Post kit</Link>}<TalentChips codes={p.talent} portraits={pickPortraits(await repo.list("referenceAssets"))} />{campaign && <Pill tone="info">Campaign: {campaign.name}</Pill>}<Pill>{p.scope}</Pill><Pill>{p.platform}</Pill>{p.identityVersion && <Pill tone="info">{p.identityVersion}</Pill>}<Pill>cost {p.costUsd ? `$${p.costUsd.toFixed(2)}` : "unknown/none"}</Pill></div>
       {p.qaNotes.length > 0 && <Card className="mb-4 border-warn/30"><h2 className="mb-1 font-bold text-warn">QA notes</h2><ul className="list-disc pl-4 text-[13px]">{p.qaNotes.map((n) => <li key={n}>{n}</li>)}</ul></Card>}
       <Card className="mb-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">Assets</h2>
@@ -94,7 +94,7 @@ export default async function ProductionDetail({ params, searchParams }: { param
         </Card>
         <Card>
           <h2 className="mb-2 font-bold">Publish state</h2>
-          {pubs.length === 0 ? <p className="text-[13px] text-muted">{p.status === "APPROVED" ? <>Approved and not published. <Link href="/approvals" className="text-blue2">Publish from Approvals →</Link></> : "Not published."}</p> : pubs.map((x) => (
+          {pubs.length === 0 ? <p className="text-[13px] text-muted">{p.status === "APPROVED" ? <>Approved and not published. <Link href="/approvals" className="text-blue2">Publish from Approvals</Link></> : "Not published."}</p> : pubs.map((x) => (
             <div key={x.id} className="border-t border-edge py-1.5 text-[12.5px] first:border-0">
               <div className="flex flex-wrap items-center gap-2"><StatusPill status={x.status} /><Pill tone={x.provider === "MOCK_INSTAGRAM" ? "warn" : "info"}>{x.provider}</Pill><span className="text-faint">attempt {x.attempts}/{x.maxAttempts} · {ago(x.publishedAt ?? x.updatedAt)}</span></div>
               {x.permalink && <p className="mt-0.5 break-all font-mono text-[11.5px] text-muted">{x.permalink}</p>}
@@ -108,7 +108,7 @@ export default async function ProductionDetail({ params, searchParams }: { param
         <Card>
           <h2 className="mb-2 font-bold">Creative brief</h2>
           {p.brief ? <dl className="grid grid-cols-[90px_1fr] gap-x-3 gap-y-1 text-[13px]"><dt className="text-muted">Hook</dt><dd>{p.brief.hook}</dd><dt className="text-muted">Location</dt><dd>{p.brief.location}</dd><dt className="text-muted">Outfit</dt><dd>{p.brief.outfit}</dd><dt className="text-muted">Lighting</dt><dd>{p.brief.lighting}</dd><dt className="text-muted">Story</dt><dd>{p.brief.storyBeat}</dd></dl> : <Empty>No brief.</Empty>}
-          {p.brief?.reel && <div className="mt-3 rounded-lg border border-edge p-2.5 text-[12px]"><b>Reel plan</b> · {p.brief.reel.durationSec}s · {p.brief.reel.cameraMovement}<br /><span className="text-muted">Source still: {p.brief.reel.sourceStill}<br />Loop: {p.brief.reel.loopStrategy}<br />Audio: {p.brief.reel.audioConcept}</span><pre className="mt-1 whitespace-pre-wrap text-[11px] text-[#c6cdf0]">{p.brief.reel.higgsfieldPrompt}</pre></div>}
+          {p.brief?.reel && <div className="mt-3 rounded-lg border border-edge p-2.5 text-[12px]"><b>Reel plan</b> · {p.brief.reel.durationSec}s · {p.brief.reel.cameraMovement}<br /><span className="text-muted">Source still: {p.brief.reel.sourceStill}<br />Loop: {p.brief.reel.loopStrategy}<br />Audio: {p.brief.reel.audioConcept}</span><pre className="mt-1 whitespace-pre-wrap text-[11px] text-[#d9d1cf]">{p.brief.reel.higgsfieldPrompt}</pre></div>}
           <h2 className="mb-2 mt-4 font-bold">Captions</h2>
           {captions.map((c) => <p key={c.id} className="rounded-lg border border-edge p-2 text-[13px]">{c.text} <StatusPill status={c.approval} /></p>)}
         </Card>

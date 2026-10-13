@@ -15,7 +15,7 @@ type Env = Record<string, string | undefined>;
 export interface IntegrationStatus { state: "BLOCKED" | "DISCONNECTED" | "NOT CONFIGURED" | "CONNECTED"; label: string; detail: string }
 export function instagramStatus(env: Env = process.env): IntegrationStatus {
   if (instagramLiveRequested(env)) return { state: "BLOCKED", label: "INSTAGRAM — BLOCKED", detail: "NORTHLINE_INSTAGRAM_LIVE is on, but no live Meta adapter is built yet. Nothing is sent to Meta." };
-  return { state: "BLOCKED", label: "INSTAGRAM — BLOCKED / DISCONNECTED", detail: "Creator account suspended; Meta is requesting phone verification. No live Meta calls are made. Publishing and insights run on the mock provider." };
+  return { state: "BLOCKED", label: "Instagram blocked / disconnected", detail: "Creator account suspended; Meta is requesting phone verification. No live Meta calls are made. Publishing and insights run on the mock provider." };
 }
 
 export interface FlagView { key: string; label: string; value: string; tone: "ok" | "warn" | "bad" | "mute"; note: string }

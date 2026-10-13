@@ -1,44 +1,90 @@
 @import "tailwindcss";
 
+/* Self-hosted type (works offline, no Google Fonts call). Bodoni Moda = the agency's editorial voice (titles, creator names);
+   Instrument Sans = everything you read and click; JetBrains Mono = production codes and numbers only. All SIL OFL. */
+@font-face { font-family: "Bodoni Moda"; font-style: normal; font-weight: 400 900; font-display: swap; src: url("/fonts/bodoni-moda-latin-opsz-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "Bodoni Moda"; font-style: italic; font-weight: 400 900; font-display: swap; src: url("/fonts/bodoni-moda-latin-wght-italic.woff2") format("woff2-variations"); }
+@font-face { font-family: "Instrument Sans"; font-style: normal; font-weight: 400 700; font-stretch: 75% 100%; font-display: swap; src: url("/fonts/instrument-sans-latin-wght-normal.woff2") format("woff2-variations"); }
+@font-face { font-family: "JetBrains Mono"; font-style: normal; font-weight: 400 800; font-display: swap; src: url("/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations"); }
+
+/* Darkroom palette: warm graphite chrome so photographs read true; one champagne accent for actions;
+   every other colour on screen belongs to a creator. Legacy token names (blue/blue2/violet) are kept so every page re-themes at once. */
 @theme {
-  --color-bg: #070b1a;
-  --color-panel: #0e1530;
-  --color-panel2: #121b3c;
-  --color-edge: #22305f;
-  --color-ink: #e8ecff;
-  --color-muted: #8c96bf;
-  --color-faint: #5b6590;
-  --color-blue: #3f6bff;
-  --color-blue2: #5b8cff;
-  --color-violet: #8b5cf6;
-  --color-ok: #35d49a;
-  --color-warn: #f5b54a;
-  --color-bad: #ff6b86;
-  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --color-bg: #121013;
+  --color-panel: #1a171b;
+  --color-panel2: #231f24;
+  --color-edge: #332d35;
+  --color-ink: #f4efe8;
+  --color-muted: #aaa0a7;
+  --color-faint: #766c78;
+  --color-blue: #b8935a;      /* champagne, deep (fills) */
+  --color-blue2: #e2c896;     /* champagne (links, focus, active) */
+  --color-violet: #c9a6d6;    /* mauve, secondary accent */
+  --color-ok: #8fd4a6;
+  --color-warn: #edc172;
+  --color-bad: #f0939b;
+  --color-sheet: #0c0a0d;     /* photo backdrop / inputs */
+  --font-sans: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Bodoni Moda", "Didot", "Bodoni 72", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
 }
 
 :root { color-scheme: dark; }
+html { background: var(--color-bg); }
 body {
   background: var(--color-bg); color: var(--color-ink); font-family: var(--font-sans); font-size: 14px; line-height: 1.5;
-  background-image:
-    radial-gradient(900px 480px at 88% -12%, rgba(91,140,255,.20), transparent 60%),
-    radial-gradient(700px 420px at 30% -20%, rgba(255,122,182,.08), transparent 60%),
-    radial-gradient(800px 420px at -10% 110%, rgba(139,92,246,.14), transparent 60%);
+  background-image: radial-gradient(1100px 520px at 70% -18%, rgba(226,200,150,.07), transparent 65%);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility;
 }
-h1, h2, h3 { letter-spacing: -0.01em; }
-::selection { background: rgba(91,140,255,.35); }
-* { scrollbar-width: thin; scrollbar-color: #26305e transparent; }
+h1, h2, h3 { letter-spacing: -0.01em; text-wrap: balance; }
+p { text-wrap: pretty; }
+::selection { background: rgba(226,200,150,.32); color: #fff; }
+* { scrollbar-width: thin; scrollbar-color: #3a333c transparent; }
 img { -webkit-user-drag: auto; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button:not(:disabled), [role="button"], summary { cursor: pointer; }
-button { transition: transform .12s ease, filter .15s ease, background-color .15s ease, border-color .15s ease; }
+button { transition: transform .12s ease, filter .15s ease, background-color .15s ease, border-color .15s ease, color .15s ease; }
 button:not(:disabled):active { transform: scale(.98); }
-input:focus, textarea:focus, select:focus { border-color: var(--color-blue2); outline: none; box-shadow: 0 0 0 3px rgba(91,140,255,.18); }
+input:focus, textarea:focus, select:focus { border-color: var(--color-blue2); outline: none; box-shadow: 0 0 0 3px rgba(226,200,150,.16); }
 :focus-visible { outline: 2px solid var(--color-blue2); outline-offset: 2px; }
-textarea, input, select { background: #070c20; transition: border-color .15s, box-shadow .15s; border: 1px solid var(--color-edge); border-radius: 10px; padding: 8px 11px; color: var(--color-ink); width: 100%; }
+textarea, input, select { background: var(--color-sheet); transition: border-color .15s, box-shadow .15s; border: 1px solid var(--color-edge); border-radius: 10px; padding: 8px 11px; color: var(--color-ink); width: 100%; }
+input::placeholder, textarea::placeholder { color: var(--color-faint); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--color-blue2); }
+summary { list-style: none; }
+summary::-webkit-details-marker { display: none; }
+details > summary::before { content: ""; display: inline-block; flex: none; width: 6px; height: 6px; margin-right: 10px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: translateY(-2px) rotate(-45deg); transition: transform .15s ease; opacity: .7; }
+details[open] > summary::before { transform: translateY(-3px) rotate(45deg); }
+summary.no-caret::before { display: none; }
+
+/* Tables: quiet header, hairline rows, hover highlight. */
+main table { border-collapse: collapse; }
+main th { font-weight: 600; color: var(--color-faint); font-size: 12px; text-align: left; }
+main tbody tr { transition: background-color .12s; }
+main tbody tr:hover { background: rgba(255,255,255,.025); }
+
+@layer components {
+  /* Section heading used across pages (sentence case, not tracked caps). */
+  .h-section { font-size: 15px; font-weight: 600; color: var(--color-ink); letter-spacing: -0.005em; }
+  .h-label { font-size: 12.5px; font-weight: 600; color: var(--color-muted); }
+  .display { font-family: var(--font-display); font-optical-sizing: auto; font-weight: 500; letter-spacing: -0.015em; }
+  .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 6px; border: 1px solid var(--color-edge); background: var(--color-panel2); font: 500 11px/1 var(--font-mono); color: var(--color-muted); }
+}
+
+/* The one orchestrated motion: page content settles in on navigation. Everything else moves only in answer to a click. */
+/* Opacity only: a transform here would trap position:fixed children (sheets, the sign-in screen) inside the page box. */
+@keyframes nl-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nl-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes nl-pop { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes nl-shimmer { from { background-position: -400px 0; } to { background-position: 400px 0; } }
+.page-enter { animation: nl-enter .32s ease-out both; }
+.anim-fade { animation: nl-fade .16s ease both; }
+.anim-pop { animation: nl-pop .2s cubic-bezier(.2,.7,.2,1) both; }
+.skeleton { background: linear-gradient(90deg, var(--color-panel) 0, var(--color-panel2) 50%, var(--color-panel) 100%); background-size: 800px 100%; animation: nl-shimmer 1.4s linear infinite; border-radius: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
 
 /* Mobile safety: a grid with no explicit column utility gets ONE shrinkable column (minmax(0,1fr)) instead of an `auto` column that grows to its widest
    unbreakable child and pushes the whole page past the phone screen. Inside @layer base so every Tailwind grid-cols-* utility still wins. */

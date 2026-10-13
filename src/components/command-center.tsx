@@ -12,7 +12,7 @@ export function CommandCenterPanel({ cc, readOnly }: { cc: CommandCenter; readOn
   const { system: s, queue: q, budget: b } = cc;
   return (
     <section aria-label="Command Center" className="mb-6">
-      <h2 className="mb-2 text-sm font-bold uppercase tracking-wide text-muted">Command Center</h2>
+      <h2 className="mb-2 h-section">Command Center</h2>
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <h3 className="mb-2 font-bold">System</h3>

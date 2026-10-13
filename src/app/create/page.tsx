@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Icon } from "@/components/Icon";
 import { PageHeader } from "@/components/ui";
 import { CreateForm } from "./CreateForm";
 import { CreateStudio, type StudioCreator } from "./CreateStudio";
@@ -41,9 +42,9 @@ export default async function CreatePage({ searchParams }: { searchParams: Promi
   }));
   const generate = sp.mode === "generate" || !!sp.from;
   const tabs = (
-    <div role="tablist" aria-label="Studio" className="mb-5 grid grid-cols-2 gap-2 sm:inline-grid sm:grid-cols-[auto_auto]">
-      <Link role="tab" aria-selected={!generate} href={`/create${sp.creator ? `?creator=${sp.creator}` : ""}`} className={`rounded-xl border px-4 py-2.5 text-center font-bold ${!generate ? "border-blue2 bg-blue/20" : "border-edge text-muted hover:text-ink"}`}>⇪ Import asset</Link>
-      <Link role="tab" aria-selected={generate} href={`/create?mode=generate${sp.creator ? `&creator=${sp.creator}` : ""}`} className={`rounded-xl border px-4 py-2.5 text-center font-bold ${generate ? "border-blue2 bg-blue/20" : "border-edge text-muted hover:text-ink"}`}>✦ Generate with AI</Link>
+    <div role="tablist" aria-label="Studio" className="mb-6 grid grid-cols-2 gap-1 rounded-xl border border-edge/80 bg-panel/60 p-1 sm:inline-grid sm:grid-cols-[auto_auto]">
+      <Link role="tab" aria-selected={!generate} href={`/create${sp.creator ? `?creator=${sp.creator}` : ""}`} className={`inline-flex items-center justify-center gap-2 rounded-[9px] px-4 py-2 text-[13.5px] font-semibold ${!generate ? "bg-white/[0.08] text-ink" : "text-muted hover:text-ink"}`}><Icon name="upload" size={15} />Import images</Link>
+      <Link role="tab" aria-selected={generate} href={`/create?mode=generate${sp.creator ? `&creator=${sp.creator}` : ""}`} className={`inline-flex items-center justify-center gap-2 rounded-[9px] px-4 py-2 text-[13.5px] font-semibold ${generate ? "bg-white/[0.08] text-ink" : "text-muted hover:text-ink"}`}><Icon name="spark" size={15} />Generate with AI</Link>
     </div>
   );
   const header = <PageHeader title="Studio" sub="Bring in images you made anywhere, or generate one. Everything goes through QA and your approval." actions={<Link href="/create?mode=planner" className="rounded-xl border border-edge bg-panel2 px-3.5 py-2 text-[13px] font-bold">Campaign planner</Link>} />;

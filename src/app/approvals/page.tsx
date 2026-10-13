@@ -12,6 +12,8 @@ import { Btn, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, ag
 import { CreatorAvatar, CreatorTag, TriadDetail, TriadPills } from "@/components/cc";
 import { pickPortraits } from "@/lib/talent/portrait";
 import { ImportDropzone } from "@/components/ImportDropzone";
+import { KeyNav } from "@/components/KeyNav";
+import { Icon } from "@/components/Icon";
 import { ApprovalBoard, type BoardCard } from "./ApprovalBoard";
 import { visibleQueue } from "@/lib/orchestrator/bulk";
 import { MANUAL_UPLOAD } from "@/lib/pipeline/import";
@@ -40,15 +42,15 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
 
   const toolbar = (
     <div className="mb-4 flex flex-wrap items-center gap-2">
-      <div role="tablist" aria-label="View" className="inline-flex rounded-xl border border-edge p-0.5">
-        <Link role="tab" aria-selected={!grid} href={qs({ view: undefined })} className={`rounded-lg px-3 py-1.5 text-[13px] font-bold ${!grid ? "bg-blue/25" : "text-muted"}`}>Focus</Link>
-        <Link role="tab" aria-selected={grid} href={qs({ view: "grid" })} className={`rounded-lg px-3 py-1.5 text-[13px] font-bold ${grid ? "bg-blue/25" : "text-muted"}`}>Grid</Link>
+      <div role="tablist" aria-label="View" className="inline-flex rounded-xl border border-edge/80 bg-panel/60 p-0.5">
+        <Link role="tab" aria-selected={!grid} href={qs({ view: undefined })} className={`rounded-[9px] px-3 py-1.5 text-[13px] font-semibold ${!grid ? "bg-white/[0.08] text-ink" : "text-muted hover:text-ink"}`}>Focus</Link>
+        <Link role="tab" aria-selected={grid} href={qs({ view: "grid" })} className={`rounded-[9px] px-3 py-1.5 text-[13px] font-semibold ${grid ? "bg-white/[0.08] text-ink" : "text-muted hover:text-ink"}`}>Grid</Link>
       </div>
       <nav aria-label="Creator filter" className="flex flex-wrap gap-1 text-[12.5px]">
-        <Link href={`/approvals?${grid ? "view=grid" : ""}`} className={`rounded-full border px-2.5 py-1 ${!creator ? "border-blue2 bg-blue/20" : "border-edge text-muted"}`}>All · {allPending}</Link>
-        {ROSTER.map((t) => <Link key={t.code} href={`/approvals?creator=${t.code}${grid ? "&view=grid" : ""}`} className={`flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 ${creator === t.code ? "border-transparent font-semibold text-[#0a0f24]" : "border-edge text-muted"}`} style={creator === t.code ? { background: t.color } : undefined}><CreatorAvatar code={t.code} portrait={portraits[t.code]} size={24} ring={false} />{t.first}</Link>)}
+        <Link href={`/approvals?${grid ? "view=grid" : ""}`} className={`rounded-full border px-3 py-1 ${!creator ? "border-blue2/60 bg-blue2/10 text-ink" : "border-edge text-muted hover:text-ink"}`}>All <span className="num ml-0.5 text-[11.5px] text-faint">{allPending}</span></Link>
+        {ROSTER.map((t) => <Link key={t.code} href={`/approvals?creator=${t.code}${grid ? "&view=grid" : ""}`} className={`flex items-center gap-1.5 rounded-full border py-0.5 pl-0.5 pr-2.5 ${creator === t.code ? "border-transparent font-semibold text-[#141016]" : "border-edge text-muted"}`} style={creator === t.code ? { background: t.color } : undefined}><CreatorAvatar code={t.code} portrait={portraits[t.code]} size={24} ring={false} />{t.first}</Link>)}
       </nav>
-      {!grid && pending.length > 1 && <span className="ml-auto flex items-center gap-2 text-[13px]"><span className="font-mono text-muted">{idx + 1} / {pending.length}</span><Link href={qs({ id: pending[(idx - 1 + pending.length) % pending.length].id })} className="rounded-lg border border-edge px-2.5 py-1">← Prev</Link><Link href={qs({ id: pending[(idx + 1) % pending.length].id })} className="rounded-lg border border-edge px-2.5 py-1">Next →</Link></span>}
+      {!grid && pending.length > 1 && <span className="ml-auto flex items-center gap-1.5 text-[13px]"><span className="num mr-1 text-muted">{idx + 1} of {pending.length}</span><Link data-key="prev" aria-label="Previous (left arrow)" href={qs({ id: pending[(idx - 1 + pending.length) % pending.length].id })} className="grid h-8 w-8 place-items-center rounded-lg border border-edge hover:border-[#4a414c]"><Icon name="chevron" size={15} className="rotate-180" /></Link><Link data-key="next" aria-label="Next (right arrow)" href={qs({ id: pending[(idx + 1) % pending.length].id })} className="grid h-8 w-8 place-items-center rounded-lg border border-edge hover:border-[#4a414c]"><Icon name="chevron" size={15} /></Link></span>}
     </div>
   );
 
@@ -62,7 +64,7 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
     }));
     body = <ApprovalBoard cards={cards} approved={done("APPROVED")} rejected={done("REJECTED")} creator={creator} back={qs({ view: "grid" })} readOnly={readOnly} tags={REJECT_TAGS.map(([t, c]) => [t, c] as const)} />;
   } else if (!ap) {
-    body = <Empty>Nothing to review{creator ? ` for ${ROSTER_BY_CODE[creator].first}` : ""}. <Link className="text-blue2" href="/create">Import or create an image →</Link></Empty>;
+    body = <Empty>Nothing to review{creator ? ` for ${ROSTER_BY_CODE[creator].first}` : ""}. <Link className="text-blue2" href="/create">Import or create an image</Link></Empty>;
   } else {
     const p = prods.get(ap.productionId)!;
     const assets = allAssets.filter((x) => x.productionId === p.id && x.current && x.kind !== "REEL").sort((x, y) => x.seq - y.seq);
@@ -77,8 +79,8 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
     body = (
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
         <div className="grid content-start gap-3">
-          <div className="relative overflow-hidden rounded-2xl border border-edge" style={{ background: `linear-gradient(160deg, ${t.color}33, #0b1128 75%)` }}>
-            {asset?.storagePath ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${asset.id}/file`} alt={`${p.code} frame ${asset.seq}`} className="mx-auto max-h-[74vh] w-auto object-contain" />
+          <div className="relative grid place-items-center overflow-hidden rounded-2xl border border-edge/70 bg-sheet" style={{ backgroundImage: `radial-gradient(80% 60% at 50% 40%, ${t.color}22, transparent 70%)` }}>
+            {asset?.storagePath ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${asset.id}/file`} alt={`${p.code} frame ${asset.seq}`} className="max-h-[72vh] w-full object-contain lg:h-[72vh]" />
               : <div className="grid aspect-[4/5] place-items-center p-6 text-center text-muted">{asset ? `${asset.provider} produced no image file.` : "No asset attached."}</div>}
           </div>
           {assets.length > 1 && <div className="flex gap-2 overflow-x-auto">{assets.map((x) => <Link key={x.id} href={qs({ id: ap.id, asset: x.id })} aria-current={x.id === asset?.id ? "true" : undefined} className={`flex-none rounded-lg border px-2 py-1 font-mono text-[12px] ${x.id === asset?.id ? "border-blue2 bg-blue/20" : "border-edge text-muted"}`}>frame {x.seq}</Link>)}</div>}
@@ -86,18 +88,18 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
         </div>
         <div className="grid content-start gap-4">
           <div className="flex items-start justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3"><Link href={`/talent/${t.code}`} aria-label={`${t.name} talent page`}><CreatorAvatar code={t.code} portrait={portraits[t.code]} size={56} /></Link><div className="min-w-0"><div className="text-lg font-extrabold">{t.name}</div><p className="text-[13.5px] text-muted">{p.concept}</p></div></div>
-            <span className="flex-none font-mono text-[12px] text-faint">{p.code}</span>
+            <div className="flex min-w-0 items-center gap-3"><Link href={`/talent/${t.code}`} aria-label={`${t.name} talent page`}><CreatorAvatar code={t.code} portrait={portraits[t.code]} size={56} /></Link><div className="min-w-0"><div className="display text-[26px] font-semibold leading-tight">{t.name}</div><p className="mt-0.5 text-[13.5px] text-muted">{p.concept}</p></div></div>
+            <Link href={`/productions/${p.id}`} className="flex-none font-mono text-[12px] text-faint hover:text-ink">{p.code}</Link>
           </div>
           {triad && <div className="flex flex-wrap gap-1.5"><TriadPills triad={triad} /></div>}
           {captions.map((c) => <p key={c.id} className="rounded-xl border border-edge p-2.5 text-[13.5px]">“{c.text}”</p>)}
-          {blockers.length > 0 && <p className="rounded-xl border border-warn/40 bg-warn/10 p-2.5 text-[13px] text-warn">Can’t approve yet: {blockers.join("; ")}. <Link href="/launch" className="underline">Launch →</Link></p>}
+          {blockers.length > 0 && <p className="flex items-start gap-2.5 rounded-xl border border-warn/30 bg-warn/[0.07] p-3 text-[13px] text-warn"><Icon name="alert" className="mt-0.5" /><span>Can’t approve yet: {blockers.join("; ")}. <Link href="/launch" className="font-semibold underline underline-offset-2">Open Launch</Link></span></p>}
           <form action={decideAction} className="grid gap-3">
             <input type="hidden" name="approvalId" value={ap.id} />
             {assets.length > 1 ? <div className="flex flex-wrap gap-3 text-[12.5px]">{assets.map((x) => <label key={x.id} className="flex items-center gap-1.5"><input type="checkbox" name="asset" value={x.id} defaultChecked={x.status === "RAW" && x.qaStatus !== "HARD_FAIL"} className="size-4 !w-auto" />approve frame {x.seq}</label>)}</div> : asset && <input type="hidden" name="asset" value={asset.id} />}
             <div className="grid grid-cols-2 gap-2">
-              <Btn primary name="decision" value="APPROVED" disabled={blockers.length > 0} className="py-3 text-[15px]">Approve</Btn>
-              <Btn name="decision" value="REJECTED" className="border-bad/50 py-3 text-[15px] text-bad">Deny</Btn>
+              <Btn primary data-key="approve" name="decision" value="APPROVED" disabled={blockers.length > 0} className="py-3 text-[15px]"><Icon name="check" size={17} />Approve <span className="kbd ml-1 !border-black/15 !bg-black/10 !text-[#1a1410]/70">A</span></Btn>
+              <Btn data-key="deny" name="decision" value="REJECTED" className="!border-bad/40 py-3 text-[15px] !text-bad hover:!bg-bad/10"><Icon name="x" size={17} />Deny <span className="kbd ml-1">D</span></Btn>
             </div>
             <details className="rounded-xl border border-edge p-3 text-[13px]"><summary className="cursor-pointer font-semibold text-muted">Reasons, notes, request revision</summary>
               <div className="mt-2 flex flex-wrap gap-1.5">{REJECT_TAGS.map(([tag, code]) => <label key={tag} className="flex cursor-pointer items-center gap-1 rounded-full border border-edge px-2.5 py-1 text-[12px] has-[:checked]:border-bad/60 has-[:checked]:bg-bad/15"><input type="checkbox" name="reason" value={code} className="sr-only" />{tag}</label>)}</div>
@@ -143,11 +145,12 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
 
   return (
     <>
-      <PageHeader title="Approvals" sub="Review, approve or deny. Approving never publishes; publishing is a separate confirmed click." />
+      <PageHeader title="Approvals" sub={<>Approve or deny each image. Approving never posts anything; posting is always your own click.{!grid && ap && <span className="hidden lg:inline"> Keys: <span className="kbd">←</span> <span className="kbd">→</span> move, <span className="kbd">A</span> approve, <span className="kbd">D</span> deny.</span>}</>} />
       {sp.error && <div role="alert" className="mb-4 rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">{sp.error}</div>}
       {sp.ok && <div role="status" className="mb-4 rounded-xl border border-ok/40 bg-ok/10 p-3 text-ok">{sp.ok}</div>}
       {toolbar}
       {body}
+      {!grid && ap && <KeyNav map={{ ArrowLeft: "prev", ArrowRight: "next", a: "approve", d: "deny" }} />}
 
       <Card className="mt-6">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2"><h2 className="font-bold">Ready to publish</h2><span className="flex items-center gap-2 text-[12px]"><Pill tone="bad">{ig.label}</Pill>{publisher.provider ? <Pill tone="warn">{publisher.provider.name}</Pill> : <Pill tone="mute">publishing off</Pill>}</span></div>
@@ -160,7 +163,7 @@ export default async function Approvals({ searchParams }: { searchParams: Promis
               <div key={a.id} className="flex gap-3 rounded-xl border border-edge p-2.5">
                 <div className="h-28 w-[5.6rem] flex-none overflow-hidden rounded-lg border border-edge bg-panel2">{a.storagePath ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${a.id}/file`} alt={a.filename} className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[10px] text-muted">no file</span>}</div>
                 <details className="min-w-0 flex-1 text-[12.5px]">
-                  <summary className="cursor-pointer"><span className="flex items-center gap-2"><CreatorTag code={a.talent[0]} portrait={portraits[a.talent[0]]} /><span className="font-mono text-[11px] text-faint">{p?.code ?? "—"}</span></span><span className="block truncate text-muted">{p?.concept}</span><span className="mt-1 flex flex-wrap gap-1.5"><Link href={`/post/${a.productionId}`} className="inline-block rounded-lg bg-ok/85 px-3 py-1 font-bold text-[#0a0f24]">Post kit →</Link><span className="inline-block rounded-lg border border-edge px-3 py-1 text-muted">Mock publish…</span></span></summary>
+                  <summary className="cursor-pointer"><span className="flex items-center gap-2"><CreatorTag code={a.talent[0]} portrait={portraits[a.talent[0]]} /><span className="font-mono text-[11px] text-faint">{p?.code ?? "—"}</span></span><span className="block truncate text-muted">{p?.concept}</span><span className="mt-1 flex flex-wrap gap-1.5"><Link href={`/post/${a.productionId}`} className="inline-block rounded-lg bg-ok/85 px-3 py-1 font-bold text-[#141016]">Post kit</Link><span className="inline-block rounded-lg border border-edge px-3 py-1 text-muted">Mock publish…</span></span></summary>
                   <form action={publishAction} className="mt-2 grid gap-1.5 rounded-lg border border-edge p-2">
                     <input type="hidden" name="assetId" value={a.id} /><input type="hidden" name="back" value="/approvals" />
                     <p>Publish this image to <b>{publisher.provider!.name === "MOCK_INSTAGRAM" ? "the mock Instagram provider (nothing is posted)" : "Instagram"}</b> for {a.talent[0]}?</p>

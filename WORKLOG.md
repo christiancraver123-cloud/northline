@@ -135,3 +135,12 @@ Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Ren
 - UI: grouped sidebar with icons + creator shortcuts, phone top bar + bottom tab bar + menu sheet, no chrome on /login, refined background/inputs/cards/headers, devIndicators off, hydration warning from browser extensions suppressed on <html>/<body>.
 - withMsg keeps #anchors (ok/error messages were lost on /talent/X#all).
 - 2026-10-13: installable app — manifest + icons (public before sign-in), apple-touch-icon, standalone; Mac start scripts open a Chrome app window when Chrome is installed.
+
+## 2026-10-13 — Full UI redesign ("Darkroom")
+- New design system in `src/app/globals.css`: warm graphite chrome (photos read true), one champagne accent for actions, creator colours carry identity. Legacy token names (blue/blue2/violet) remapped so every page re-themed at once.
+- Type self-hosted in `public/fonts` (SIL OFL, no Google Fonts call): Bodoni Moda for titles and creator names, Instrument Sans for UI, JetBrains Mono for codes/numbers. `/fonts/*.woff2` is public so the sign-in page renders.
+- New: inline icon set (`components/Icon.tsx`), ⌘K / Ctrl+K / "/" command palette (`components/CommandPalette.tsx`), keyboard review on Approvals focus view (←/→, A, D via `components/KeyNav.tsx`), route skeleton (`app/loading.tsx`), opacity-only page entrance (`app/template.tsx` — no transform, it would trap fixed children).
+- Redesigned: sidebar (icons, creators list, search), dashboard (date + greeting + plain summary, comp-card creators, two-column body), talent index + detail hero, approvals focus/grid, studio tabs, live board, sign-in. All-caps tracked labels replaced with sentence case; status pills humanized.
+- New app icon (champagne N) for web manifest, apple-touch and `Northline.app` AppIcon.icns.
+- Instagram status label is now "Instagram blocked / disconnected" (tests updated).
+- Checked: tsc, 431 unit tests, `next build`, Playwright sweep of 17 pages at 1440px (no errors), phone width 390px (no sideways scroll), palette + keyboard flows.

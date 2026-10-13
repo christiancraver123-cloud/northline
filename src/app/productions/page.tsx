@@ -29,7 +29,7 @@ export default async function Productions({ searchParams }: { searchParams: Prom
       {sp.warn && <div role="alert" className="mb-4 rounded-xl border border-warn/40 bg-warn/10 p-3 text-warn">Some steps need attention: {sp.warn}</div>}
       <nav aria-label="Filter by creator" className="mb-4 flex flex-wrap gap-2">
         {ROSTER.map((t) => { const on = sp.talent === t.code; return (
-          <Link key={t.code} href={on ? "/productions" : `/productions?talent=${t.code}`} aria-current={on ? "true" : undefined} className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-[13px] font-semibold transition ${on ? "border-transparent text-[#0a0f24]" : "border-edge text-muted hover:text-ink"}`} style={on ? { background: t.color } : undefined}>
+          <Link key={t.code} href={on ? "/productions" : `/productions?talent=${t.code}`} aria-current={on ? "true" : undefined} className={`flex items-center gap-2 rounded-full border py-1 pl-1 pr-3 text-[13px] font-semibold transition ${on ? "border-transparent text-[#141016]" : "border-edge text-muted hover:text-ink"}`} style={on ? { background: t.color } : undefined}>
             <Avatar code={t.code} portrait={portraits[t.code]} size={30} />{t.first}<span className={`font-mono text-[11px] ${on ? "" : "text-faint"}`}>{all.filter((p) => p.talent.includes(t.code)).length}</span>
           </Link>); })}
       </nav>
@@ -44,10 +44,10 @@ export default async function Productions({ searchParams }: { searchParams: Prom
         <select name="campaign" defaultValue={sp.campaign ?? ""} aria-label="Campaign"><option value="">All campaigns</option>{campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <button className="rounded-xl border border-edge bg-panel2 px-3 py-2 font-bold">Filter</button>
       </form>
-      {list.length === 0 ? <Empty>No productions match. <Link className="text-blue2" href="/create">Create one →</Link></Empty> : (
+      {list.length === 0 ? <Empty>No productions match. <Link className="text-blue2" href="/create">Create one</Link></Empty> : (
         <Card className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-left">
-            <thead className="text-[11px] uppercase text-faint"><tr><th className="pb-2">ID</th><th>Creator</th><th>Concept</th><th>Format</th><th>Assets</th><th>Status</th><th>Created</th></tr></thead>
+            <thead className="text-[12px] font-semibold text-faint"><tr><th className="pb-2">ID</th><th>Creator</th><th>Concept</th><th>Format</th><th>Assets</th><th>Status</th><th>Created</th></tr></thead>
             <tbody>{list.map((p) => {
               const a = assets.filter((x) => x.productionId === p.id);
               return <tr key={p.id} className="border-t border-edge"><td className="py-2"><ProdLink p={p} /> <DemoBadge origin={p.origin} /></td><td><TalentChips codes={p.talent} portraits={portraits} /></td><td className="max-w-[260px] truncate">{p.concept}</td><td className="text-muted">{p.contentType}</td>

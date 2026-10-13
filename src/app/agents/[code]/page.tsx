@@ -95,9 +95,9 @@ export default async function AgentWorkspace({ params, searchParams }: { params:
         <Card>
           <h2 className="mb-2 font-bold">Reports from {def.name}</h2>
           {reports.length === 0 ? <Empty>No reports yet. Reports appear when this agent completes a report task or flags something.</Empty> : byNew(reports).map((r) => (
-            <details key={r.id} className="border-t border-edge py-2 first:border-0"><summary className="cursor-pointer">{!r.read && <span className="mr-2 text-warn">●</span>}<b>{r.title}</b> <span className="text-[11px] text-faint">{ago(r.createdAt)} · {r.kind}</span></summary><pre className="mt-2 whitespace-pre-wrap text-[12.5px] text-[#c6cdf0]">{r.body}</pre><p className="mt-1 text-[11px] text-faint">Sources: {r.sources.join(", ")}</p></details>
+            <details key={r.id} className="border-t border-edge py-2 first:border-0"><summary className="cursor-pointer">{!r.read && <span className="mr-2 text-warn">●</span>}<b>{r.title}</b> <span className="text-[11px] text-faint">{ago(r.createdAt)} · {r.kind}</span></summary><pre className="mt-2 whitespace-pre-wrap text-[12.5px] text-[#d9d1cf]">{r.body}</pre><p className="mt-1 text-[11px] text-faint">Sources: {r.sources.join(", ")}</p></details>
           ))}
-          <Link href="/agents/reports" className="mt-2 inline-block text-blue2">Open reports inbox →</Link>
+          <Link href="/agents/reports" className="mt-2 inline-block text-blue2">Open reports inbox</Link>
         </Card>
       )}
 

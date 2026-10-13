@@ -40,6 +40,6 @@ export function passwordOk(input: string, expected: string | undefined): boolean
 /** Is this request path reachable without an operator session? Machine endpoints authenticate with Bearer tokens themselves. */
 export function isPublicPath(p: string): boolean {
   // App-install files must load before sign-in (the phone fetches them when you add Northline to the home screen).
-  if (p === "/manifest.webmanifest" || /^\/(icon|apple-icon)(-\d+)?\.png$/.test(p) || p === "/favicon.ico") return true;
+  if (p === "/manifest.webmanifest" || /^\/(icon|apple-icon)(-\d+)?\.png$/.test(p) || p === "/favicon.ico" || /^\/fonts\/[\w.-]+\.woff2$/.test(p)) return true;
   return p === "/login" || p === "/api/health" || p.startsWith("/api/n8n/") || p === "/api/create" || p === "/api/agents/tick";
 }

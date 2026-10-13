@@ -11,7 +11,7 @@ export function CreatorPortrait({ code, refId, portrait, className = "", label =
   const url = portrait ? portrait.url : refId ? portraitUrl(refId) : null;
   const src = portrait?.source ?? (refId ? "MASTER_FACE" : "FALLBACK");
   return (
-    <div className={`relative overflow-hidden ${className}`} style={{ background: `linear-gradient(160deg, ${t.color}66, #0b1128 80%)` }} title={src === "MASTER_FACE" ? `${t.name} · canonical master face` : src === "CANONICAL_REFERENCE" ? `${t.name} · canonical reference (no master face yet)` : `${t.name} · no canonical image yet`}>
+    <div className={`relative overflow-hidden ${className}`} style={{ background: `linear-gradient(160deg, ${t.color}66, #0c0a0d 80%)` }} title={src === "MASTER_FACE" ? `${t.name} · canonical master face` : src === "CANONICAL_REFERENCE" ? `${t.name} · canonical reference (no master face yet)` : `${t.name} · no canonical image yet`}>
       {url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={url} alt={`${t.name} — canonical ${src === "MASTER_FACE" ? "master face" : "reference"}`} loading="lazy" className="h-full w-full object-cover object-top" />
         : <span className="grid h-full place-items-center text-center leading-tight"><span><b className="block text-[2.2em] font-extrabold" style={{ color: t.color }}>{t.first[0]}</b>{label && <span className="text-[10px] text-muted">no canonical image</span>}</span></span>}
     </div>
@@ -23,7 +23,7 @@ export function CreatorAvatar({ code, portrait, size = 28, ring = true, classNam
   const t = ROSTER_BY_CODE[code];
   return (
     <span className={`relative inline-grid flex-none place-items-center overflow-hidden rounded-full ${className}`} title={t.name}
-      style={{ width: size, height: size, background: `linear-gradient(160deg, ${t.color}aa, #0b1128)`, boxShadow: ring ? `0 0 0 2px ${t.color}` : undefined }}>
+      style={{ width: size, height: size, background: `linear-gradient(160deg, ${t.color}aa, #0c0a0d)`, boxShadow: ring ? `0 0 0 2px ${t.color}` : undefined }}>
       {portrait?.url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={portrait.url} alt={t.name} loading="lazy" className="h-full w-full object-cover object-[50%_30%]" />
         : <b style={{ fontSize: size * 0.45 }} className="text-ink">{t.first[0]}</b>}
     </span>

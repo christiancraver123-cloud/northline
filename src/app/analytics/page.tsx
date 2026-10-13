@@ -46,7 +46,7 @@ export default async function Analytics({ searchParams }: { searchParams: Promis
       <td className="text-right">{x.r.source === "mock" ? <Pill tone="warn">mock</Pill> : <Pill tone="ok">{x.r.source}</Pill>}</td>
     </tr>
   );
-  const Head = () => <thead className="text-[11px] uppercase text-faint"><tr><th className="text-left">Creator</th><th className="text-left">Post</th><th className="text-left">Type</th><th className="text-left">Location</th><th className="text-right">Views</th><th className="text-right">Reach</th><th className="text-right">Saves</th><th className="text-right">Shares</th><th className="text-right">Eng.</th><th /></tr></thead>;
+  const Head = () => <thead className="text-[12px] font-semibold text-faint"><tr><th className="text-left">Creator</th><th className="text-left">Post</th><th className="text-left">Type</th><th className="text-left">Location</th><th className="text-right">Views</th><th className="text-right">Reach</th><th className="text-right">Saves</th><th className="text-right">Shares</th><th className="text-right">Eng.</th><th /></tr></thead>;
 
   return (
     <>
@@ -62,7 +62,7 @@ export default async function Analytics({ searchParams }: { searchParams: Promis
 
       <Card className="mb-5 overflow-x-auto">
         <h2 className="mb-2 font-bold">Creator performance</h2>
-        <table className="w-full min-w-[640px] text-[13px]"><thead className="text-[11px] uppercase text-faint"><tr><th className="text-left">Creator</th><th className="text-right">Published</th><th className="text-right">Last post</th><th className="text-right">Gap</th><th className="text-right">Avg engagement</th><th className="text-right">Approved ready</th><th className="text-right">Priority</th></tr></thead>
+        <table className="w-full min-w-[640px] text-[13px]"><thead className="text-[12px] font-semibold text-faint"><tr><th className="text-left">Creator</th><th className="text-right">Published</th><th className="text-right">Last post</th><th className="text-right">Gap</th><th className="text-right">Avg engagement</th><th className="text-right">Approved ready</th><th className="text-right">Priority</th></tr></thead>
           <tbody>{creators.map((c) => <tr key={c.code} className="border-t border-edge"><td className="whitespace-nowrap py-1.5"><Link href={`/talent/${c.code}`} className="inline-flex items-center gap-2.5 font-semibold hover:underline"><Avatar code={c.code} portrait={portraits[c.code]} size={34} />{c.name}</Link>{!c.active && <span className="ml-1.5 text-[11px] text-warn">setup</span>}</td><td className="text-right font-mono">{c.published}</td><td className="text-right font-mono">{c.lastContentAt ? ago(c.lastContentAt) : "—"}</td><td className="text-right font-mono">{c.postingGapDays == null ? "—" : `${c.postingGapDays}d`}</td><td className="text-right font-mono">{pct(c.engagementRate)}{c.insightsAreMock ? " ·m" : ""}</td><td className="text-right font-mono">{c.approvedReady}</td><td className="text-right font-mono font-bold">{c.priority.score}</td></tr>)}</tbody></table>
         <p className="mt-2 text-[11.5px] text-faint">Follower growth is not tracked yet (needs live Instagram insights). ·m = mock data.</p>
       </Card>
@@ -82,7 +82,7 @@ export default async function Analytics({ searchParams }: { searchParams: Promis
           </Card>
         </>
       )}
-      {legacy.length > 0 && <Card className="mt-5 overflow-x-auto"><h2 className="mb-2 font-bold">Other analytics records</h2><table className="w-full text-[12.5px]"><thead className="text-[11px] uppercase text-faint"><tr><th className="text-left">Source</th><th>Views</th><th>Reach</th><th>Likes</th><th>Comments</th><th>Shares</th><th>Saves</th></tr></thead><tbody>{legacy.map((r) => <tr key={r.id} className="border-t border-edge"><td><Pill tone={r.source === "imported" ? "ok" : "warn"}>{r.source}</Pill></td><td>{n(r.views)}</td><td>{n(r.reach)}</td><td>{n(r.likes)}</td><td>{n(r.comments)}</td><td>{n(r.shares)}</td><td>{n(r.saves)}</td></tr>)}</tbody></table></Card>}
+      {legacy.length > 0 && <Card className="mt-5 overflow-x-auto"><h2 className="mb-2 font-bold">Other analytics records</h2><table className="w-full text-[12.5px]"><thead className="text-[12px] font-semibold text-faint"><tr><th className="text-left">Source</th><th>Views</th><th>Reach</th><th>Likes</th><th>Comments</th><th>Shares</th><th>Saves</th></tr></thead><tbody>{legacy.map((r) => <tr key={r.id} className="border-t border-edge"><td><Pill tone={r.source === "imported" ? "ok" : "warn"}>{r.source}</Pill></td><td>{n(r.views)}</td><td>{n(r.reach)}</td><td>{n(r.likes)}</td><td>{n(r.comments)}</td><td>{n(r.shares)}</td><td>{n(r.saves)}</td></tr>)}</tbody></table></Card>}
     </>
   );
 }

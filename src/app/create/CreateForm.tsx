@@ -38,7 +38,7 @@ export function CreateForm({ error, readOnly = false }: { error?: string; readOn
           <label className="mb-1 block font-bold" htmlFor="nl">Describe what you want</label>
           <textarea id="nl" rows={3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Create a Miami weekend campaign for Sienna and Zoe" />
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={interpret} className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-3.5 py-2 font-bold">Interpret</button>
+            <button type="button" onClick={interpret} className="rounded-xl bg-blue2 text-[#1a1410] shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_8px_20px_-10px_rgba(226,200,150,.6)] hover:bg-[#ecd6ab] px-3.5 py-2 font-bold">Interpret</button>
             {EXAMPLES.map((e) => <button key={e} type="button" onClick={() => setText(e)} className="rounded-full border border-edge px-2.5 py-1 text-[12px] text-muted hover:text-ink">{e}</button>)}
           </div>
           {issues.map((i) => <p key={i} className="mt-2 text-warn">{i}</p>)}
@@ -49,7 +49,7 @@ export function CreateForm({ error, readOnly = false }: { error?: string; readOn
             {ROSTER.map((t) => {
               const on = talent.includes(t.code);
               return <button key={t.code} type="button" aria-pressed={on} onClick={() => setTalent(on ? talent.filter((c) => c !== t.code) : [...talent, t.code])}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${on ? "border-transparent text-[#0a0f24]" : "border-edge text-muted"}`} style={on ? { background: t.color } : undefined}>{t.first}</button>;
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 font-semibold ${on ? "border-transparent text-[#141016]" : "border-edge text-muted"}`} style={on ? { background: t.color } : undefined}>{t.first}</button>;
             })}
           </div>
           <div className="grid gap-3 sm:grid-cols-3">
@@ -72,7 +72,7 @@ export function CreateForm({ error, readOnly = false }: { error?: string; readOn
           )}
         </div>
         <input type="hidden" name="request" value={JSON.stringify(request ?? {})} />
-        <button disabled={!request || readOnly} title={readOnly ? "Read-only mode: changes are disabled" : undefined} className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-3 font-bold disabled:cursor-not-allowed disabled:opacity-40">Generate drafts →</button>
+        <button disabled={!request || readOnly} title={readOnly ? "Read-only mode: changes are disabled" : undefined} className="rounded-xl bg-blue2 text-[#1a1410] shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_8px_20px_-10px_rgba(226,200,150,.6)] hover:bg-[#ecd6ab] px-4 py-3 font-bold disabled:cursor-not-allowed disabled:opacity-40">Generate drafts</button>
         <p className="text-[12px] text-faint">Creates production records and assets, then queues them for approval. Nothing is published.</p>
       </div>
     </form>

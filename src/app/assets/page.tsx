@@ -33,7 +33,7 @@ export default async function Assets({ searchParams }: { searchParams: Promise<S
         <label className="flex items-center gap-2 text-[12px] text-muted"><input type="checkbox" name="all" value="1" defaultChecked={sp.all === "1"} className="!w-auto" />Include superseded attempts</label>
         <button className="rounded-xl border border-edge bg-panel2 px-3 py-2 font-bold">Filter</button>
       </form>
-      {list.length === 0 ? <Empty>No assets match. <Link className="text-blue2" href="/create">Create a production →</Link></Empty> : (
+      {list.length === 0 ? <Empty>No assets match. <Link className="text-blue2" href="/create">Create a production</Link></Empty> : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">{list.map((a) => (
           <Link key={a.id} href={`/assets/${a.id}`} className="block">
             <AssetTile asset={a} />

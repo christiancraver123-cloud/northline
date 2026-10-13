@@ -38,11 +38,11 @@ export function ReferenceLibrary({ talent, refs, identityId, error, ok }: { tale
       {ok && !error && <div className="mb-3 rounded-lg border border-ok/30 bg-ok/10 p-2 text-ok">Saved.</div>}
       <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         <div>
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-blue2">Master</div>
+          <div className="mb-1.5 h-label text-blue2">Master</div>
           {master ? <RefTile r={master} talent={talent} /> : <Empty>No master face yet. Upload a MASTER_FACE — it is the highest identity authority.</Empty>}
         </div>
         <div>
-          <div className="mb-1.5 text-[11px] font-bold uppercase tracking-wide text-muted">Supporting references ({supporting.length})</div>
+          <div className="mb-1.5 h-label">Supporting references ({supporting.length})</div>
           {supporting.length ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{supporting.map((r) => <RefTile key={r.id} r={r} talent={talent} />)}</div> : <Empty>No supporting references. Missing references stay missing — they are never backfilled from generated images.</Empty>}
         </div>
       </div>

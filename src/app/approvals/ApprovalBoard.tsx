@@ -9,7 +9,7 @@ import { bulkDecideAction, moveCardAction } from "../actions";
 export interface BoardCard { approvalId: string; productionId: string; code: string; creator: string; color: string; portraitUrl: string | null; thumb: string | null; qa: "PASS" | "REVIEW" | "FAIL" | "NOT RUN"; blockers: string[] }
 export interface DoneCard { id: string; code: string; thumb: string | null; color: string; creator: string; portraitUrl: string | null }
 function Avatar({ url, color, name, size, className = "" }: { url: string | null; color: string; name: string; size: number; className?: string }) {
-  return <span title={name} className={`inline-grid flex-none place-items-center overflow-hidden rounded-full ${className}`} style={{ width: size, height: size, background: color, boxShadow: `0 0 0 2px ${color}` }}>{url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={url} alt={name} draggable={false} className="h-full w-full object-cover object-[50%_30%]" /> : <b className="text-[#0a0f24]" style={{ fontSize: size * 0.45 }}>{name[0]}</b>}</span>;
+  return <span title={name} className={`inline-grid flex-none place-items-center overflow-hidden rounded-full ${className}`} style={{ width: size, height: size, background: color, boxShadow: `0 0 0 2px ${color}` }}>{url ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={url} alt={name} draggable={false} className="h-full w-full object-cover object-[50%_30%]" /> : <b className="text-[#141016]" style={{ fontSize: size * 0.45 }}>{name[0]}</b>}</span>;
 }
 const QA_TONE = { PASS: "text-ok border-ok/40", REVIEW: "text-warn border-warn/40", FAIL: "text-bad border-bad/40", "NOT RUN": "text-muted border-edge" } as const;
 
@@ -48,9 +48,9 @@ export function ApprovalBoard({ cards, approved, rejected, creator, back, readOn
   const col = (target: "APPROVED" | "REJECTED", label: string, items: DoneCard[]) => (
     <section aria-label={label} onDragOver={(e) => { if (drag) { e.preventDefault(); setOver(target); } }} onDragLeave={() => setOver(null)} onDrop={(e) => { e.preventDefault(); drop(target); }}
       className={`rounded-2xl border-2 border-dashed p-3 transition ${over === target ? (target === "APPROVED" ? "border-ok bg-ok/10" : "border-bad bg-bad/10") : "border-edge"}`}>
-      <h3 className={`mb-2 text-[12px] font-bold uppercase tracking-wider ${target === "APPROVED" ? "text-ok" : "text-bad"}`}>{label}</h3>
+      <h3 className={`mb-2 text-[13px] font-semibold ${target === "APPROVED" ? "text-ok" : "text-bad"}`}>{label}</h3>
       {drag && <p className="mb-2 text-[12px] text-muted">Drop to {target === "APPROVED" ? "approve (same checks as the button)" : "reject (recorded as your decision)"}</p>}
-      <div className="grid grid-cols-4 gap-1.5">{items.slice(0, 8).map((x) => <div key={x.id} title={`${x.creator} · ${x.code}`} className="relative aspect-[4/5] overflow-hidden rounded-md border-2" style={{ borderColor: x.color, background: `linear-gradient(160deg, ${x.color}55, #0b1128)` }}>{x.thumb && /* eslint-disable-next-line @next/next/no-img-element */ <img src={x.thumb} alt={x.code} className="h-full w-full object-cover" />}<Avatar url={x.portraitUrl} color={x.color} name={x.creator} size={18} className="absolute bottom-0.5 left-0.5" /></div>)}</div>
+      <div className="grid grid-cols-4 gap-1.5">{items.slice(0, 8).map((x) => <div key={x.id} title={`${x.creator} · ${x.code}`} className="relative aspect-[4/5] overflow-hidden rounded-md border-2" style={{ borderColor: x.color, background: `linear-gradient(160deg, ${x.color}55, #0c0a0d)` }}>{x.thumb && /* eslint-disable-next-line @next/next/no-img-element */ <img src={x.thumb} alt={x.code} className="h-full w-full object-cover" />}<Avatar url={x.portraitUrl} color={x.color} name={x.creator} size={18} className="absolute bottom-0.5 left-0.5" /></div>)}</div>
       {!items.length && <p className="text-[12px] text-faint">None yet.</p>}
     </section>
   );
@@ -64,8 +64,8 @@ export function ApprovalBoard({ cards, approved, rejected, creator, back, readOn
         <button type="button" disabled={readOnly || !sel.size} onClick={() => setConfirm({ decision: "APPROVED", ids: [...sel], label: "selected" })} className="rounded-lg border border-ok/50 px-3 py-1.5 text-[13px] font-bold text-ok disabled:opacity-40">Approve selected ({sel.size})</button>
         <button type="button" disabled={readOnly || !sel.size} onClick={() => setConfirm({ decision: "REJECTED", ids: [...sel], label: "selected" })} className="rounded-lg border border-bad/50 px-3 py-1.5 text-[13px] font-bold text-bad disabled:opacity-40">Deny selected ({sel.size})</button>
         <span className="flex-1" />
-        <button type="button" disabled={readOnly || !cards.length} onClick={() => setConfirm({ decision: "APPROVED", ids: all, label: "all" })} className="rounded-lg bg-ok/20 px-3 py-1.5 text-[13px] font-bold text-ok disabled:opacity-40">APPROVE ALL ({cards.length})</button>
-        <button type="button" disabled={readOnly || !cards.length} onClick={() => setConfirm({ decision: "REJECTED", ids: all, label: "all" })} className="rounded-lg bg-bad/20 px-3 py-1.5 text-[13px] font-bold text-bad disabled:opacity-40">DENY ALL ({cards.length})</button>
+        <button type="button" disabled={readOnly || !cards.length} onClick={() => setConfirm({ decision: "APPROVED", ids: all, label: "all" })} className="rounded-lg bg-ok/20 px-3 py-1.5 text-[13px] font-bold text-ok disabled:opacity-40">Approve all ({cards.length})</button>
+        <button type="button" disabled={readOnly || !cards.length} onClick={() => setConfirm({ decision: "REJECTED", ids: all, label: "all" })} className="rounded-lg bg-bad/20 px-3 py-1.5 text-[13px] font-bold text-bad disabled:opacity-40">Deny all ({cards.length})</button>
       </div>
 
       {confirm && (
@@ -79,7 +79,7 @@ export function ApprovalBoard({ cards, approved, rejected, creator, back, readOn
             <input name="notes" placeholder="Shared reason (optional)" aria-label="Shared reason" />
           </>}
           <label className="flex items-center gap-2 text-[13px]"><input type="checkbox" name="confirm" value="yes" required className="size-4 !w-auto" />Yes, {confirm.decision === "REJECTED" ? "deny" : "approve"} these {confirm.ids.length}.</label>
-          <div className="flex gap-2"><button className={`rounded-lg px-4 py-2 font-bold ${confirm.decision === "REJECTED" ? "bg-bad/80" : "bg-ok/80 text-[#0a0f24]"}`}>{confirm.decision === "REJECTED" ? `Deny ${confirm.ids.length}` : `Approve ${confirm.ids.length}`}</button><button type="button" onClick={() => setConfirm(null)} className="rounded-lg border border-edge px-4 py-2">Cancel</button></div>
+          <div className="flex gap-2"><button className={`rounded-lg px-4 py-2 font-bold ${confirm.decision === "REJECTED" ? "bg-bad/80" : "bg-ok/80 text-[#141016]"}`}>{confirm.decision === "REJECTED" ? `Deny ${confirm.ids.length}` : `Approve ${confirm.ids.length}`}</button><button type="button" onClick={() => setConfirm(null)} className="rounded-lg border border-edge px-4 py-2">Cancel</button></div>
         </form>
       )}
       {msg && <div role="status" className={`rounded-xl border p-2.5 text-[13px] ${msg.ok ? "border-ok/40 text-ok" : "border-bad/40 text-bad"}`}>{msg.text}</div>}
@@ -93,10 +93,10 @@ export function ApprovalBoard({ cards, approved, rejected, creator, back, readOn
                 <li key={c.approvalId} draggable={!readOnly} onDragStart={(e) => { e.dataTransfer.setData("text/plain", c.approvalId); e.dataTransfer.effectAllowed = "move"; setDrag(c.approvalId); }} onDragEnd={() => { setDrag(null); setOver(null); }}
                   style={{ borderTopColor: c.color }} className={`group relative overflow-hidden rounded-xl border border-t-4 bg-panel/80 transition ${on ? "border-blue2 ring-2 ring-blue2/50" : "border-edge"} ${drag === c.approvalId ? "opacity-50" : ""} ${!readOnly ? "cursor-grab" : ""}`}>
                   <label className="absolute left-2 top-2 z-10 grid h-6 w-6 cursor-pointer place-items-center rounded-md bg-black/60"><input type="checkbox" checked={on} onChange={() => {}} onClick={(e) => toggle(c.approvalId, e.shiftKey)} aria-label={`Select ${c.code}`} className="size-4 !w-auto" /></label>
-                  <Link href={`/approvals?id=${c.approvalId}${creator ? `&creator=${creator}` : ""}`} className="block aspect-[4/5]" style={{ background: `linear-gradient(160deg, ${c.color}55, #0b1128 80%)` }} draggable={false}>
+                  <Link href={`/approvals?id=${c.approvalId}${creator ? `&creator=${creator}` : ""}`} className="block aspect-[4/5]" style={{ background: `linear-gradient(160deg, ${c.color}55, #0c0a0d 80%)` }} draggable={false}>
                     {c.thumb ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={c.thumb} alt={c.code} draggable={false} className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[11px] text-muted">no image file</span>}
                   </Link>
-                  <div className="flex items-center justify-between gap-1 p-2 text-[12.5px]"><span className="flex min-w-0 items-center gap-2"><Avatar url={c.portraitUrl} color={c.color} name={c.creator} size={30} /><b className="truncate">{c.creator}</b></span><span className={`rounded-full border px-1.5 font-mono text-[10.5px] ${QA_TONE[c.qa]}`}>QA {c.qa}</span></div>
+                  <div className="flex items-center justify-between gap-1 p-2 text-[12.5px]"><span className="flex min-w-0 items-center gap-2"><Avatar url={c.portraitUrl} color={c.color} name={c.creator} size={30} /><b className="truncate">{c.creator}</b></span><span className={`rounded-full border px-2 text-[11px] font-medium ${QA_TONE[c.qa]}`}>QA {c.qa.toLowerCase()}</span></div>
                   {c.blockers.length > 0 && <p className="px-2 pb-2 text-[11px] text-warn" title={c.blockers.join("; ")}>Blocked: {c.blockers[0]}</p>}
                 </li>
               );

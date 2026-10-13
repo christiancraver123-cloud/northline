@@ -26,7 +26,7 @@ export function CaptionWriter({ productionId, initial, hashtags, aiTag, readOnly
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={write} disabled={pending || readOnly} className="rounded-xl bg-gradient-to-br from-violet to-blue px-4 py-2 font-bold disabled:opacity-40">{pending ? "Writing…" : opts.length ? "✦ Write more" : "✦ Write captions"}</button>
+        <button type="button" onClick={write} disabled={pending || readOnly} className="rounded-xl bg-gradient-to-br from-violet to-blue px-4 py-2 font-bold disabled:opacity-40">{pending ? "Writing…" : opts.length ? "Write more" : "Write captions"}</button>
         {note && <span className="self-center text-[12px] text-muted">{note}</span>}
       </div>
       {opts.length > 0 && <ul className="grid gap-2">{opts.map((o) => (
@@ -35,7 +35,7 @@ export function CaptionWriter({ productionId, initial, hashtags, aiTag, readOnly
       <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
         <button type="button" disabled={readOnly || pending || text === saved} onClick={() => save()} className="rounded-lg border border-edge px-3 py-1.5 disabled:opacity-40">{text === saved ? "Saved" : "Save caption"}</button>
         <label className="flex items-center gap-1.5 text-muted"><input type="checkbox" checked={tags} onChange={(e) => setTags(e.target.checked)} className="size-4 !w-auto" />Add hashtags</label>
-        <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(full); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* blocked */ } }} className="ml-auto rounded-lg bg-ok/85 px-3 py-1.5 font-bold text-[#0a0f24]">{copied ? "Copied ✓" : "Copy full caption"}</button>
+        <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(full); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* blocked */ } }} className="ml-auto rounded-lg bg-ok/85 px-3 py-1.5 font-bold text-[#141016]">{copied ? "Copied ✓" : "Copy full caption"}</button>
       </div>
       <pre className="whitespace-pre-wrap rounded-xl border border-dashed border-edge p-3 font-sans text-[13px] text-muted">{full || "—"}</pre>
     </div>

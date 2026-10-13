@@ -5,7 +5,8 @@ import { loadDashboard, type Tone } from "@/lib/ops/dashboard";
 import { CommandCenterPanel } from "@/components/command-center";
 import { isReadOnly } from "@/lib/runtime/mode";
 import { ROSTER_BY_CODE } from "@/lib/talent/roster";
-import { AgentStatusPill, ago } from "@/components/ui";
+import { AgentStatusPill, SectionHead, ago } from "@/components/ui";
+import { Icon } from "@/components/Icon";
 import { CreatorAvatar, CreatorPortrait } from "@/components/cc";
 import { loadPortraits } from "@/lib/talent/portraits-server";
 import { missedSlots, nightSteps, tonightSlots } from "@/lib/ops/tonight";
@@ -36,35 +37,46 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
   const stage = (k: string) => d.pipeline.find((p) => p.key === k)?.count ?? 0;
   const activity = [["In review", stage("REVIEW"), "/approvals"], ["Approved, ready", stage("APPROVED"), "/approvals"], ["Published", stage("PUBLISHED"), "/analytics"], ["Queued / in progress", stage("RUNNING") + stage("QA") + stage("QUEUED"), "/productions"], ["Failed", stage("FAILED"), "/productions?status=FAILED"]] as const;
   const attention = d.attention.slice(0, 5);
+  const nyNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const hour = nyNow.getHours();
+  const greeting = hour < 5 ? "Working late." : hour < 12 ? "Good morning." : hour < 18 ? "Good afternoon." : "Good evening.";
+  const dateLine = now.toLocaleDateString("en-US", { timeZone: "America/New_York", weekday: "long", month: "long", day: "numeric" });
+  const pendingN = d.approvals.length;
+  const summary = [pendingN ? `${pendingN} ${pendingN === 1 ? "image is" : "images are"} waiting for your review` : "Approvals are clear", tonight.length ? `${tonight.length} ${tonight.length === 1 ? "post" : "posts"} planned for tonight` : "nothing is scheduled tonight"].join(", and ") + ".";
   return (
     <>
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-4">
-        <div><p className="text-[12px] font-bold uppercase tracking-[0.16em] text-blue2">Northline Studio</p><h1 className="bg-gradient-to-r from-ink to-blue2/80 bg-clip-text text-[28px] font-extrabold tracking-tight text-transparent sm:text-[34px]">Good to see you.</h1><p className="text-[13.5px] text-muted">What needs you tonight, and who needs content.</p></div>
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+        <div className="min-w-0">
+          <p className="text-[13px] text-muted">{dateLine}</p>
+          <h1 className="display mt-1 text-[40px] leading-[1.02] sm:text-[52px]">{greeting}</h1>
+          <p className="mt-2.5 max-w-[60ch] text-[15px] text-muted">{summary}</p>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href="/create" className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold">⇪ Import</Link>
-          <Link href="/create?mode=generate" className="rounded-xl border border-edge bg-panel2 px-4 py-2 font-bold">✦ Generate</Link>
+          <Link href="/create?mode=generate" className="inline-flex items-center gap-2 rounded-xl border border-edge bg-panel2 px-4 py-2.5 text-[13.5px] font-semibold hover:border-[#4a414c]"><Icon name="spark" size={15} />Generate</Link>
+          <Link href="/create" className="inline-flex items-center gap-2 rounded-xl bg-blue2 px-4 py-2.5 text-[13.5px] font-semibold text-[#1a1410] shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_8px_20px_-10px_rgba(226,200,150,.6)] hover:bg-[#ecd6ab]"><Icon name="upload" size={15} />Import images</Link>
         </div>
       </header>
 
-      <nav aria-label="Signals" className="mb-6 flex flex-wrap gap-2">
-        {signals.map((s) => <Link key={s.label} href={s.href} title={s.title} className="flex items-center gap-2 rounded-full border border-edge bg-panel/70 px-3.5 py-1.5 text-[13px] hover:border-blue2/50"><span className={`h-2 w-2 rounded-full ${dot[s.tone]}`} /><span className="text-muted">{s.label}</span><b className={`font-mono ${txt[s.tone]}`}>{s.value}</b></Link>)}
+      <nav aria-label="Signals" className="mb-9 flex flex-wrap items-center gap-x-1 gap-y-2 rounded-2xl border border-edge/70 bg-panel/50 p-1.5">
+        {signals.map((s) => <Link key={s.label} href={s.href} title={s.title} className="flex items-center gap-2 rounded-xl px-3 py-1.5 text-[13px] hover:bg-white/[0.04]"><span className={`h-1.5 w-1.5 rounded-full ${dot[s.tone]}`} /><span className="text-muted">{s.label}</span><span className={`font-semibold ${txt[s.tone]}`}>{s.value}</span></Link>)}
       </nav>
 
-      <section aria-label="Creators" className="mb-8">
-        <div className="mb-3 flex items-baseline justify-between"><h2 className="text-[12px] font-bold uppercase tracking-wider text-muted">Your creators · by priority</h2><Link href="/talent" className="text-[13px] text-blue2">Talent →</Link></div>
+      <section aria-label="Creators" className="mb-10">
+        <SectionHead title="Your creators" action={<Link href="/talent" className="text-[13px] text-muted hover:text-ink">Ordered by who needs content most</Link>} />
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-          {d.creators.map((c) => (
-            <Link key={c.code} href={`/talent/${c.code}`} className="group relative overflow-hidden rounded-2xl border border-edge bg-panel/70 transition hover:-translate-y-0.5 hover:border-blue2/60" style={{ boxShadow: `0 10px 30px -18px ${c.color}` }}>
-              <CreatorPortrait code={c.code} portrait={portraits[c.code]} className="aspect-[3/4] w-full transition duration-300 group-hover:scale-[1.03]" />
+          {d.creators.map((c, i) => (
+            <Link key={c.code} href={`/talent/${c.code}`} className="group relative block overflow-hidden rounded-2xl bg-sheet ring-1 ring-edge/70 transition-[box-shadow,transform] duration-300 hover:-translate-y-0.5 hover:ring-[color:var(--c)]" style={{ ["--c" as string]: c.color }}>
+              <CreatorPortrait code={c.code} portrait={portraits[c.code]} className="aspect-[3/4] w-full transition duration-500 group-hover:scale-[1.035]" />
               <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-2.5">
-                <span className="flex items-center gap-1.5 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-semibold backdrop-blur"><span className={`h-2 w-2 rounded-full ${c.active ? "bg-ok" : "bg-warn"}`} />{c.active ? "Active" : "In setup"}</span>
-                <span className="rounded-lg bg-black/60 px-2 py-0.5 font-mono text-[13px] font-bold backdrop-blur" style={{ color: c.color }} title={`Priority · ${c.priority.reasons.join(" · ")}`}>P{c.priority.score}</span>
+                <span className="flex items-center gap-1.5 rounded-full bg-black/45 px-2 py-0.5 text-[11px] font-medium text-ink/90 backdrop-blur-md"><span className={`h-1.5 w-1.5 rounded-full ${c.active ? "bg-ok" : "bg-warn"}`} />{c.active ? "Active" : "In setup"}</span>
+                {i === 0 && <span className="rounded-full bg-black/45 px-2 py-0.5 text-[11px] font-medium text-blue2 backdrop-blur-md" title={c.priority.reasons.join("; ")}>Next up</span>}
               </div>
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-3 pb-2.5 pt-10">
-                <b className="block truncate text-[17px] leading-tight">{c.name.split(" ")[0]}</b>
-                <div className="mt-1 flex items-center justify-between gap-2 text-[11.5px] text-ink/80">
-                  <span title="Approved and ready to publish"><b className="font-mono text-ok">{c.approvedReady}</b> ready</span>
-                  <span className="truncate" title="Last post">{c.lastContentAt ? `posted ${ago(c.lastContentAt)}` : "never posted"}</span>
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/55 to-transparent px-3.5 pb-3 pt-14">
+                <div className="mb-1.5 h-px w-6" style={{ background: c.color }} />
+                <b className="display block truncate text-[22px] font-semibold leading-none">{c.name.split(" ")[0]}</b>
+                <div className="mt-1.5 flex items-center justify-between gap-2 text-[11.5px] text-ink/75">
+                  <span title="Approved and ready to post"><b className="font-semibold text-ink">{c.approvedReady}</b> ready</span>
+                  <span className="truncate" title={`Priority ${c.priority.score}: ${c.priority.reasons.join("; ")}`}>{c.lastContentAt ? `posted ${ago(c.lastContentAt)}` : "not posted yet"}</span>
                 </div>
               </div>
             </Link>
@@ -72,18 +84,13 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         </div>
       </section>
 
-      <section aria-label="Needs attention" className="mb-8">
-        <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">Needs attention</h2>
-        <ul className="grid gap-1.5">{attention.map((a, i) => (
-          <li key={i}><Link href={a.href} className="flex items-center gap-3 rounded-xl border border-edge bg-panel/60 px-4 py-2.5 text-[14px] hover:border-blue2/50"><span className={`h-2 w-2 flex-none rounded-full ${dot[a.tone]}`} /><span className="min-w-0 flex-1">{a.text}</span><span className="text-faint">→</span></Link></li>
-        ))}</ul>
-      </section>
-
-      <section aria-label="Tonight" className="mb-8">
-        <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">Tonight {tonight.length > 0 && <span className="text-warn">· {tonight.length}</span>}{missed.length > 0 && <span className="text-bad"> · {missed.length} missed</span>}</h2>
+      <div className="grid gap-x-8 gap-y-10 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="grid min-w-0 content-start gap-10">
+      <section aria-label="Tonight">
+        <SectionHead title="Tonight" count={tonight.length} action={missed.length > 0 ? <span className="text-[13px] text-bad">{missed.length} missed</span> : <Link href="/calendar" className="text-[13px] text-muted hover:text-ink">Calendar</Link>} />
         {sp.ok && <div role="status" className="mb-2 rounded-xl border border-ok/40 bg-ok/10 p-2.5 text-[13px] text-ok">{sp.ok}</div>}
         {sp.error && <div role="alert" className="mb-2 rounded-xl border border-bad/40 bg-bad/10 p-2.5 text-[13px] text-bad">{sp.error}</div>}
-        {tonight.length === 0 && missed.length === 0 ? <p className="rounded-xl border border-dashed border-edge p-4 text-[13px] text-muted">Nothing scheduled for tonight. Approving an image puts it on the calendar.</p> : (
+        {tonight.length === 0 && missed.length === 0 ? <div className="flex items-center gap-4 rounded-2xl border border-dashed border-edge/80 px-5 py-5 text-[13.5px] text-muted"><Icon name="calendar" size={20} className="text-faint" /><span>Nothing is scheduled for tonight. Approving an image puts it on the calendar.</span></div> : (
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
             <div className="grid content-start gap-3">{tonight.map(({ e, p, img, caption, steps }) => (
               <div key={e.id} className="flex gap-3 rounded-2xl border border-edge bg-panel/70 p-3">
@@ -94,16 +101,16 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
                   {caption && <div className="mt-1 flex items-center gap-2"><span className="min-w-0 truncate">“{caption}”</span><CopyButton text={caption} label="Copy caption" /></div>}
                   <ol className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">{steps.map((s, i) => <li key={s.label} className={s.done ? "text-ok" : "text-muted"}>{s.done ? "✓" : `${i + 1}.`} {s.label}</li>)}</ol>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
-                    {steps[1].done && !steps[2].done && <form action={markPostedAction} className="flex items-center gap-2"><input type="hidden" name="entryId" value={e.id} /><label className="flex items-center gap-1.5 text-[12px]"><input type="checkbox" name="confirm" value="yes" required className="size-4 !w-auto" />I posted it</label><button className="rounded-lg bg-ok/80 px-3 py-1 text-[12px] font-bold text-[#0a0f24]">Record</button></form>}
+                    {steps[1].done && !steps[2].done && <form action={markPostedAction} className="flex items-center gap-2"><input type="hidden" name="entryId" value={e.id} /><label className="flex items-center gap-1.5 text-[12px]"><input type="checkbox" name="confirm" value="yes" required className="size-4 !w-auto" />I posted it</label><button className="rounded-lg bg-ok/80 px-3 py-1 text-[12px] font-bold text-[#141016]">Record</button></form>}
                     <form action={rescheduleSlotAction}><input type="hidden" name="entryId" value={e.id} /><button className="rounded-lg border border-edge px-3 py-1 text-[12px]">Not tonight → next open slot</button></form>
-                    {!steps[1].done && <Link href="/approvals" className="text-[12px] text-blue2">Approvals →</Link>}
-                    {steps[1].done && <Link href={`/post/${p.id}`} className="rounded-lg bg-ok/85 px-3 py-1 text-[12px] font-bold text-[#0a0f24]">Post kit →</Link>}
+                    {!steps[1].done && <Link href="/approvals" className="text-[12px] text-blue2">Approvals</Link>}
+                    {steps[1].done && <Link href={`/post/${p.id}`} className="rounded-lg bg-ok/85 px-3 py-1 text-[12px] font-bold text-[#141016]">Post kit</Link>}
                   </div>
                 </div>
               </div>))}
               {tonight.length === 0 && <p className="text-[13px] text-muted">Nothing for tonight.</p>}
             </div>
-            <div><h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-faint">Missed slots · {missed.length}</h3>
+            <div><h3 className="mb-2 h-label">Missed slots · {missed.length}</h3>
               {missed.length === 0 ? <p className="text-[12.5px] text-muted">Nothing missed.</p> : <ul className="grid gap-2">{missed.map(({ e, p }) => (
                 <li key={e.id} className="rounded-xl border border-edge p-2.5 text-[12.5px]"><div className="flex items-center gap-2"><CreatorAvatar code={e.talent} portrait={portraits[e.talent]} size={20} /><span className="font-mono text-[11px] text-muted">{p.code} · was {e.date} {e.time}</span></div><p className="my-1 truncate">{p.concept}</p>
                   <form action={rescheduleSlotAction}><input type="hidden" name="entryId" value={e.id} /><button className="rounded-lg border border-edge px-2.5 py-1 text-[11.5px]">Move to next open slot</button></form></li>))}</ul>}
@@ -112,33 +119,43 @@ export default async function Dashboard({ searchParams }: { searchParams: Promis
         )}
       </section>
 
-      <section aria-label="Approvals" className="mb-8">
-        <div className="mb-2 flex items-baseline justify-between"><h2 className="text-[12px] font-bold uppercase tracking-wider text-muted">Approvals {d.approvals.length > 0 && <span className="text-warn">· {d.approvals.length}</span>}</h2>{d.approvals.length > 0 && <Link href="/approvals" className="text-[13px] text-blue2">Review all →</Link>}</div>
-        {d.approvals.length === 0 ? <p className="rounded-xl border border-dashed border-edge p-6 text-center text-muted">Nothing waiting. <Link href="/create" className="text-blue2">Import an image →</Link></p> : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-6">{d.approvals.slice(0, 6).map((a) => (
-            <Link key={a.approvalId} href={`/approvals?id=${a.approvalId}`} className="group block overflow-hidden rounded-2xl border border-edge">
-              <div className="relative aspect-[4/5]" style={{ background: "linear-gradient(160deg,#1a2350,#0b1128)" }}>
+      <section aria-label="Approvals">
+        <SectionHead title="Waiting for approval" count={d.approvals.length} action={d.approvals.length > 0 && <Link href="/approvals" className="text-[13px] font-medium text-blue2 hover:text-ink">Review all</Link>} />
+        {d.approvals.length === 0 ? <p className="rounded-xl border border-dashed border-edge p-6 text-center text-muted">Nothing waiting. <Link href="/create" className="text-blue2">Import an image</Link></p> : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{d.approvals.slice(0, 8).map((a) => (
+            <Link key={a.approvalId} href={`/approvals?id=${a.approvalId}`} className="group block overflow-hidden rounded-2xl border border-edge/70 bg-panel/50 transition-colors hover:border-[#4a414c]">
+              <div className="relative aspect-[4/5]" style={{ background: "linear-gradient(160deg,#2a2228,#0c0a0d)" }}>
                 {a.asset?.storagePath ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={`/api/assets/${a.asset.id}/file`} alt={a.production.code} className="h-full w-full object-cover transition group-hover:scale-[1.02]" /> : <span className="grid h-full place-items-center text-[11px] text-muted">no image file</span>}
-                {a.triad && <span className={`absolute bottom-2 left-2 rounded-md bg-black/65 px-1.5 py-0.5 font-mono text-[10.5px] ${a.triad.overall === "PASS" ? "text-ok" : a.triad.overall === "FAIL" ? "text-bad" : "text-warn"}`}>QA {a.triad.overall}</span>}
+                {a.triad && <span className={`absolute bottom-2 left-2 rounded-full bg-black/55 px-2 py-0.5 text-[11px] font-medium backdrop-blur-md ${a.triad.overall === "PASS" ? "text-ok" : a.triad.overall === "FAIL" ? "text-bad" : "text-warn"}`}>QA {a.triad.overall.toLowerCase()}</span>}
               </div>
-              <div className="flex items-center gap-2 px-2.5 py-2 text-[12px]"><CreatorAvatar code={a.production.talent[0]} portrait={portraits[a.production.talent[0]]} size={24} /><b className="truncate">{ROSTER_BY_CODE[a.production.talent[0]].first}</b><span className="ml-auto flex-none text-muted">{a.ageHours}h</span></div>
+              <div className="flex items-center gap-2 px-2.5 py-2 text-[12px]"><CreatorAvatar code={a.production.talent[0]} portrait={portraits[a.production.talent[0]]} size={24} /><b className="truncate">{ROSTER_BY_CODE[a.production.talent[0]].first}</b><span className="ml-auto flex-none text-faint">{a.ageHours < 1 ? "new" : `${a.ageHours}h`}</span></div>
             </Link>
           ))}</div>
         )}
       </section>
 
-      <section aria-label="Production activity" className="mb-8">
-        <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">Production activity</h2>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">{activity.map(([label, n, href]) => <Link key={label} href={href} className={`rounded-xl border px-3 py-2.5 ${n ? (label === "Failed" ? "border-bad/40 bg-bad/10" : "border-edge bg-panel/70") : "border-edge opacity-60"}`}><div className="font-mono text-2xl font-bold">{n}</div><div className="text-[12px] text-muted">{label}</div></Link>)}</div>
+      </div>
+      <aside className="grid content-start gap-10">
+      <section aria-label="Needs attention">
+        <SectionHead title="Needs attention" count={attention.length} />
+        {attention.length === 0 ? <p className="text-[13px] text-muted">Nothing needs you right now.</p> : <ul className="overflow-hidden rounded-2xl border border-edge/70 bg-panel/50">{attention.map((a, i) => (
+          <li key={i} className="border-t border-edge/60 first:border-0"><Link href={a.href} className="group flex items-start gap-3 px-4 py-3 text-[13.5px] hover:bg-white/[0.03]"><span className={`mt-[7px] h-1.5 w-1.5 flex-none rounded-full ${dot[a.tone]}`} /><span className="min-w-0 flex-1">{a.text}</span><Icon name="chevron" size={14} className="mt-[3px] text-faint group-hover:text-ink" /></Link></li>
+        ))}</ul>}
       </section>
+      <section aria-label="Production activity">
+        <SectionHead title="Pipeline" action={<Link href="/productions" className="text-[13px] text-muted hover:text-ink">Productions</Link>} />
+        <div className="grid grid-cols-2 gap-2">{activity.map(([label, n, href]) => <Link key={label} href={href} className={`rounded-xl border px-3.5 py-3 transition-colors hover:border-[#4a414c] ${label === "Failed" && n ? "border-bad/35 bg-bad/[0.06]" : "border-edge/70 bg-panel/50"} ${n ? "" : "opacity-60"}`}><div className={`num text-[22px] font-semibold leading-tight ${label === "Failed" && n ? "text-bad" : ""}`}>{n}</div><div className="mt-0.5 text-[12px] text-muted">{label}</div></Link>)}</div>
+      </section>
+      </aside>
+      </div>
 
-      <details className="rounded-2xl border border-edge p-3">
-        <summary className="cursor-pointer font-bold text-muted">System status, agents and operations</summary>
+      <details className="mt-10 rounded-2xl border border-edge/70 bg-panel/30 px-4 py-3">
+        <summary className="flex cursor-pointer items-center font-semibold text-muted">System status, agents and operations</summary>
         <div className="mt-3 grid gap-4 lg:grid-cols-2">
           <div className="grid content-start gap-0 text-[13px]">{d.system.map((s) => <div key={s.name} className="flex items-start justify-between gap-3 border-t border-edge py-1.5 first:border-0"><span className="min-w-0"><b>{s.name}</b><span className="block text-[11.5px] text-muted break-words">{s.detail}</span></span><span className={`flex-none font-mono text-[11.5px] font-semibold ${txt[s.tone]}`}>{s.state}</span></div>)}</div>
           <div className="grid content-start gap-3 text-[13px]">
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-edge bg-edge sm:grid-cols-3">{d.status.map((s) => <div key={s.label} className="bg-panel/95 px-2.5 py-1.5" title={s.title}><div className="text-[10px] font-bold uppercase tracking-wider text-faint">{s.label}</div><div className={`truncate font-mono text-[12px] ${txt[s.tone]}`}>{s.value}</div></div>)}</div>
-            <div>{snaps.filter((x) => x.status !== "IDLE" && x.status !== "SCHEDULED").map((x) => <Link key={x.agent.code} href={`/agents/${x.agent.code}`} className="flex items-center justify-between gap-2 border-t border-edge py-1.5 first:border-0"><span className="truncate">{x.agent.name}</span><AgentStatusPill status={x.status} /></Link>)}<Link href="/agents" className="mt-1 block text-blue2">All agents →</Link></div>
+            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-edge bg-edge sm:grid-cols-3">{d.status.map((s) => <div key={s.label} className="bg-panel/95 px-2.5 py-1.5" title={s.title}><div className="text-[11.5px] font-semibold text-faint">{s.label}</div><div className={`truncate font-mono text-[12px] ${txt[s.tone]}`}>{s.value}</div></div>)}</div>
+            <div>{snaps.filter((x) => x.status !== "IDLE" && x.status !== "SCHEDULED").map((x) => <Link key={x.agent.code} href={`/agents/${x.agent.code}`} className="flex items-center justify-between gap-2 border-t border-edge py-1.5 first:border-0"><span className="truncate">{x.agent.name}</span><AgentStatusPill status={x.status} /></Link>)}<Link href="/agents" className="mt-1 block text-blue2">All agents</Link></div>
           </div>
         </div>
         <div className="mt-4"><CommandCenterPanel cc={d.cc} readOnly={readOnly} /></div>

@@ -29,7 +29,7 @@ export default async function Collabs({ searchParams }: { searchParams: Promise<
   return (
     <>
       <PageHeader title="Collabs" sub="Who knows whom, and how a shared day rolls out across their accounts." />
-      {sp.ok && <div role="status" className="mb-4 rounded-xl border border-ok/40 bg-ok/10 p-3 text-ok">{sp.ok} <Link href="/productions" className="underline">Productions →</Link></div>}
+      {sp.ok && <div role="status" className="mb-4 rounded-xl border border-ok/40 bg-ok/10 p-3 text-ok">{sp.ok} <Link href="/productions" className="underline">Productions</Link></div>}
       {sp.error && <div role="alert" className="mb-4 rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">{sp.error}</div>}
       <div className="mb-6 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <section className="rounded-2xl border border-edge bg-panel/70 p-4">
@@ -46,7 +46,7 @@ export default async function Collabs({ searchParams }: { searchParams: Promise<
                   <input type="checkbox" name="c" value={t.code} defaultChecked={picked.includes(t.code)} className="peer sr-only" />
                   <span className="block aspect-[3/4]" style={{ background: t.color }}>{portraits[t.code].url && /* eslint-disable-next-line @next/next/no-img-element */ <img src={portraits[t.code].url!} alt="" className="h-full w-full object-cover object-top" />}</span>
                   <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-1.5 pb-1 pt-4 text-[12px] font-bold">{t.first}</span>
-                  <span className="absolute right-1 top-1 hidden h-5 w-5 place-items-center rounded-full bg-blue2 text-[11px] font-black text-[#0a0f24] peer-checked:grid">✓</span>
+                  <span className="absolute right-1 top-1 hidden h-5 w-5 place-items-center rounded-full bg-blue2 text-[11px] font-black text-[#141016] peer-checked:grid">✓</span>
                 </label>
               ))}
             </div>
@@ -73,13 +73,13 @@ export default async function Collabs({ searchParams }: { searchParams: Promise<
           {plan.notes.length > 0 && <ul className="mt-2 grid gap-1 text-[12px] text-warn">{plan.notes.map((n) => <li key={n}>• {n}</li>)}</ul>}
           <form action={createCollabAction} className="mt-3 flex flex-wrap items-center gap-3">
             {picked.map((c) => <input key={c} type="hidden" name="c" value={c} />)}<input type="hidden" name="event" value={sp.event} /><input type="hidden" name="location" value={sp.location ?? ""} />
-            <button disabled={isReadOnly()} className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold disabled:opacity-40">Create {plan.posts.length} productions</button>
+            <button disabled={isReadOnly()} className="rounded-xl bg-blue2 text-[#1a1410] shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_8px_20px_-10px_rgba(226,200,150,.6)] hover:bg-[#ecd6ab] px-4 py-2 font-bold disabled:opacity-40">Create {plan.posts.length} productions</button>
             <span className="text-[12px] text-faint">They start as ideas with captions and prompts. Nothing is generated, scheduled or posted.</span>
           </form>
         </section>
       )}
 
-      {existing.length > 0 && <section><h2 className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">Recent collab productions</h2><ul className="grid gap-1 text-[13px]">{existing.map((p) => <li key={p.id}><Link href={`/productions/${p.id}`} className="text-blue2">{p.code}</Link> <span className="text-muted">{p.concept}</span></li>)}</ul></section>}
+      {existing.length > 0 && <section><h2 className="mb-2 h-section">Recent collab productions</h2><ul className="grid gap-1 text-[13px]">{existing.map((p) => <li key={p.id}><Link href={`/productions/${p.id}`} className="text-blue2">{p.code}</Link> <span className="text-muted">{p.concept}</span></li>)}</ul></section>}
     </>
   );
 }

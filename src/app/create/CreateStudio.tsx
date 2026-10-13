@@ -64,10 +64,10 @@ export function CreateStudio({ creators, error, readOnly, initial, initialCreato
               return (
                 <button key={x.code} type="button" role="radio" aria-checked={on} onClick={() => { setCode(x.code); setEdited(null); }}
                   className={`group relative overflow-hidden rounded-xl border text-left transition ${on ? "border-transparent" : "border-edge opacity-70 hover:opacity-100"}`} style={on ? { boxShadow: `0 0 0 3px ${x.color}, 0 12px 30px -12px ${x.color}` } : undefined}>
-                  <div className="aspect-[3/4] w-full" style={{ background: `linear-gradient(160deg, ${x.color}55, #0b1128 75%)` }}>
+                  <div className="aspect-[3/4] w-full" style={{ background: `linear-gradient(160deg, ${x.color}55, #0c0a0d 75%)` }}>
                     {x.portraitUrl ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={x.portraitUrl} alt={`${x.name} canonical portrait`} className="h-full w-full object-cover object-top" /> : <span className="grid h-full place-items-center text-3xl font-extrabold" style={{ color: x.color }}>{x.name[0]}</span>}
                   </div>
-                  {on && <span className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-[13px] font-black text-[#0a0f24]" style={{ background: x.color }}>✓</span>}
+                  {on && <span className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-[13px] font-black text-[#141016]" style={{ background: x.color }}>✓</span>}
                   <div className="px-2 py-1.5 text-[12.5px] font-bold">{x.name.split(" ")[0]}<span className={`ml-1.5 text-[10px] font-normal ${x.active ? "text-ok" : "text-warn"}`}>{x.active ? "active" : "setup"}</span></div>
                 </button>
               );
@@ -111,7 +111,7 @@ export function CreateStudio({ creators, error, readOnly, initial, initialCreato
           {!preview ? <p className="text-muted">Pick a creator and fill the starred fields to see exactly what is sent.</p> : (
             <>
               <div className="grid gap-2">{preview.sections.map((s) => (
-                <details key={s.key} className="rounded-lg border border-edge px-3 py-2 text-[12.5px]" open={s.key === "scene"}><summary className="cursor-pointer font-semibold uppercase tracking-wide text-muted">{s.label}</summary><p className="mt-1 whitespace-pre-wrap break-words">{s.text}</p></details>
+                <details key={s.key} className="rounded-lg border border-edge px-3 py-2 text-[12.5px]" open={s.key === "scene"}><summary className="cursor-pointer font-semibold text-muted">{s.label}</summary><p className="mt-1 whitespace-pre-wrap break-words">{s.text}</p></details>
               ))}</div>
               <label className="mt-3 block font-semibold">Final prompt {overridden && <span className="ml-1 rounded-full bg-warn/20 px-2 text-[11px] text-warn">edited</span>}
                 <textarea rows={8} value={finalPrompt} onChange={(e) => setEdited(e.target.value)} className="mt-1 font-mono text-[12px]" />
@@ -135,7 +135,7 @@ export function CreateStudio({ creators, error, readOnly, initial, initialCreato
           <input type="hidden" name="request" value={JSON.stringify(request ?? {})} />
           <input type="hidden" name="confirmed" value={confirm ? "yes" : ""} />
           <button disabled={!request || !confirm || blockers.length > 0} title={readOnly ? "Read-only mode: changes are disabled" : undefined}
-            className="mt-3 w-full rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-3 text-[15px] font-extrabold tracking-wide disabled:cursor-not-allowed disabled:opacity-40">GENERATE 1 IMAGE</button>
+            className="mt-3 w-full rounded-xl bg-blue2 text-[#1a1410] shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_8px_20px_-10px_rgba(226,200,150,.6)] hover:bg-[#ecd6ab] px-4 py-3 text-[15px] font-extrabold tracking-wide disabled:cursor-not-allowed disabled:opacity-40">GENERATE 1 IMAGE</button>
           <p className="mt-2 text-[12px] text-faint">The image goes through Identity, Anatomy and Realism QA, then waits in Approvals. Nothing is posted.</p>
         </Step>
       </div>

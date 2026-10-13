@@ -40,7 +40,7 @@ describe("feature flags", () => {
     expect(publishingMode({ NODE_ENV: "production" })).toBe("off");
     expect(publishingMode({ NODE_ENV: "production", NORTHLINE_PUBLISHING: "mock" })).toBe("mock");
     expect(instagramStatus({}).state).toBe("BLOCKED");
-    expect(instagramStatus({}).label).toContain("BLOCKED / DISCONNECTED");
+    expect(instagramStatus({}).label).toContain("blocked / disconnected");
     expect(instagramStatus({ NORTHLINE_INSTAGRAM_LIVE: "on" }).state).toBe("BLOCKED");
   });
   it("live publishing has no adapter: resolvePublisher refuses without NORTHLINE_INSTAGRAM_LIVE and the Meta stub never calls out", async () => {
@@ -230,7 +230,7 @@ describe("founder dashboard view-model", () => {
     expect(d.status.find((s) => s.label === "Image provider")!.value).toBe("MOCK");
     expect(d.system.find((s) => s.name === "Instagram / Meta")!.state).toBe("BLOCKED");
     expect(d.system.find((s) => s.name === "Database")!.state).toBe("LOCAL FILE (demo)");
-    expect(d.attention[0].text).toMatch(/INSTAGRAM/);
+    expect(d.attention[0].text).toMatch(/Instagram blocked/);
     expect(d.pipeline.map((p) => p.key)).toEqual(["IDEA", "QUEUED", "RUNNING", "QA", "REVIEW", "APPROVED", "SCHEDULED", "PUBLISHED", "FAILED", "BLOCKED"]);
     expect(d.creators[0].priority.score).toBeGreaterThanOrEqual(d.creators[5].priority.score); // sorted by priority
   });

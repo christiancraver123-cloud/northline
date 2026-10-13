@@ -32,7 +32,7 @@ export function ImagePicker({ images, back, readOnly, filterLabel }: { images: P
         <button type="button" disabled={!sel.size} onClick={() => setSel(new Set())} className="rounded-lg border border-edge px-3 py-1.5 disabled:opacity-40">Deselect</button>
         <label className="flex items-center gap-1.5 text-muted"><input type="checkbox" checked={onlyLib} onChange={(e) => setOnlyLib(e.target.checked)} className="size-4 !w-auto" />Only not reviewed</label>
         <span className="text-faint">Tip: shift-click to tick a range.</span>
-        <button disabled={readOnly || !sel.size} className="ml-auto rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold disabled:opacity-40">Send {sel.size || ""} to Approvals</button>
+        <button disabled={readOnly || !sel.size} className="ml-auto rounded-xl bg-blue2 text-[#1a1410] shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_8px_20px_-10px_rgba(226,200,150,.6)] hover:bg-[#ecd6ab] px-4 py-2 font-bold disabled:opacity-40">Send {sel.size || ""} to Approvals</button>
       </div>
       {filterLabel && <p className="text-[12px] text-faint">{filterLabel}</p>}
       <ul className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8">{shown.map((im, idx) => {
@@ -43,7 +43,7 @@ export function ImagePicker({ images, back, readOnly, filterLabel }: { images: P
               ? <button type="button" onClick={(e) => toggle(idx, e.shiftKey)} aria-pressed={on} aria-label={`Select ${im.label}`} className="block w-full">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={im.url} alt={im.label} loading="lazy" className="aspect-[4/5] w-full object-cover" />
-                  <span className={`absolute left-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-md text-[11px] font-black ${on ? "bg-blue2 text-[#0a0f24]" : "bg-black/60 text-transparent"}`}>✓</span>
+                  <span className={`absolute left-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-md text-[11px] font-black ${on ? "bg-blue2 text-[#141016]" : "bg-black/60 text-transparent"}`}>✓</span>
                 </button>
               : <Link href={im.href} className="block">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={im.url} alt={im.label} loading="lazy" className="aspect-[4/5] w-full object-cover" /></Link>}
             <span className={`absolute bottom-1 right-1 rounded px-1 font-mono text-[9.5px] ${im.library ? "bg-black/60 text-warn" : "bg-black/60 text-ok"}`}>{im.status}</span>

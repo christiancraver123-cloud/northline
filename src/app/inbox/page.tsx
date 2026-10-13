@@ -35,11 +35,11 @@ export default async function Inbox({ searchParams }: { searchParams: Promise<SP
   return (
     <>
       <PageHeader title="Inbox" sub="Images waiting next to the app, and (later) creator DMs." />
-      {sp.ok && <div role="status" className="mb-4 rounded-xl border border-ok/40 bg-ok/10 p-3 text-ok">{sp.ok} <Link href="/approvals" className="underline">Open Approvals →</Link></div>}
+      {sp.ok && <div role="status" className="mb-4 rounded-xl border border-ok/40 bg-ok/10 p-3 text-ok">{sp.ok} <Link href="/approvals" className="underline">Open Approvals</Link></div>}
       {sp.error && <div role="alert" className="mb-4 rounded-xl border border-bad/40 bg-bad/10 p-3 text-bad">{sp.error}</div>}
 
       <section aria-label="Image inbox" className="mb-8">
-        <h2 className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">Images</h2>
+        <h2 className="mb-2 h-section">Images</h2>
         {!batches.length ? <p className="rounded-xl border border-dashed border-edge p-6 text-center text-muted">No inbox folder on this machine. Put batches in “_Inbox (unsorted Higgsfield + ChatGPT downloads)” next to the app, or set NORTHLINE_INBOX_DIR.</p> : <>
           <nav aria-label="Batch" className="mb-2 flex flex-wrap gap-1.5 text-[12.5px]">{batches.map((b) => <Link key={b} href={q({ batch: b })} className={`rounded-full border px-3 py-1 ${b === batch ? "border-blue2 bg-blue/20" : "border-edge text-muted"}`}>{b}</Link>)}</nav>
           <nav aria-label="Folder" className="mb-4 flex flex-wrap gap-1.5 text-[12.5px]">{folders.map((f) => { const gk = items.find((i) => i.folder === f)!.group; const n = items.filter((i) => i.folder === f).length; return (
@@ -49,7 +49,7 @@ export default async function Inbox({ searchParams }: { searchParams: Promise<SP
             <input type="hidden" name="back" value={back} />
             <div className="flex flex-wrap items-center gap-3 text-[13px]">
               {g?.kind === "creator" ? <><b>{ROSTER_BY_CODE[g.code].name}</b><span className="text-muted">Tick images, then send them to Approvals (QA runs; nothing is posted). Up to 30 at a time.</span>
-                <button disabled={readOnly || !shown.some(sendable)} className="ml-auto rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold disabled:opacity-40">Send ticked to Approvals</button></>
+                <button disabled={readOnly || !shown.some(sendable)} className="ml-auto rounded-xl bg-blue2 text-[#1a1410] shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_8px_20px_-10px_rgba(226,200,150,.6)] hover:bg-[#ecd6ab] px-4 py-2 font-bold disabled:opacity-40">Send ticked to Approvals</button></>
                 : <span className="text-muted">{g?.kind === "collab" ? "Collab images need one creator per post, so they stay here for now." : "Reference material: shown for context, never sent to Approvals."}</span>}
             </div>
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-6">{shown.map((i) => { const done = sentKeys.has(i.key); return (

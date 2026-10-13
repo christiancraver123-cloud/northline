@@ -1,4 +1,5 @@
 "use client";
+import { Icon } from "./Icon";
 // Native drag-and-drop image import. States: idle → drag-over → (confirm) → uploading → success | failure.
 // Validates type and size in the browser for fast feedback; the server re-validates by file content.
 import { useCallback, useRef, useState, useTransition } from "react";
@@ -57,10 +58,10 @@ export function ImportDropzone({ creators, fixedCreator, defaultCreator, replace
             return (
               <button key={x.code} type="button" role="radio" aria-checked={on} aria-label={x.name} onClick={() => setCreator(x.code)}
                 className={`group relative overflow-hidden rounded-xl border text-left transition ${on ? "border-transparent" : "border-edge opacity-70 hover:opacity-100"}`} style={on ? { boxShadow: `0 0 0 3px ${x.color}, 0 12px 30px -12px ${x.color}` } : undefined}>
-                <span className="block aspect-[3/4] w-full" style={{ background: `linear-gradient(160deg, ${x.color}66, #0b1128 80%)` }}>
+                <span className="block aspect-[3/4] w-full" style={{ background: `linear-gradient(160deg, ${x.color}66, #0c0a0d 80%)` }}>
                   {x.masterUrl ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={x.masterUrl} alt="" className="h-full w-full object-cover object-top" /> : <span className="grid h-full place-items-center text-3xl font-extrabold" style={{ color: x.color }}>{x.name[0]}</span>}
                 </span>
-                {on && <span className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-[13px] font-black text-[#0a0f24]" style={{ background: x.color }}>✓</span>}
+                {on && <span className="absolute right-1.5 top-1.5 grid h-6 w-6 place-items-center rounded-full text-[13px] font-black text-[#141016]" style={{ background: x.color }}>✓</span>}
                 <span className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent px-2 pb-1.5 pt-6 text-[13px] font-bold ${on ? "" : "text-ink/85"}`}>{x.name.split(" ")[0]}</span>
               </button>
             );
@@ -82,7 +83,7 @@ export function ImportDropzone({ creators, fixedCreator, defaultCreator, replace
         data-state={over ? "drag-over" : pending ? "uploading" : "idle"}
         className={`grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed text-center transition ${compact ? "min-h-28 p-4" : "min-h-56 p-8"} ${readOnly ? "cursor-not-allowed opacity-50" : ""} ${over ? "border-blue2 bg-blue/15 scale-[1.01]" : "border-edge bg-panel/60 hover:border-blue2/60"}`}>
         <div>
-          <div className={`mx-auto mb-2 grid h-11 w-11 place-items-center rounded-full ${over ? "bg-blue2/30" : "bg-panel2"} text-xl`}>⇪</div>
+          <div className={`mx-auto mb-2 grid h-11 w-11 place-items-center rounded-full ${over ? "bg-blue2/30" : "bg-panel2"} `}><Icon name="upload" size={20} /></div>
           <p className="font-bold">{readOnly ? "Read-only mode: importing is disabled" : over ? "Drop to add" : title ?? "Drag images here"}</p>
           <p className="text-[12.5px] text-muted">{replaceProductionId ? "One image. It becomes a new version; the old one stays in history." : "PNG, JPEG or WebP · up to 10 MB each · or click to choose"}</p>
         </div>
@@ -101,7 +102,7 @@ export function ImportDropzone({ creators, fixedCreator, defaultCreator, replace
               {it.state === "failure" && <div className="text-bad">{it.error}</div>}
               {it.state === "success" && it.result?.ok && <div className="text-ok">Imported as <Link className="underline" href={`/productions/${it.result.productionId}`}>{it.result.code}</Link> · {it.result.status === "REVIEW" ? <Link className="underline" href="/approvals">in Approvals</Link> : it.result.status}</div>}
             </div>
-            <span className="flex-none font-mono text-[11px] uppercase text-faint">{it.state === "ready" ? "ready" : it.state}</span>
+            <span className="flex-none font-mono text-[12px] font-semibold text-faint">{it.state === "ready" ? "ready" : it.state}</span>
             {it.state !== "uploading" && it.state !== "success" && <button type="button" aria-label={`Remove ${it.file.name}`} onClick={() => setItems((xs) => xs.filter((x) => x.id !== it.id))} className="flex-none px-1 text-muted hover:text-ink">✕</button>}
           </li>
         ))}</ul>
@@ -123,7 +124,7 @@ export function ImportDropzone({ creators, fixedCreator, defaultCreator, replace
       {items.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" disabled={disabled || !ready || !creator} onClick={upload}
-            className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2.5 font-bold disabled:cursor-not-allowed disabled:opacity-40">
+            className="rounded-xl bg-blue2 text-[#1a1410] shadow-[0_1px_0_rgba(255,255,255,.35)_inset,0_8px_20px_-10px_rgba(226,200,150,.6)] hover:bg-[#ecd6ab] px-4 py-2.5 font-bold disabled:cursor-not-allowed disabled:opacity-40">
             {pending ? "Importing…" : replaceProductionId ? `Replace image${c ? ` for ${c.name.split(" ")[0]}` : ""}` : `Import ${ready} image${ready === 1 ? "" : "s"}${c ? ` to ${c.name.split(" ")[0]}` : ""}`}
           </button>
           {!creator && <span className="text-[12.5px] text-warn">Choose the creator first.</span>}

@@ -12,10 +12,10 @@ import { ROSTER } from "@/lib/talent/roster";
 export const dynamic = "force-dynamic";
 
 const Tile = ({ label, value, sub, dim }: { label: string; value: string; sub?: string; dim?: boolean }) => (
-  <div className="rounded-xl border border-edge bg-panel/70 px-4 py-3">
-    <p className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-muted">{label}</p>
-    <p className={`mt-1 font-mono text-[26px] leading-tight ${dim ? "text-faint" : "text-ink"}`}>{value}</p>
-    {sub && <p className="font-mono text-[10px] text-faint">{sub}</p>}
+  <div className="min-w-0 rounded-xl border border-edge/70 bg-panel/50 px-4 py-3">
+    <p className="text-[12.5px] text-muted">{label}</p>
+    <p className={`num mt-0.5 text-[26px] font-semibold leading-tight ${dim ? "text-faint" : "text-ink"}`}>{value}</p>
+    {sub && <p className="mt-0.5 truncate text-[12px] text-faint">{sub}</p>}
   </div>
 );
 const addDays = (day: string, n: number) => { const [y, m, d] = day.split("-").map(Number); return new Date(Date.UTC(y, m - 1, d + n, 12)).toISOString().slice(0, 10); };
@@ -48,11 +48,11 @@ export default async function Live() {
   ];
   const hms = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour12: false, timeZone: "America/New_York" });
   return (
-    <div className="mx-auto max-w-[1500px]">
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3 border-b border-edge pb-4">
-        <div className="flex items-center gap-4"><LiveClock /><span className="font-mono text-[10px] tracking-[0.2em] text-faint">NORTHLINE · OPS BOARD</span></div>
-        <Link href="/analytics" className="font-mono text-[10px] text-muted underline">analytics →</Link>
-      </div>
+    <div>
+      <header className="mb-7 flex flex-wrap items-end justify-between gap-3">
+        <div><div className="mb-1"><LiveClock /></div><h1 className="display text-[34px] leading-[1.05] sm:text-[42px]">Live</h1><p className="mt-2 text-[14.5px] text-muted">Real numbers only. Mock and demo data never show up here.</p></div>
+        <Link href="/analytics" className="text-[13px] text-muted hover:text-ink">Open analytics</Link>
+      </header>
       <div className="mb-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
         <Tile label="Posted today" value={String(postedToday)} sub={`${pipeline} in the pipeline`} />
         <Tile label="Views · 28 days" value={sum(in28, "views").toLocaleString()} sub={`${in28.length} posts measured (real only)`} />
@@ -62,29 +62,29 @@ export default async function Live() {
         <Tile label="Revenue" value="—" sub="not connected yet" dim />
       </div>
       <div className="mb-4 grid gap-2 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-        <div className="min-w-0 rounded-xl border border-edge bg-panel/70 p-4"><AreaChart points={series} label="Views by publish day · 14 days (latest snapshot)" /></div>
-        <div className="min-w-0 rounded-xl border border-edge bg-panel/70 p-4">
-          <p className="mb-2 text-[12px] font-bold uppercase tracking-wider text-muted">Event feed</p>
+        <div className="min-w-0 rounded-2xl border border-edge/70 bg-panel/50 p-4"><AreaChart points={series} label="Views by publish day · 14 days (latest snapshot)" /></div>
+        <div className="min-w-0 rounded-2xl border border-edge/70 bg-panel/50 p-4">
+          <p className="mb-2 h-section">Event feed</p>
           <ul className="max-h-[210px] space-y-1 overflow-auto font-mono text-[10.5px]">{feed.map((l) => (
             <li key={l.id} className="flex min-w-0 gap-2 whitespace-nowrap"><span className="text-faint">{hms(l.createdAt)}</span><span className={l.level === "error" ? "text-bad" : l.level === "warn" ? "text-warn" : "text-muted"}>{l.kind}</span><span className="truncate text-faint" title={l.message}>{l.message}</span></li>))}
             {!feed.length && <li className="text-faint">No events yet.</li>}</ul>
         </div>
       </div>
-      <div className="mb-4 rounded-xl border border-edge bg-panel/70 p-4">
-        <p className="mb-3 text-[12px] font-bold uppercase tracking-wider text-muted">Roster</p>
+      <div className="mb-4 rounded-2xl border border-edge/70 bg-panel/50 p-4">
+        <p className="mb-3 h-section">Roster</p>
         <div className="overflow-x-auto"><table className="w-full min-w-[720px] text-left"><tbody>{roster.map((r) => (
-          <tr key={r.t.code} className="border-b border-edge">
+          <tr key={r.t.code} className="border-b border-edge/60 last:border-0">
             <td className="w-12 py-2"><CreatorAvatar code={r.t.code} portrait={portraits[r.t.code]} size={36} /></td>
-            <td className="py-2"><Link href={`/talent/${r.t.code}`} className="text-[13px] hover:underline">{r.t.name}</Link><p className="font-mono text-[10px] text-faint">{r.handle ? `@${r.handle}` : "no account yet"}</p></td>
-            <td className="py-2 font-mono text-[10.5px]">{r.live ? <span className="text-ok">● LIVE</span> : <span className="text-faint">○ SETUP</span>}</td>
-            <td className="py-2 font-mono text-[12px] text-muted">{r.posts} posts</td>
-            <td className="py-2 font-mono text-[12px] text-muted">{r.views.toLocaleString()} views</td>
-            <td className="py-2 font-mono text-[12px] text-muted">{r.follows.toLocaleString()} follows</td>
-            <td className="py-2 font-mono text-[10.5px] text-muted">{r.next ? `next ${r.next.date} ${r.next.time}` : "nothing scheduled"}</td>
+            <td className="py-2"><Link href={`/talent/${r.t.code}`} className="text-[13.5px] font-medium hover:underline">{r.t.name}</Link><p className="text-[12px] text-faint">{r.handle ? `@${r.handle}` : "no account yet"}</p></td>
+            <td className="py-2 text-[12.5px]">{r.live ? <span className="inline-flex items-center gap-1.5 text-ok"><span className="h-1.5 w-1.5 rounded-full bg-ok" />Live</span> : <span className="inline-flex items-center gap-1.5 text-faint"><span className="h-1.5 w-1.5 rounded-full bg-faint" />In setup</span>}</td>
+            <td className="py-2 num text-[12.5px] text-muted">{r.posts} posts</td>
+            <td className="py-2 num text-[12.5px] text-muted">{r.views.toLocaleString()} views</td>
+            <td className="py-2 num text-[12.5px] text-muted">{r.follows.toLocaleString()} follows</td>
+            <td className="py-2 text-[12.5px] text-muted">{r.next ? `next ${r.next.date} ${r.next.time}` : "nothing scheduled"}</td>
           </tr>))}</tbody></table></div>
       </div>
-      <div className="rounded-xl border border-edge bg-panel/70 p-4">
-        <div className="mb-3 flex items-baseline justify-between"><p className="text-[12px] font-bold uppercase tracking-wider text-muted">Face wall · {wall.length}</p><p className="font-mono text-[10px] text-faint">canonical references + approved images · drag any into ChatGPT</p></div>
+      <div className="rounded-2xl border border-edge/70 bg-panel/50 p-4">
+        <div className="mb-3 flex items-baseline justify-between"><p className="h-section">Face wall <span className="num ml-1 text-[12px] font-medium text-faint">{wall.length}</span></p><p className="text-[12px] text-faint">Canonical references and approved images. Drag any into ChatGPT.</p></div>
         {wall.length ? <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-9">{wall.map((w) => /* eslint-disable-next-line @next/next/no-img-element */ <img key={w.src} src={w.src} alt={w.label} title={w.label} loading="lazy" className="aspect-[3/4] w-full cursor-grab rounded-md border border-edge object-cover object-top" />)}</div>
           : <p className="text-[12.5px] text-muted">No canonical references uploaded yet.</p>}
       </div>

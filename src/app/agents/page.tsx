@@ -30,7 +30,7 @@ export default async function Agents() {
       <div className="mb-4 flex flex-wrap items-center gap-2 text-[12px]"><span className="text-muted">Model providers:</span>{providers.filter((p) => p.name !== "mock" || p.state === "configured").map((p) => <span key={p.name} title={p.detail ?? ""}><Pill tone={PROVIDER_STATE_TONE[p.state] as never}>{p.name} · {p.state.replace("_", "-")}{p.calls ? ` · ${p.calls} call${p.calls > 1 ? "s" : ""}` : ""}</Pill></span>)}<Link href="/settings" className="text-blue2">details</Link></div>
       <Card className="mb-5 overflow-x-auto">
         <h2 className="mb-2 font-bold">Roster</h2>
-        <table className="w-full min-w-[860px] text-[12.5px]"><thead className="text-left text-[11px] uppercase text-faint"><tr><th>Agent</th><th>Tier</th><th>Model</th><th>Task</th><th>Creator</th><th>Status</th><th>Elapsed</th><th>Next / blocker</th><th className="text-right">Cost 7d</th></tr></thead>
+        <table className="w-full min-w-[860px] text-[12.5px]"><thead className="text-left text-[12px] font-semibold text-faint"><tr><th>Agent</th><th>Tier</th><th>Model</th><th>Task</th><th>Creator</th><th>Status</th><th>Elapsed</th><th>Next / blocker</th><th className="text-right">Cost 7d</th></tr></thead>
           <tbody>{snaps.map((s) => <tr key={s.agent.code} className="border-t border-edge align-top">
             <td className="py-1.5"><Link href={`/agents/${s.agent.code}`} className="font-semibold hover:underline">{s.agent.name}</Link><div className="text-[11px] text-faint">{AGENT_BY_CODE[s.agent.code].role.slice(0, 60)}</div></td>
             <td><Pill tone={AGENT_TIER[s.agent.code] === "premium" ? "warn" : "mute"}>{AGENT_TIER[s.agent.code]}</Pill></td>

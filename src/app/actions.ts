@@ -57,6 +57,21 @@ export async function decideAction(formData: FormData) {
   if (err) redirect(`/approvals?error=${encodeURIComponent(err)}`);
 }
 
+/** Command HUD: one approve/deny decision, returned as data (no redirect) so the HUD can stay open. Same checks as Approvals. */
+export async function hudDecideAction(approvalId: string, decision: "APPROVED" | "REJECTED"): Promise<{ ok: boolean; error?: string }> {
+  await requireOperator();
+  if (decision !== "APPROVED" && decision !== "REJECTED") return { ok: false, error: "unknown decision" };
+  try {
+    const repo = await getRepo();
+    const ap = await repo.get("approvals", approvalId);
+    if (!ap || ap.state !== "PENDING") return { ok: false, error: "already decided" };
+    await decide(repo, approvalId, decision, decision === "REJECTED" ? encodeDecisionNotes([], "Denied from Command HUD") : "", "operator");
+    await resolveApprovalWaits(repo, ap.productionId, decision);
+    revalidatePath("/", "layout");
+    return { ok: true };
+  } catch (e) { return { ok: false, error: e instanceof Error ? e.message.slice(0, 200) : "failed" }; }
+}
+
 export async function retryAssetAction(formData: FormData) {
   await requireOperator();
   const pid = String(formData.get("productionId"));

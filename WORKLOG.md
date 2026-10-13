@@ -151,3 +151,10 @@ Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Ren
 - Real data only; animation is decoration. Read-only page; every monitor links to the page that owns the data. Auto-refreshes every 20 s. Esc exits, F full screen. Boot sequence plays once per browser session.
 - Entry points: dashboard "Command HUD" button, sidebar (Today), ⌘K. Sidebar hidden on /hud.
 - SVG coordinates are rounded so server and browser render identical markup (unrounded trig caused a hydration mismatch).
+
+## 2026-10-13 — Command HUD, interactive pass
+- Creator focus: click an orbit node or roster row (or keys 1–6) → dossier replaces the core (portrait, stats, her queue, review/profile/import). Hover pauses the orbit and highlights the creator.
+- Review inspector: click the core, a feed monitor, "Review" or press R → full-screen inspector; A approve, D deny, ←/→ move, Esc close. Uses new `hudDecideAction` (same `decide()` path and blockers as Approvals, returns data instead of redirecting). Approve is locked with the blocker shown when Launch checks fail. Counts update live; auto-refresh pauses while reviewing.
+- Command console (/ to type, Mic for Chrome speech input): help, brief, review [name], focus [name], approvals/studio/talent/calendar/live/inbox/collabs/analytics, mute/unmute, full screen, clear, exit.
+- Spoken briefing (B / "Brief me") via the browser's built-in voices; synthesized UI sounds via Web Audio (`components/hud/fx.ts`), M toggles, remembered per browser.
+- Parallax tilt on the core. Nothing publishes, schedules or messages from the HUD.

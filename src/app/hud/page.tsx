@@ -7,6 +7,7 @@ import { ROSTER_BY_CODE } from "@/lib/talent/roster";
 import { instagramStatus } from "@/lib/flags";
 import { isReadOnly } from "@/lib/runtime/mode";
 import { nyDay } from "@/lib/ops/tonight";
+import { approvalBlockers } from "@/lib/orchestrator/approvals";
 import { Hud, type HudData } from "@/components/hud/Hud";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +38,7 @@ export default async function HudPage() {
       priority: c.priority.score, ready: c.approvedReady, pending: pendingBy(c.code), images: imgs.filter((a) => a.talent[0] === c.code).length,
       refs: refs.filter((r) => r.talent === c.code && r.status === "ACTIVE").length, lastPost: c.lastContentAt, city: ROSTER_BY_CODE[c.code].markets[0] ?? "",
     })),
-    queue: d.approvals.slice(0, 14).map((a) => ({ id: a.approvalId, code: a.production.code, talent: a.production.talent[0], color: ROSTER_BY_CODE[a.production.talent[0]].color, thumb: a.asset?.storagePath ? `/api/assets/${a.asset.id}/file` : null, qa: a.triad?.overall ?? "NOT RUN", age: a.ageHours })),
+    queue: await Promise.all(d.approvals.slice(0, 200).map(async (a) => ({ id: a.approvalId, code: a.production.code, concept: a.production.concept, talent: a.production.talent[0], color: ROSTER_BY_CODE[a.production.talent[0]].color, thumb: a.asset?.storagePath ? `/api/assets/${a.asset.id}/file` : null, qa: a.triad?.overall ?? "NOT RUN", age: a.ageHours, blockers: await approvalBlockers(repo, a.production.id) }))),
     pending: d.approvals.length,
     pipeline: d.pipeline.map((p) => ({ key: p.key, label: p.label, count: p.count })),
     system: {

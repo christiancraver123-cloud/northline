@@ -134,3 +134,4 @@ Pushed `command-center-oneshot` as its own branch (not merged, not deployed; Ren
 - Phone: `scripts/mac/Start Northline for phone.command` — password (chosen in Terminal, stored in .phone-login, never in chat), binds 0.0.0.0, prints Wi-Fi and Tailscale URLs; `allowedDevOrigins` from NORTHLINE_LAN_HOSTS. Verified login + full flow over a LAN IP in a mobile browser.
 - UI: grouped sidebar with icons + creator shortcuts, phone top bar + bottom tab bar + menu sheet, no chrome on /login, refined background/inputs/cards/headers, devIndicators off, hydration warning from browser extensions suppressed on <html>/<body>.
 - withMsg keeps #anchors (ok/error messages were lost on /talent/X#all).
+- 2026-10-13: installable app — manifest + icons (public before sign-in), apple-touch-icon, standalone; Mac start scripts open a Chrome app window when Chrome is installed.

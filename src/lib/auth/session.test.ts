@@ -24,6 +24,8 @@ describe("operator session auth", () => {
   });
   it("only machine endpoints and login are public", () => {
     for (const p of ["/login", "/api/health", "/api/n8n/production-orchestrator", "/api/create", "/api/agents/tick"]) expect(isPublicPath(p)).toBe(true);
+    for (const p of ["/manifest.webmanifest", "/icon.png", "/apple-icon.png", "/icon-192.png", "/icon-512.png"]) expect(isPublicPath(p)).toBe(true); // app install files
+    for (const p of ["/icon.png/../approvals", "/icons/secret.png", "/api/assets/x/file"]) expect(isPublicPath(p)).toBe(false);
     for (const p of ["/", "/agents", "/api/assets/1/file", "/approvals"]) expect(isPublicPath(p)).toBe(false);
   });
 });

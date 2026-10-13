@@ -7,7 +7,7 @@ export default async function Login({ searchParams }: { searchParams: Promise<{ 
   const { error } = await searchParams;
   return (
     <div className="mx-auto mt-24 max-w-sm rounded-2xl border border-edge bg-panel/80 p-6">
-      <h1 className="mb-1 text-xl font-extrabold">Northline</h1>
+      <img src="/icon-192.png" alt="" className="mb-4 h-14 w-14 rounded-2xl shadow-[0_0_30px_rgba(91,140,255,.45)]" /><h1 className="mb-1 text-2xl font-extrabold tracking-tight">Northline</h1>
       <p className="mb-4 text-muted">Operator sign-in</p>
       {misconfigured && <p role="alert" className="mb-3 rounded-lg border border-warn/40 bg-warn/10 p-2 text-warn">Not configured: set NORTHLINE_ADMIN_PASSWORD and NORTHLINE_SESSION_SECRET (server env). The app stays locked until then.</p>}
       {error && <p role="alert" className="mb-3 text-bad">{error}</p>}

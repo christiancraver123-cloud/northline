@@ -24,5 +24,5 @@ echo "Northline is starting (keep this window open; close it to stop)."
 [ -n "$LAN" ] && echo "  Same Wi-Fi:            http://$LAN:3100   (shared Wi-Fi like a dorm/house network: prefer Tailscale)"
 echo "  On this Mac:           http://localhost:3100"
 echo "Log in with the password you chose. Forgot it? Delete the hidden .phone-login file in the app folder and run this again."
-( sleep 8; open "http://localhost:3100" ) &
+( sleep 8; if [ -d "/Applications/Google Chrome.app" ]; then open -na "Google Chrome" --args --app=http://localhost:3100; else open "http://localhost:3100"; fi ) &
 npm run dev -- -H 0.0.0.0 -p 3100

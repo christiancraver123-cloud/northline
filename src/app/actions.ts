@@ -1,5 +1,6 @@
 "use server";
 import { redirect } from "next/navigation";
+import { sendLibraryToReview } from "@/lib/pipeline/library";
 import { suggestSlot } from "@/lib/orchestrator/schedule";
 import { planCollab } from "@/lib/collab/plan";
 import { collabMembers } from "@/lib/collab/members";
@@ -434,4 +435,16 @@ export async function markPostedAction(formData: FormData) {
   for (const a of (await repo.list("assets", { productionId: prod.id })).filter((a) => a.current && a.status === "APPROVED")) await repo.update("assets", a.id, { publication: "PUBLISHED" });
   revalidatePath("/", "layout");
   redirect(withMsg("/", "ok", `${prod.code} recorded as posted.`));
+}
+
+/** Talent page: send ticked library images to Approvals (QA runs; nothing is approved or posted). */
+export async function sendLibraryAction(formData: FormData) {
+  await requireOperator();
+  const back = backTo(formData.get("back"), "/talent");
+  const ids = formData.getAll("asset").map(String).slice(0, 200);
+  if (!ids.length) redirect(withMsg(back, "error", "Tick at least one image."));
+  const repo = await getRepo();
+  const r = await sendLibraryToReview(repo, defaultDeps(), ids);
+  revalidatePath("/", "layout");
+  redirect(r.failed.length ? withMsg(back, "error", `Sent ${r.sent} to Approvals. ${r.failed.length} not sent: ${r.failed.slice(0, 2).map((f) => f.reason).join(" | ")}`) : withMsg(back, "ok", `Sent ${r.sent} to Approvals.`));
 }

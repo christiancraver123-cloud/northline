@@ -1,7 +1,7 @@
 "use client";
 // Grid view: select / bulk approve / bulk deny the visible queue, and drag review cards into Approved or Rejected.
 // Every action goes through the server's approval gate. There is no publish column: publishing is a separate confirmed action.
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { bulkDecideAction, moveCardAction } from "../actions";
@@ -24,7 +24,18 @@ export function ApprovalBoard({ cards, approved, rejected, creator, back, readOn
   const [pending, start] = useTransition();
   const router = useRouter();
   const all = useMemo(() => cards.map((c) => c.approvalId), [cards]);
-  const toggle = (id: string) => setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const last = useRef<number | null>(null);
+  /** Click toggles one card; shift-click sets the whole range since the last click. */
+  const toggle = (id: string, shift = false) => {
+    const idx = all.indexOf(id), prev = last.current;
+    setSel((s) => {
+      const n = new Set(s), on = !s.has(id);
+      if (shift && prev !== null) { const [a, b] = [Math.min(prev, idx), Math.max(prev, idx)]; for (const x of all.slice(a, b + 1)) { if (on) n.add(x); else n.delete(x); } }
+      else if (on) n.add(id); else n.delete(id);
+      return n;
+    });
+    last.current = idx;
+  };
   const drop = (target: "APPROVED" | "REJECTED") => {
     const id = drag; setDrag(null); setOver(null);
     if (!id || readOnly) return;
@@ -81,7 +92,7 @@ export function ApprovalBoard({ cards, approved, rejected, creator, back, readOn
               return (
                 <li key={c.approvalId} draggable={!readOnly} onDragStart={(e) => { e.dataTransfer.setData("text/plain", c.approvalId); e.dataTransfer.effectAllowed = "move"; setDrag(c.approvalId); }} onDragEnd={() => { setDrag(null); setOver(null); }}
                   style={{ borderTopColor: c.color }} className={`group relative overflow-hidden rounded-xl border border-t-4 bg-panel/80 transition ${on ? "border-blue2 ring-2 ring-blue2/50" : "border-edge"} ${drag === c.approvalId ? "opacity-50" : ""} ${!readOnly ? "cursor-grab" : ""}`}>
-                  <label className="absolute left-2 top-2 z-10 grid h-6 w-6 cursor-pointer place-items-center rounded-md bg-black/60"><input type="checkbox" checked={on} onChange={() => toggle(c.approvalId)} aria-label={`Select ${c.code}`} className="size-4 !w-auto" /></label>
+                  <label className="absolute left-2 top-2 z-10 grid h-6 w-6 cursor-pointer place-items-center rounded-md bg-black/60"><input type="checkbox" checked={on} onChange={() => {}} onClick={(e) => toggle(c.approvalId, e.shiftKey)} aria-label={`Select ${c.code}`} className="size-4 !w-auto" /></label>
                   <Link href={`/approvals?id=${c.approvalId}${creator ? `&creator=${creator}` : ""}`} className="block aspect-[4/5]" style={{ background: `linear-gradient(160deg, ${c.color}55, #0b1128 80%)` }} draggable={false}>
                     {c.thumb ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={c.thumb} alt={c.code} draggable={false} className="h-full w-full object-cover" /> : <span className="grid h-full place-items-center text-[11px] text-muted">no image file</span>}
                   </Link>

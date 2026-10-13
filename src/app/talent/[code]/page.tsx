@@ -10,6 +10,8 @@ import { ReferenceLibrary } from "@/components/ReferenceLibrary";
 import { AssetTile, Card, DemoBadge, Empty, PageHeader, Pill, ProdLink, StatusPill, ago } from "@/components/ui";
 import Link from "next/link";
 import { CreatorPortrait } from "@/components/cc";
+import { ImagePicker, type PickerImage } from "@/components/ImagePicker";
+import { isLibraryProduction } from "@/lib/pipeline/library";
 import { pickPortrait, PORTRAIT_TYPE_ORDER } from "@/lib/talent/portrait";
 import { ImportDropzone } from "@/components/ImportDropzone";
 import { isReadOnly } from "@/lib/runtime/mode";
@@ -17,7 +19,7 @@ import { creatorOverviews } from "@/lib/ops/creators";
 import { listIfMigrated } from "@/lib/publishing/service";
 import { weightsFromEnv } from "@/lib/priority";
 
-export default async function TalentDetail({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ refError?: string; refOk?: string }> }) {
+export default async function TalentDetail({ params, searchParams }: { params: Promise<{ code: string }>; searchParams: Promise<{ refError?: string; refOk?: string; ok?: string; error?: string }> }) {
   const t = getTalent((await params).code.toUpperCase());
   if (!t) notFound();
   const repo = await getRepo();
@@ -34,6 +36,11 @@ export default async function TalentDetail({ params, searchParams }: { params: P
   const strip = refs.filter((r) => r.status === "ACTIVE").sort((a, b) => (a.referenceType === "MASTER_FACE" ? -1 : b.referenceType === "MASTER_FACE" ? 1 : PORTRAIT_TYPE_ORDER.indexOf(a.referenceType) - PORTRAIT_TYPE_ORDER.indexOf(b.referenceType)));
   const recent = assets.filter((a) => a.talent[0] === t.code && a.current && a.kind === "IMG").sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 8);
   const readOnly = isReadOnly();
+  const libProds = new Set(prods.filter(isLibraryProduction).map((p) => p.id));
+  const allImages: PickerImage[] = assets.filter((a) => a.talent[0] === t.code && a.current && a.kind === "IMG" && a.storagePath).sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((a) => {
+    const lib = libProds.has(a.productionId);
+    return { id: a.id, url: `/api/assets/${a.id}/file`, label: a.filename, library: lib, status: lib ? "not reviewed" : a.publication === "PUBLISHED" ? "posted" : a.status === "APPROVED" ? "approved" : a.status === "REJECTED" ? "denied" : "in review", href: `/assets/${a.id}` };
+  });
   return (
     <>
       <section className="mb-8 grid gap-5 sm:grid-cols-[200px_minmax(0,1fr)] lg:grid-cols-[260px_minmax(0,1fr)]">
@@ -46,7 +53,7 @@ export default async function TalentDetail({ params, searchParams }: { params: P
           <div className="flex flex-wrap gap-1.5">{t.criticalRules.map((r) => <span key={r} className="rounded-full border border-bad/30 bg-bad/5 px-2.5 py-1 text-[12px]">{r}</span>)}</div>
           <p className="text-[13.5px]"><span className="text-muted">Storyline:</span> {ov.storyline ?? "none active"} · <span className="text-muted">Last post:</span> {ov.lastContentAt ? ago(ov.lastContentAt) : "never"} · <span className="text-muted">Ready:</span> {ov.approvedReady}</p>
           {ov.priority.reasons.length > 0 && <p className="text-[12.5px] text-muted">Priority because: {ov.priority.reasons.slice(0, 3).join(" · ")}</p>}
-          <div className="flex flex-wrap gap-2"><a href="#generated" className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold">⇪ Import</a><Link href={`/create?mode=generate&creator=${t.code}`} className="rounded-xl border border-edge bg-panel2 px-4 py-2 font-bold">✦ Generate</Link></div>
+          <div className="flex flex-wrap gap-2"><a href="#all" className="rounded-xl border border-blue2/60 bg-blue/20 px-4 py-2 font-bold">All {allImages.length} images ↓</a><a href="#generated" className="rounded-xl bg-gradient-to-br from-blue to-[#4d5cf0] px-4 py-2 font-bold">⇪ Import</a><Link href={`/create?mode=generate&creator=${t.code}`} className="rounded-xl border border-edge bg-panel2 px-4 py-2 font-bold">✦ Generate</Link></div>
         </div>
       </section>
       <h2 className="mb-3 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-bad/60" />Canonical references — identity authority, protected (imports and generated images never land here)</h2>
@@ -101,8 +108,11 @@ export default async function TalentDetail({ params, searchParams }: { params: P
       <h2 id="generated" className="mb-3 mt-10 flex scroll-mt-4 items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-blue2/60" />Generated content — zero identity authority</h2>
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         <div className="rounded-2xl border border-edge bg-panel/70 p-4"><h3 className="mb-2 font-bold">Import to {t.first}</h3><ImportDropzone readOnly={readOnly} fixedCreator={t.code} creators={[{ code: t.code, name: t.name, color: t.color, masterUrl: portrait.url }]} title={`Drop images for ${t.first}`} /></div>
-        <div className="rounded-2xl border border-edge bg-panel/70 p-4"><h3 className="mb-2 flex items-baseline justify-between font-bold">Recent content<Link href={`/assets?talent=${t.code}`} className="text-[13px] font-normal text-blue2">All of {t.first}&apos;s images →</Link></h3>{recent.length === 0 ? <Empty>No content yet.</Empty> : <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">{recent.map((a) => <Link key={a.id} href={`/assets/${a.id}`}><AssetTile asset={a} /></Link>)}</div>}</div>
+        <div className="rounded-2xl border border-edge bg-panel/70 p-4"><h3 className="mb-2 font-bold">How images get here</h3><p className="text-[13px] text-muted">Drop new images on the left, or tick images below that haven&apos;t been reviewed yet and send them to Approvals in one go.</p></div>
       </div>
+      <h2 id="all" className="mb-3 mt-10 flex scroll-mt-4 items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-blue2/60" />All of {t.first}&apos;s images · {allImages.length}</h2>
+      {(sp.ok || sp.error) && <div role={sp.error ? "alert" : "status"} className={`mb-3 rounded-xl border p-2.5 text-[13px] ${sp.error ? "border-bad/40 bg-bad/10 text-bad" : "border-ok/40 bg-ok/10 text-ok"}`}>{sp.error ?? sp.ok} {sp.ok && <Link href={`/approvals?view=grid&creator=${t.code}`} className="underline">Open Approvals →</Link>}</div>}
+      <ImagePicker images={allImages} back={`/talent/${t.code}#all`} readOnly={readOnly} />
       <h2 className="mb-3 mt-10 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-ok/60" />Approved · ready to publish</h2>
       {approved.length === 0 ? <Empty>Nothing approved yet.</Empty> : <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">{approved.map((a) => <Link key={a.id} href={`/assets/${a.id}`}><AssetTile asset={a} label={a.publication === "PUBLISHED" ? "posted" : undefined} /></Link>)}</div>}
       <h2 className="mb-3 mt-10 flex items-center gap-2 text-[12px] font-bold uppercase tracking-wider text-muted"><span className="h-px w-6 bg-violet/60" />Published {myPubs.some((x) => x.provider === "MOCK_INSTAGRAM") && <Pill tone="warn">mock</Pill>}</h2>

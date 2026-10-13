@@ -56,3 +56,29 @@ export async function importLibrary(repo: Repo, storage: StorageProvider, items:
   }
   return out;
 }
+
+export const isLibraryProduction = (p: Pick<Production, "concept" | "status">) => p.status === "ARCHIVED" && p.concept.startsWith("Image library import (");
+
+/**
+ * Send library images to review: each becomes a normal manual import (QA → Approvals). The library copy leaves the
+ * library view (current=false) but stays in history. Only images from a library production can be sent.
+ */
+export async function sendLibraryToReview(repo: Repo, deps: import("./deps").Deps, assetIds: string[], by = "founder"): Promise<{ sent: number; failed: { id: string; reason: string }[] }> {
+  if (isReadOnly()) throw new ReadOnlyError("sending library images to Approvals");
+  const { importAsset } = await import("./import");
+  const out = { sent: 0, failed: [] as { id: string; reason: string }[] };
+  for (const id of [...new Set(assetIds)]) {
+    try {
+      const a = await repo.get("assets", id);
+      if (!a || !a.current || !a.storagePath) throw new Error("not in the library");
+      const p = await repo.get("productions", a.productionId);
+      if (!p || !isLibraryProduction(p)) throw new Error("not a library image");
+      const f = await deps.storage.read(a.storagePath);
+      if (!f) throw new Error("file missing from storage");
+      await importAsset(repo, deps, { talent: a.talent[0], bytes: f.bytes, filename: a.filename.split("/").pop() ?? a.filename, meta: { notes: `From library: ${a.id} (${a.filename})` }, createdBy: by });
+      await repo.update("assets", a.id, { current: false });
+      out.sent++;
+    } catch (e) { out.failed.push({ id, reason: e instanceof Error ? e.message.slice(0, 120) : "failed" }); }
+  }
+  return out;
+}

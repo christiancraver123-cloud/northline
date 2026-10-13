@@ -40,3 +40,20 @@ describe("library import", () => {
     expect(skipReason("Sienna/Photos/x.png")).toBeNull();
   });
 });
+
+describe("send library images to review", () => {
+  it("each picked library image becomes a REVIEW item with an approval; library copy leaves the library; non-library ids are refused", async () => {
+    const { sendLibraryToReview } = await import("@/lib/pipeline/library");
+    const repo = new FileRepo(null), st = mem();
+    await importLibrary(repo, st, [{ talent: "SIE", bytes: variant(7), filename: "a.png", category: "Photos" }, { talent: "SIE", bytes: variant(8), filename: "b.png", category: "Photos" }], { batch: "T", origin: "demo" });
+    const lib = await repo.list("assets");
+    const deps = { image: { name: "x", model: null, generate: async () => { throw new Error("no"); } }, video: null, storage: st, origin: "demo" } as never;
+    const r = await sendLibraryToReview(repo, deps, [lib[0].id, "nope"]);
+    expect(r.sent).toBe(1); expect(r.failed.map((f) => f.id)).toEqual(["nope"]);
+    expect(await repo.list("approvals", { state: "PENDING" })).toHaveLength(1);
+    expect((await repo.get("assets", lib[0].id))!.current).toBe(false);
+    expect((await repo.get("assets", lib[1].id))!.current).toBe(true);
+    const again = await sendLibraryToReview(repo, deps, [lib[0].id]);
+    expect(again.sent).toBe(0); // already sent: no duplicate review item
+  });
+});

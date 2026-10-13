@@ -9,7 +9,7 @@ if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && ! file -L "$(comman
     [ -x "$d/node" ] && file -L "$d/node" | grep -q arm64 && { export PATH="$d:$PATH"; break; }
   done
 fi
-echo "node: $(command -v node) $(node -p process.arch 2>/dev/null) · uname -m: $(uname -m) · $(date)" > .northline-node.txt
+echo "node: $(command -v node) arch=$(node -p process.arch 2>/dev/null) node-translated=$(node -p "require('child_process').execSync('sysctl -n sysctl.proc_translated').toString().trim()" 2>/dev/null) · shell uname -m: $(uname -m) translated=$(sysctl -n sysctl.proc_translated 2>/dev/null) · $(date)" > .northline-node.txt
 set -a; [ -f .phone-login ] && . ./.phone-login; set +a
 export NORTHLINE_AUTH_DISABLED=false
 LAN=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)

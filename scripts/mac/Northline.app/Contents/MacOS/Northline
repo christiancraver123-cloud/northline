@@ -1,58 +1,35 @@
 #!/bin/bash
-# Northline.app — starts the Northline Command Center in the background (if it isn't already running) and opens it in its own window.
-# Works for your phone too: it listens on your Wi-Fi/Tailscale address with a password (asked once, stored only on this Mac).
+# Northline.app — starts the Northline server in the background (via launchd) if needed, then opens it in its own window.
 APP_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"          # folder that contains Northline.app
+RES="$(cd "$(dirname "$0")/../Resources" && pwd)"
 NL="${NORTHLINE_HOME:-$APP_DIR/Northline Command Center (new)}"
 [ -d "$NL" ] || NL="$HOME/Downloads/Northline Media/Northline Command Center (new)"
-PORT=3100; URL="http://localhost:$PORT"
+PORT=3100; URL="http://localhost:$PORT"; LABEL="media.northline.server"; LOG="$NL/.northline.log"
 say() { osascript -e "display notification \"$1\" with title \"Northline\"" >/dev/null 2>&1; }
 alert() { osascript -e "display alert \"Northline\" message \"$1\"" >/dev/null 2>&1; }
-open_window() {
-  if [ -d "/Applications/Google Chrome.app" ]; then open -na "Google Chrome" --args --app="$URL" --window-size=1400,900; else open "$URL"; fi
-}
-if [ ! -d "$NL" ]; then alert "Can't find the 'Northline Command Center (new)' folder. Keep Northline.app in the 'Northline Media' folder (or put the folder back)."; exit 1; fi
-# Already running? Just open the window.
+open_window() { if [ -d "/Applications/Google Chrome.app" ]; then open -na "Google Chrome" --args --app="$URL" --window-size=1400,900; else open "$URL"; fi; }
+stop_server() { launchctl remove "$LABEL" 2>/dev/null; PIDS=$(lsof -ti tcp:$PORT 2>/dev/null); [ -n "$PIDS" ] && kill $PIDS 2>/dev/null; sleep 2; PIDS=$(lsof -ti tcp:$PORT 2>/dev/null); [ -n "$PIDS" ] && kill -9 $PIDS 2>/dev/null; }
+healthy() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "$URL/login")" = "200" ]; }
+[ -d "$NL" ] || { alert "Can't find the 'Northline Command Center (new)' folder. Keep Northline.app in the 'Northline Media' folder."; exit 1; }
 if curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest"; then
-  # Running but broken (e.g. started under Rosetta)? Restart it.
-  if grep -q "lightningcss.darwin-x64" "$NL/.northline.log" 2>/dev/null; then PIDS=$(lsof -ti tcp:$PORT 2>/dev/null); [ -n "$PIDS" ] && kill $PIDS; sleep 2; else open_window; exit 0; fi
+  if healthy; then open_window; exit 0; fi
+  stop_server   # running but broken (e.g. an old Intel-mode server) → restart cleanly
 fi
-# A run under the wrong (Intel) Node leaves a cached build error behind: clear the build cache before starting again.
-if grep -q "lightningcss.darwin-x64" "$NL/.northline.log" 2>/dev/null; then rm -rf "$NL/.next"; : > "$NL/.northline.log"; fi
-cd "$NL" || exit 1
-# Phone password (first run only). Typed into a Mac dialog, saved in a private file in the app folder.
-if [ ! -f .phone-login ]; then
-  PW=$(osascript -e 'text returned of (display dialog "Choose a password for Northline (8+ characters). You will type it on your phone, and on this Mac when asked." default answer "" with hidden answer with title "Northline" buttons {"Cancel","Save"} default button "Save")' 2>/dev/null) || exit 0
-  if [ ${#PW} -lt 8 ]; then alert "That password is too short (8+ characters). Open Northline again to try again."; exit 1; fi
-  { printf 'NORTHLINE_ADMIN_PASSWORD=%q\n' "$PW"; printf 'NORTHLINE_SESSION_SECRET=%s\n' "$(openssl rand -hex 32)"; } > .phone-login; chmod 600 .phone-login; unset PW
+grep -q "darwin-x64" "$LOG" 2>/dev/null && rm -rf "$NL/.next"   # drop the build cache an Intel-mode run left behind
+if [ ! -f "$NL/.phone-login" ]; then
+  PW=$(osascript -e 'text returned of (display dialog "Choose a password for Northline (8+ characters)." default answer "" with hidden answer with title "Northline" buttons {"Cancel","Save"} default button "Save")' 2>/dev/null) || exit 0
+  [ ${#PW} -lt 8 ] && { alert "That password is too short (8+ characters). Open Northline again."; exit 1; }
+  { printf 'NORTHLINE_ADMIN_PASSWORD=%q\n' "$PW"; printf 'NORTHLINE_SESSION_SECRET=%s\n' "$(openssl rand -hex 32)"; } > "$NL/.phone-login"; chmod 600 "$NL/.phone-login"; unset PW
 fi
-say "Starting… the first start takes a few minutes."
-# Script apps can be launched under Rosetta (Intel mode) on Apple Silicon. Force native arm64 so node loads the same
-# native modules that npm installed (otherwise: "Cannot find module lightningcss.darwin-x64.node").
-ARCH=""; [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && ARCH="arch -arm64"
-# Use the same Node as Terminal: interactive login shell (loads ~/.zshrc, e.g. nvm), and the path the Terminal
-# start scripts recorded in .node-bin (a different, Intel-only Node would also cause the darwin-x64 error).
-$ARCH /bin/zsh -lic '
-  [ -f .node-bin ] && export PATH="$(cat .node-bin):$PATH"
-  if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ] && ! file -L "$(command -v node)" 2>/dev/null | grep -q arm64; then
-    for d in /opt/homebrew/bin $(ls -d "$HOME"/.nvm/versions/node/*/bin 2>/dev/null | sort -V -r) /usr/local/bin; do
-      [ -x "$d/node" ] && file -L "$d/node" | grep -q arm64 && { export PATH="$d:$PATH"; break; }
-    done
-  fi
-  echo "node: $(command -v node) $(node -p process.arch 2>/dev/null)" > .northline-node.txt
-  set -a; . ./.phone-login; set +a
-  export NORTHLINE_AUTH_DISABLED=false
-  LAN=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
-  TS=$(command -v tailscale >/dev/null 2>&1 && tailscale ip -4 2>/dev/null | head -1)
-  export NORTHLINE_LAN_HOSTS="$LAN,$TS"
-  printf "%s\n%s\n" "$LAN" "$TS" > .phone-address
-  command -v node >/dev/null 2>&1 || { osascript -e "display alert \"Northline\" message \"Node.js is not installed. Get the LTS version from nodejs.org, then open Northline again.\""; exit 1; }
-  [ -d node_modules ] || npm ci > .northline-install.log 2>&1
-  npx tsx scripts/import-references.ts --root "../AI Influencers" > /dev/null 2>&1
-  PKG="../_Backups/Creator Asset Package 2026-10-12"
-  if [ -d "$PKG" ] && [ ! -f .data/.library-2026-10-12-done ]; then npx tsx scripts/import-library.ts --dir "$PKG" --batch 2026-10-12 > .data-library-import.log 2>&1 && touch .data/.library-2026-10-12-done; fi
-  nohup npm run dev -- -H 0.0.0.0 -p '"$PORT"' > .northline.log 2>&1 &
-'
-for i in $(seq 1 180); do curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest" && break; sleep 2; done
-open_window
-LAN=$(sed -n 1p .phone-address 2>/dev/null)
-[ -n "$LAN" ] && say "Ready. On your phone (same Wi-Fi): http://$LAN:$PORT"
+chmod +x "$RES/server.sh" 2>/dev/null
+: > "$LOG"
+say "Starting… the first start takes a minute."
+launchctl remove "$LABEL" 2>/dev/null
+if [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]; then
+  launchctl submit -l "$LABEL" -o "$LOG" -e "$LOG" -- /usr/bin/arch -arm64 /bin/zsh -lic "exec '$RES/server.sh' '$NL' $PORT"
+else
+  launchctl submit -l "$LABEL" -o "$LOG" -e "$LOG" -- /bin/zsh -lic "exec '$RES/server.sh' '$NL' $PORT"
+fi
+for i in $(seq 1 120); do curl -s -o /dev/null --max-time 2 "$URL/manifest.webmanifest" && break; sleep 2; done
+if healthy; then echo "ok $(date)" > "$NL/.northline-health.txt"; open_window
+else echo "unhealthy $(date)" > "$NL/.northline-health.txt"; open_window; alert "Northline started but a page failed to load. Details are in .northline.log in the app folder."; fi

@@ -35,6 +35,11 @@
 - [x] Gemini text+vision verified live. [ ] OpenAI image generation still unverified (quota).
 - [ ] Higgsfield adapter (submit/poll); needs credentials + API docs.
 
+## n8n client-brief workflow (`n8n/`)
+- [ ] Import `n8n/client-brief.json` into a live n8n instance, attach both Header Auth credentials, run the test-URL example (expect 200 draft, 400 on short brief).
+- [ ] Create a dedicated Anthropic workspace with a monthly spend limit before publishing the webhook (no daily throttle exists in the workflow).
+- [ ] Decide whether to add per-caller rate limiting in n8n.
+
 ## P2 — agents & product
 - [ ] LLM-backed Orchestrator intent parsing and agents (strategist, creative director, caption writer) behind existing handler signatures; structured JSON outputs validated with zod.
 - [ ] Batch jobs (all six creators in one task) + research-style tasks when a provider supports it.

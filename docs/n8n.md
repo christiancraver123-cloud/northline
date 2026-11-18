@@ -27,3 +27,7 @@ Production webhook responses now also include `taskId` (the Production Manager t
 
 ## Idempotency
 Send `Idempotency-Key: <stable id, e.g. n8n execution id>` (or body `idempotency_key`). Re-delivering the same key returns the existing run instead of creating another production (unique index on `agent_tasks.idempotency_key`).
+
+## NL-02 Client Brief to Proposal (standalone workflow, `n8n/`)
+Separate from the production orchestrator above: it does **not** call or share auth with Northline's `/api/*` endpoints. `n8n/client-brief.json` is an importable n8n workflow: header-authenticated webhook (`X-Northline-Key`, an n8n credential) → length validation (20–12,000 chars, else `400`) → one Claude call → Markdown proposal **draft** (`200`; `truncated: true` if the 5,000-token cap was hit; `429`/`502` on provider throttling/failure). Draft only: nothing is quoted, sent or scheduled. Setup, test command and spend-limit guidance are in `n8n/README.md`; `node --test n8n/client-brief.test.cjs` checks the embedded code (not run by `npm test`).
+Status: not imported into or verified against any live n8n instance. Use synthetic briefs only in this repository.
